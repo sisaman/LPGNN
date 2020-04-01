@@ -213,13 +213,17 @@ def get_availabel_datasets():
 
 
 def load_dataset(dataset_name):
-    return datasets[dataset_name](transform=DataRange())
+    dataset = datasets[dataset_name](transform=DataRange())
+    dataset.name = dataset_name
+    return dataset
 
 
 def get_dataloader(dataset_name, data):
     if dataset_name == 'reddit':
-        cluster_data = ClusterData(data, num_parts=1000, recursive=False, save_dir='datasets/Reddit/processed')
-        loader = ClusterLoader(cluster_data, batch_size=32, shuffle=True, num_workers=6)
+        cluster_data = ClusterData(data, num_parts=5000, recursive=False, save_dir='datasets/Reddit/processed')
+        loader = ClusterLoader(cluster_data, batch_size=32, shuffle=True)
+        loader = [batch for batch in loader]
         return loader
     else:
         return [data]
+
