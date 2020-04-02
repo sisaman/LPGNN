@@ -3,7 +3,7 @@ import torch
 from tqdm import tqdm, trange
 
 from datasets import load_dataset
-from gnn import GCN
+from gnn import GCNConv, GConvDP
 from utils import one_bit_response, get_degree
 
 setup = {
@@ -47,33 +47,16 @@ def error_estimation():
         delta[delta == 0] = 1  # avoid inf and nan
         delta = delta
 
-        model_ref = GCN(
-            input_dim=dataset.num_node_features,
-            output_dim=dataset.num_node_features,
-            hidden_dim=setup['hidden_dim'],
-            private=False,
-            gc_test=True
-        ).to(device)
-
-        gc = model_ref(data.x, data.edge_index)
-
-        model = GCN(
-            input_dim=dataset.num_node_features,
-            output_dim=dataset.num_node_features,
-            hidden_dim=setup['hidden_dim'],
-            private=True,
-            gc_test=True,
-            epsilon=0,
-            alpha=data.alpha,
-            delta=data.delta
-        ).to(device)
+        gcnconv = GCNConv().to(device)
+        gc = gcnconv(data.x, data.edge_index)
+        gconvdp = GConvDP(epsilon=0, alpha=data.alpha, delta=data.delta).to(device)
 
         for run in trange(setup['repeats'], desc='Run', leave=False):
             for epsilon in tqdm(setup['eps'], desc=f'Epsilon (dataset={dataset_name}, run={run})', leave=False):
 
                 data = one_bit_response(dataset[0], epsilon).to(device)
-                model.set_epsilon(epsilon)
-                gc_hat = model(data.x, data.edge_index)
+                gconvdp.eps = epsilon
+                gc_hat = gconvdp(data.x, data.edge_index)
 
                 diff = (gc - gc_hat) / delta
                 error = torch.norm(diff, p=1, dim=1) / diff.shape[1]
