@@ -9,7 +9,7 @@ from utils import one_bit_response, get_degree
 setup = {
     'datasets': [
         'cora',
-        # 'citeseer',
+        'citeseer',
         'pubmed',
         # 'reddit',
         # 'ppi',
@@ -50,6 +50,7 @@ def error_estimation():
         model_ref = GCN(
             input_dim=dataset.num_node_features,
             output_dim=dataset.num_node_features,
+            hidden_dim=setup['hidden_dim'],
             private=False,
             gc_test=True
         ).to(device)
@@ -59,6 +60,7 @@ def error_estimation():
         model = GCN(
             input_dim=dataset.num_node_features,
             output_dim=dataset.num_node_features,
+            hidden_dim=setup['hidden_dim'],
             private=True,
             gc_test=True,
             epsilon=0,
