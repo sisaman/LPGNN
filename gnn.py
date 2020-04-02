@@ -7,7 +7,6 @@ from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_remaining_self_loops, degree
 
 
-# noinspection PyMethodOverriding
 class GCNConv(MessagePassing):
     def __init__(self):
         super().__init__(aggr='add')  # "Add" aggregation.
@@ -49,25 +48,6 @@ class GConvDP(GCNConv):
         return norm * ((((exp + 1) * x_j - 1) * self.delta) / (exp - 1) + self.alpha)
 
 
-# noinspection PyMethodOverriding
-# class GConvPrivLegacy(GConvDP):
-#     def __init__(self, epsilon, alpha, delta):
-#         super().__init__(epsilon, alpha, delta)
-#
-#     @staticmethod
-#     def norm(edge_index, num_nodes, dtype):
-#         edge_index, _ = add_remaining_self_loops(edge_index, num_nodes=num_nodes)
-#         row, col = edge_index
-#         deg = degree(row, num_nodes, dtype=dtype)
-#         deg_inv_sqrt = deg.pow(-0.5)
-#         return edge_index, (deg_inv_sqrt[row].view(-1, 1), deg_inv_sqrt[col].view(-1, 1))
-#
-#     def message(self, x_j, norm):
-#         norm_u, norm_v = norm
-#         exp = math.exp(self.eps)
-#         return norm_v * ((((exp + 1) * x_j - 1) * self.delta) / (exp - 1) + self.alpha * norm_u)
-
-
 class GCN(torch.nn.Module):
     def __init__(self, input_dim, output_dim, hidden_dim=16, gc_test=False, private=False, **dpargs):
         super().__init__()
@@ -93,5 +73,4 @@ class GCN(torch.nn.Module):
         x = F.dropout(x, training=self.training)
         x = self.conv2(x, edge_index)
         x = self.lin2(x)
-        return F.log_softmax(x, dim=1)
-
+        return x
