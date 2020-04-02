@@ -1,6 +1,6 @@
 import pandas as pd
 import torch
-from torch.nn.functional import nll_loss
+from torch.nn.functional import log_softmax, nll_loss
 from torch.utils.data import DataLoader
 from torch_geometric.nn import Node2Vec
 from torch_geometric.transforms import LocalDegreeProfile
@@ -15,11 +15,11 @@ torch.manual_seed(12345)
 setup = {
     'datasets': [
         'cora',
-        'citeseer',
-        'pubmed',
+        # 'citeseer',
+        # 'pubmed',
         # 'reddit',
         # 'ppi',
-        'flickr',
+        # 'flickr',
         # 'yelp',
     ],
     'methods': [
@@ -45,46 +45,29 @@ setup = {
 }
 
 
-class Classifier:
-    def __init__(self):
-        self.model = None
+class GCNClassifier(GCN):
 
-    def train(self, dataloader, optimizer, epochs):
-        raise NotImplementedError
+    def forward(self, data):
+        x = super().forward(data)
+        return log_softmax(x, dim=1)
 
-    def evaluate(self, dataloader):
-        raise NotImplementedError
-
-    def parameters(self):
-        return self.model.parameters()
-
-    def to(self, device):
-        self.model = self.model.to(device)
-        return self
-
-
-class GCNNodeClassifier(Classifier):
-    def __init__(self, **kwargs):
-        super().__init__()
-        self.model = GCN(**kwargs)
-
-    def train(self, dataloader, optimizer, epochs):
-        self.model.train()
+    def train_model(self, dataloader, optimizer, epochs):
+        self.train()
         for epoch in trange(epochs, desc='Epoch', leave=False):
             for batch in dataloader:
                 if batch.train_mask.any():
                     optimizer.zero_grad()
-                    out = self.model(batch)
+                    out = self(batch)
                     loss = nll_loss(out[batch.train_mask], batch.y[batch.train_mask])
                     loss.backward()
                     optimizer.step()
 
     @torch.no_grad()
     def evaluate(self, dataloader):
-        self.model.eval()
+        self.eval()
         total_nodes, total_corrects = 0, 0
         for batch in dataloader:
-            pred = self.model(batch).argmax(dim=1)
+            pred = self(batch).argmax(dim=1)
             total_corrects += (pred[batch.test_mask] == batch.y[batch.test_mask]).sum().item()
             total_nodes += batch.test_mask.sum().item()
 
@@ -92,31 +75,27 @@ class GCNNodeClassifier(Classifier):
         return acc
 
 
-class Node2VecNodeClassifier(Classifier):
-    def __init__(self, *args, **kwargs):
-        super().__init__()
-        self.model = Node2Vec(*args, **kwargs)
-
-    def train(self, dataloader, optimizer, epochs):
-        self.model.train()
+class Node2VecClassifier(Node2Vec):
+    def train_model(self, dataloader, optimizer, epochs):
+        self.train()
         for epoch in trange(epochs, desc='Epoch', leave=False):
             for data in dataloader:
                 nodes = torch.arange(data.num_nodes, device=data.edge_index.device)
                 node_sampler = DataLoader(nodes, batch_size=128, shuffle=True)
                 for subset in node_sampler:
                     optimizer.zero_grad()
-                    loss = self.model.loss(data.edge_index, subset)
+                    loss = self.loss(data.edge_index, subset)
                     loss.backward()
                     optimizer.step()
 
     @torch.no_grad()
     def evaluate(self, dataloader):
-        self.model.eval()
+        self.eval()
         total_nodes, total_corrects = 0, 0
         for data in dataloader:
-            z = self.model(torch.arange(data.num_nodes, device=data.edge_index.device))
-            acc = self.model.test(z[data.train_mask], data.y[data.train_mask],
-                                  z[data.test_mask], data.y[data.test_mask], max_iter=150)
+            z = self(torch.arange(data.num_nodes, device=data.edge_index.device))
+            acc = self.test(z[data.train_mask], data.y[data.train_mask],
+                            z[data.test_mask], data.y[data.test_mask], max_iter=150)
             n_nodes = data.test_mask.sum().item()
             total_corrects += acc * n_nodes
             total_nodes += n_nodes
@@ -139,10 +118,11 @@ def run(dataset, method, epsilon):
             data = one_bit_response(data, epsilon)
 
         if method == 'node2vec':
-            classifier = Node2VecNodeClassifier(data.num_nodes, embedding_dim=16, walk_length=20,
-                                                context_size=10, walks_per_node=10)
+            model = Node2VecClassifier(
+                data.num_nodes, embedding_dim=16, walk_length=20, context_size=10, walks_per_node=10
+            )
         else:
-            classifier = GCNNodeClassifier(
+            model = GCNClassifier(
                 input_dim=data.num_node_features,
                 output_dim=dataset.num_classes,
                 hidden_dim=setup['hidden_dim'],
@@ -154,10 +134,10 @@ def run(dataset, method, epsilon):
 
         loader = get_dataloader(dataset.name, data)
 
-    classifier = classifier.to(device)
-    optimizer = torch.optim.Adam(classifier.parameters(), lr=0.01, weight_decay=5e-4)
-    classifier.train(loader, optimizer, 100)
-    return classifier.evaluate(loader)
+    model = model.to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
+    model.train_model(loader, optimizer, 100)
+    return model.evaluate(loader)
 
 
 def node_classification():
