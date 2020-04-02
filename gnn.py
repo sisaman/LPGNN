@@ -48,19 +48,34 @@ class GConvDP(GCNConv):
         return norm * ((((exp + 1) * x_j - 1) * self.delta) / (exp - 1) + self.alpha)
 
 
-class GCN(torch.nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=16, gc_test=False, private=False, **dpargs):
+class GConvMixedDP(torch.nn.Module):
+    def __init__(self, priv_dim, **dpargs):
         super().__init__()
-        self.test = gc_test
-        self.conv1 = GConvDP(**dpargs) if private else GCNConv()
+        self.gcnconv = GCNConv()
+        self.gconvdp = GConvDP(**dpargs)
+        self.priv_dim = priv_dim
 
-        if not gc_test:
-            self.lin1 = Linear(input_dim, hidden_dim)
-            self.conv2 = GCNConv()
-            self.lin2 = Linear(hidden_dim, output_dim)
+    def forward(self, x, edge_index):
+        x_left = self.gconvdp(x[:, :self.priv_dim], edge_index)
+        x_right = self.gcnconv(x[:, self.priv_dim:], edge_index)
+        x = torch.cat([x_left, x_right], dim=1)
+        return x
 
-    def set_epsilon(self, epsilon):
-        self.conv1.eps = epsilon
+
+class GCN(torch.nn.Module):
+    def __init__(self, input_dim, output_dim, hidden_dim=16, priv_input_dim=0, **dpargs):
+        super().__init__()
+
+        if priv_input_dim == 0:
+            self.conv1 = GCNConv()
+        elif priv_input_dim == input_dim:
+            self.conv1 = GConvDP(**dpargs)
+        else:
+            self.conv1 = GConvMixedDP(priv_input_dim, **dpargs)
+
+        self.lin1 = Linear(input_dim, hidden_dim)
+        self.conv2 = GCNConv()
+        self.lin2 = Linear(hidden_dim, output_dim)
 
     def forward(self, x, edge_index):
         x = self.conv1(x, edge_index)

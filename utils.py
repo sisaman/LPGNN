@@ -10,12 +10,16 @@ def get_degree(data):
     return degree(row, data.num_nodes)
 
 
-def one_bit_response(data, epsilon):
+def one_bit_response(data, epsilon, priv_dim=-1):
+    if priv_dim == -1:
+        priv_dim = data.num_node_features
     exp = math.exp(epsilon)
-    p = (data.x - data.alpha) / data.delta
+    x = data.x[:, :priv_dim]
+    p = (x - data.alpha[:priv_dim]) / data.delta[:priv_dim]
     p[torch.isnan(p)] = 0.  # nan happens when alpha = beta, so also data.x = alpha, so the prev fraction must be 0
     p = p * (exp - 1) / (exp + 1) + 1 / (exp + 1)
-    data.x = Bernoulli(p).sample()
+    x = Bernoulli(p).sample()
+    data.x[:, :priv_dim] = x
     return data
 
 
