@@ -62,8 +62,7 @@ class GCN(torch.nn.Module):
     def set_epsilon(self, epsilon):
         self.conv1.eps = epsilon
 
-    def forward(self, data):
-        x, edge_index = data.x, data.edge_index
+    def forward(self, x, edge_index):
         x = self.conv1(x, edge_index)
         if self.test:
             return x

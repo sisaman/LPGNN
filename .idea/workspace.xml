@@ -14,6 +14,9 @@
       </list>
     </option>
   </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
   <component name="JupyterTrust" id="a4a2e0a5-3495-41a3-85d7-bbacd5cc09b0" />
   <component name="ProjectId" id="1Zp2ayD0INoHXSLeFFju6HRHdPl" />
   <component name="ProjectViewState">
@@ -74,8 +77,8 @@
       <method v="2" />
     </configuration>
     <list>
-      <item itemvalue="Python.node_classification" />
       <item itemvalue="Python.dataloader" />
+      <item itemvalue="Python.node_classification" />
     </list>
     <recent_temporary>
       <list>

@@ -70,7 +70,7 @@ class GCNClassifier(GCN):
             for batch in dataloader:
                 if batch.train_mask.any():
                     optimizer.zero_grad()
-                    out = self(batch)
+                    out = self(batch.x, batch.edge_index)
                     loss = cross_entropy(out[batch.train_mask], batch.y[batch.train_mask])
                     loss.backward()
                     optimizer.step()
@@ -80,7 +80,7 @@ class GCNClassifier(GCN):
         self.eval()
         total_nodes, total_corrects = 0, 0
         for batch in dataloader:
-            pred = self(batch).argmax(dim=1)
+            pred = self(batch.x, batch.edge_index).argmax(dim=1)
             total_corrects += (pred[batch.test_mask] == batch.y[batch.test_mask]).sum().item()
             total_nodes += batch.test_mask.sum().item()
 

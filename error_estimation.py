@@ -55,7 +55,7 @@ def error_estimation():
             gc_test=True
         ).to(device)
 
-        gc = model_ref(data)
+        gc = model_ref(data.x, data.edge_index)
 
         model = GCN(
             input_dim=dataset.num_node_features,
@@ -73,7 +73,7 @@ def error_estimation():
 
                 data = one_bit_response(dataset[0], epsilon).to(device)
                 model.set_epsilon(epsilon)
-                gc_hat = model(data)
+                gc_hat = model(data.x, data.edge_index)
 
                 diff = (gc - gc_hat) / delta
                 error = torch.norm(diff, p=1, dim=1) / diff.shape[1]
