@@ -4,11 +4,11 @@
 - ~~Look more closely at the error bound and try to justify the independence of the error to the number of nodes~~
 - Look for other differentially private mechanisms for mean/summation estimation and try to make them work for the graph convolution if they are working better than 1BitMean.
 - ~~Perform experiments over some more datasets, preferably not citation networks~~
-- Perform experiments for the link prediction task
+- ~~Perform experiments for the link prediction task~~
 - Assess the robustness of the method to the sparsity level of the graph
 - Visualize the embeddings obtained privately and compare with the results with the original GCN
 - ~~Report the class label distribution for the node classification task~~
 - Run the experiments for a wider range of epsilon
 - ~~Error in the estimation of the graph convolution as a function of epsilon and node degree~~
-- Shallow node embedding baselines
+- ~~Shallow node embedding baselines~~
 - Experiment for combination of private/non-private features
