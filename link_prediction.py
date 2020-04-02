@@ -16,8 +16,8 @@ torch.manual_seed(12345)
 setup = {
     'datasets': [
         'cora',
-        # 'citeseer',
-        # 'pubmed',
+        'citeseer',
+        'pubmed',
         # 'reddit',
         # 'ppi',
         # 'flickr',
@@ -40,7 +40,7 @@ setup = {
         },
         'node2vec': {
             'params': {
-                'embedding_dim': 128,
+                'embedding_dim': 64,
                 'walk_length': 20,
                 'context_size': 10,
                 'walks_per_node': 10,
@@ -95,19 +95,18 @@ class LinkPredictor(torch.nn.Module):
 class Node2VecLinkPredictor(Node2Vec, LinkPredictor):
     def get_link_logits(self, x, pos_edge_index, neg_edge_index):
         total_edge_index = torch.cat([pos_edge_index, neg_edge_index], dim=-1)
-        x = self(total_edge_index.unique())
-        x_j = torch.index_select(x, 0, total_edge_index[0])
-        x_i = torch.index_select(x, 0, total_edge_index[1])
+        x_j = self(total_edge_index[0])
+        x_i = self(total_edge_index[1])
         return torch.einsum("ef,ef->e", x_i, x_j)
 
     def train_model(self, data, optimizer, epochs):
         self.train()
         for epoch in trange(epochs, desc='Epoch', leave=False):
-            nodes = torch.arange(data.num_nodes, device=data.edge_index.device)
+            nodes = torch.arange(data.num_nodes, device=data.train_pos_edge_index.device)
             node_sampler = DataLoader(nodes, batch_size=setup['model']['node2vec']['batch_size'], shuffle=True)
             for subset in node_sampler:
                 optimizer.zero_grad()
-                loss = self.loss(data.edge_index, subset)
+                loss = self.loss(data.train_pos_edge_index, subset)
                 loss.backward()
                 optimizer.step()
 
@@ -151,7 +150,7 @@ def link_prediction(dataset, model_name, feature, epsilon):
             input_dim=data.num_node_features,
             output_dim=dataset.num_classes,
             hidden_dim=setup['model']['gcn']['hidden_dim'],
-            private=(feature == 'priv'),
+            priv_input_dim=(data.num_node_features if feature == 'priv' else 0),
             epsilon=epsilon,
             alpha=data.alpha,
             delta=data.delta,
