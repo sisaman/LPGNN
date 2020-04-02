@@ -115,7 +115,7 @@ class Node2VecClassifier(Node2Vec):
         return total_corrects / total_nodes
 
 
-def run(dataset, model_name, feature, epsilon):
+def node_classification(dataset, model_name, feature, epsilon):
     device = torch.device('cuda')
     data = dataset[0].to(device)
     data = convert_data(data, feature, epsilon=epsilon)
@@ -144,22 +144,22 @@ def run(dataset, model_name, feature, epsilon):
     return model.evaluate(loader)
 
 
-def node_classification():
+def experiment():
     for dataset_name in tqdm(setup['datasets'], desc='Dataset'):
         results = []
         dataset = load_dataset(dataset_name)
-        for run_counter in trange(setup['repeats'], desc='Run', leave=False):
+        for run in trange(setup['repeats'], desc='Run', leave=False):
             for model in tqdm(setup['model'], desc='Model', leave=False):
                 for feature in setup['model'][model].get('feature', ['']):
                     acc = -1
                     for epsilon in tqdm(setup['eps'], desc='Epsilon', leave=False):
                         if feature == 'priv' or acc == -1:
-                            acc = run(dataset, model, feature, epsilon)
-                        results.append((run_counter, f'{model}+{feature}', epsilon, acc))
+                            acc = node_classification(dataset, model, feature, epsilon)
+                        results.append((run, f'{model}+{feature}', epsilon, acc))
 
         df_result = pd.DataFrame(data=results, columns=['run', 'conf', 'eps', 'acc'])
         df_result.to_pickle(f'results/node_classification_{dataset_name}.pkl')
 
 
 if __name__ == '__main__':
-    node_classification()
+    experiment()
