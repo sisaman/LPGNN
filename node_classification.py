@@ -1,56 +1,69 @@
 import pandas as pd
 import torch
-from torch.nn.functional import log_softmax, nll_loss
+from torch.nn.functional import cross_entropy
 from torch.utils.data import DataLoader
 from torch_geometric.nn import Node2Vec
-from torch_geometric.transforms import LocalDegreeProfile
 from tqdm import tqdm, trange
 
 from datasets import load_dataset, get_dataloader
 from gnn import GCN
-from utils import one_bit_response
+from utils import convert_data
 
 torch.manual_seed(12345)
 
 setup = {
     'datasets': [
-        'cora',
-        # 'citeseer',
+        # 'cora',
+        'citeseer',
         # 'pubmed',
         # 'reddit',
         # 'ppi',
         # 'flickr',
         # 'yelp',
     ],
-    'methods': [
-        'private',
-        'node2vec',
-        'default',
-        'localdegree',
-        # 'random',
-    ],
+    'model': {
+        'gcn': {
+            'feature': [
+                'raw',
+                'priv',
+                'locd'
+            ],
+            'hidden_dim': 16,
+            'epochs': 200,
+            'optim': {
+                'weight_decay': 5e-4,
+                'lr': 0.01
+            },
+
+        },
+        'node2vec': {
+            'params': {
+                'embedding_dim': 128,
+                'walk_length': 20,
+                'context_size': 10,
+                'walks_per_node': 10,
+            },
+            'epochs': 100,
+            'batch_size': 512,
+            'optim': {
+                'weight_decay': 0,
+                'lr': 0.01
+            },
+        }
+    },
     'eps': [
         0.1,
-        # 0.2,
-        # 0.5,
         1,
         3,
         5,
         7,
         9,
     ],
-    'hidden_dim': 16,
-    'epochs': 100,
     'repeats': 10,
 }
 
 
 class GCNClassifier(GCN):
-
-    def forward(self, data):
-        x = super().forward(data)
-        return log_softmax(x, dim=1)
-
     def train_model(self, dataloader, optimizer, epochs):
         self.train()
         for epoch in trange(epochs, desc='Epoch', leave=False):
@@ -58,7 +71,7 @@ class GCNClassifier(GCN):
                 if batch.train_mask.any():
                     optimizer.zero_grad()
                     out = self(batch)
-                    loss = nll_loss(out[batch.train_mask], batch.y[batch.train_mask])
+                    loss = cross_entropy(out[batch.train_mask], batch.y[batch.train_mask])
                     loss.backward()
                     optimizer.step()
 
@@ -81,7 +94,7 @@ class Node2VecClassifier(Node2Vec):
         for epoch in trange(epochs, desc='Epoch', leave=False):
             for data in dataloader:
                 nodes = torch.arange(data.num_nodes, device=data.edge_index.device)
-                node_sampler = DataLoader(nodes, batch_size=128, shuffle=True)
+                node_sampler = DataLoader(nodes, batch_size=setup['model']['node2vec']['batch_size'], shuffle=True)
                 for subset in node_sampler:
                     optimizer.zero_grad()
                     loss = self.loss(data.edge_index, subset)
@@ -102,41 +115,32 @@ class Node2VecClassifier(Node2Vec):
         return total_corrects / total_nodes
 
 
-def run(dataset, method, epsilon):
+def run(dataset, model_name, feature, epsilon):
     device = torch.device('cuda')
     data = dataset[0].to(device)
+    data = convert_data(data, feature, epsilon=epsilon)
 
-    with torch.no_grad():
+    if model_name == 'gcn':
+        model = GCNClassifier(
+            input_dim=data.num_node_features,
+            output_dim=dataset.num_classes,
+            hidden_dim=setup['model']['gcn']['hidden_dim'],
+            private=(feature == 'priv'),
+            epsilon=epsilon,
+            alpha=data.alpha,
+            delta=data.delta,
+        )
+    else:
+        model = Node2VecClassifier(
+            data.num_nodes,
+            **setup['model']['node2vec']['params']
+        )
 
-        if method == 'random':
-            data.x = torch.rand(data.num_nodes, data.num_node_features, device=device) * data.delta + data.alpha
-        elif method == 'localdegree':
-            data.x = None
-            data.num_nodes = len(data.y)
-            data = LocalDegreeProfile()(data)
-        elif method.startswith('private'):
-            data = one_bit_response(data, epsilon)
-
-        if method == 'node2vec':
-            model = Node2VecClassifier(
-                data.num_nodes, embedding_dim=16, walk_length=20, context_size=10, walks_per_node=10
-            )
-        else:
-            model = GCNClassifier(
-                input_dim=data.num_node_features,
-                output_dim=dataset.num_classes,
-                hidden_dim=setup['hidden_dim'],
-                private=(method.startswith('private')),
-                epsilon=epsilon,
-                alpha=data.alpha,
-                delta=data.delta,
-            )
-
-        loader = get_dataloader(dataset.name, data)
+    loader = get_dataloader(dataset.name, data)
 
     model = model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
-    model.train_model(loader, optimizer, 100)
+    optimizer = torch.optim.Adam(model.parameters(), **setup['model'][model_name]['optim'])
+    model.train_model(loader, optimizer, setup['model'][model_name]['epochs'])
     return model.evaluate(loader)
 
 
@@ -145,15 +149,13 @@ def node_classification():
         results = []
         dataset = load_dataset(dataset_name)
         for run_counter in trange(setup['repeats'], desc='Run', leave=False):
-            for method in tqdm(setup['methods'], desc='Method', leave=False):
-                for epsilon in tqdm(setup['eps'] if method.startswith('private') else [0], desc='Epsilon',
-                                    leave=False):
-                    acc = run(dataset, method, epsilon)
-                    if not method.startswith('private'):
-                        for eps in setup['eps']:
-                            results.append((run_counter, method, eps, acc))
-                    else:
-                        results.append((run_counter, method, epsilon, acc))
+            for model in tqdm(setup['model'], desc='Model', leave=False):
+                for feature in setup['model'][model].get('feature', ['']):
+                    acc = -1
+                    for epsilon in tqdm(setup['eps'], desc='Epsilon', leave=False):
+                        if feature == 'priv' or acc == -1:
+                            acc = run(dataset, model, feature, epsilon)
+                        results.append((run_counter, f'{model}+{feature}', epsilon, acc))
 
         df_result = pd.DataFrame(data=results, columns=['run', 'conf', 'eps', 'acc'])
         df_result.to_pickle(f'results/node_classification_{dataset_name}.pkl')
