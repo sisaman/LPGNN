@@ -24,8 +24,9 @@ def convert_data(data, feature, **featargs):
     if feature == 'priv':
         return one_bit_response(data, featargs['epsilon'])
     elif feature == 'locd':
+        num_nodes = data.num_nodes
         data.x = None
-        data.num_nodes = len(data.y)
+        data.num_nodes = num_nodes
         return LocalDegreeProfile()(data)
     else:
         return data
