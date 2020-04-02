@@ -79,9 +79,6 @@ class GCN(torch.nn.Module):
 
     def forward(self, x, edge_index):
         x = self.conv1(x, edge_index)
-        if self.test:
-            return x
-
         x = self.lin1(x)
         x = F.relu(x)
         x = F.dropout(x, training=self.training)
