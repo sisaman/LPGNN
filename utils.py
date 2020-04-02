@@ -1,6 +1,7 @@
 import math
 import torch
 from torch.distributions.bernoulli import Bernoulli
+from torch_geometric.transforms import LocalDegreeProfile
 from torch_geometric.utils import degree
 
 
@@ -16,3 +17,15 @@ def one_bit_response(data, epsilon):
     p = p * (exp - 1) / (exp + 1) + 1 / (exp + 1)
     data.x = Bernoulli(p).sample()
     return data
+
+
+@torch.no_grad()
+def convert_data(data, feature, **featargs):
+    if feature == 'priv':
+        return one_bit_response(data, featargs['epsilon'])
+    elif feature == 'locd':
+        data.x = None
+        data.num_nodes = len(data.y)
+        return LocalDegreeProfile()(data)
+    else:
+        return data
