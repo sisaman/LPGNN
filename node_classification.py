@@ -125,7 +125,7 @@ def node_classification(dataset, model_name, feature, epsilon):
             input_dim=data.num_node_features,
             output_dim=dataset.num_classes,
             hidden_dim=setup['model']['gcn']['hidden_dim'],
-            private=(feature == 'priv'),
+            priv_input_dim=(data.num_node_features if feature == 'priv' else 0),
             epsilon=epsilon,
             alpha=data.alpha,
             delta=data.delta,
