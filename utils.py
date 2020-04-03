@@ -19,7 +19,7 @@ def one_bit_response(data, epsilon, priv_dim=-1):
     p[torch.isnan(p)] = 0.  # nan happens when alpha = beta, so also data.x = alpha, so the prev fraction must be 0
     p = p * (exp - 1) / (exp + 1) + 1 / (exp + 1)
     x = Bernoulli(p).sample()
-    data.x[:, :priv_dim] = x
+    data.x = torch.cat([x, data.x[:, priv_dim:]], dim=1)
     return data
 
 
