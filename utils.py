@@ -26,7 +26,7 @@ def one_bit_response(data, epsilon, priv_dim=-1):
 @torch.no_grad()
 def convert_data(data, feature, **featargs):
     if feature == 'priv':
-        return one_bit_response(data, featargs['epsilon'])
+        return one_bit_response(data, **featargs)
     elif feature == 'locd':
         num_nodes = data.num_nodes
         data.x = None
