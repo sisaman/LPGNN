@@ -4,16 +4,16 @@ from tqdm import tqdm, trange
 
 from datasets import load_dataset
 from gnn import GCNConv, GConvDP
-from utils import one_bit_response, get_degree
+from utils import get_degree, one_bit_response
 
 setup = {
     'datasets': [
-        'cora',
-        'citeseer',
+        # 'cora',
+        # 'citeseer',
         'pubmed',
+        'flickr',
         # 'reddit',
         # 'ppi',
-        'flickr',
         # 'yelp',
     ],
     # 'methods': [
