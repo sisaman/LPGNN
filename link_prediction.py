@@ -18,9 +18,9 @@ setup = {
         'cora',
         'citeseer',
         'pubmed',
+        'flickr',
         # 'reddit',
         # 'ppi',
-        # 'flickr',
         # 'yelp',
     ],
     'model': {
@@ -30,8 +30,8 @@ setup = {
                 'priv',
                 'locd'
             ],
-            'hidden_dim': 128,
-            'output_dim': 64,
+            'hidden_dim': 32,
+            'output_dim': 16,
             'epochs': 200,
             'optim': {
                 'weight_decay': 0,
@@ -41,7 +41,7 @@ setup = {
         },
         'node2vec': {
             'params': {
-                'embedding_dim': 64,
+                'embedding_dim': 128,
                 'walk_length': 20,
                 'context_size': 10,
                 'walks_per_node': 10,
