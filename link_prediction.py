@@ -30,7 +30,8 @@ setup = {
                 'priv',
                 'locd'
             ],
-            'hidden_dim': 16,
+            'hidden_dim': 128,
+            'output_dim': 64,
             'epochs': 200,
             'optim': {
                 'weight_decay': 0,
@@ -46,7 +47,7 @@ setup = {
                 'walks_per_node': 10,
             },
             'epochs': 100,
-            'batch_size': 512,
+            'batch_size': 128,
             'optim': {
                 'weight_decay': 0,
                 'lr': 0.01
@@ -148,7 +149,7 @@ def link_prediction(dataset, model_name, feature, epsilon):
     if model_name == 'gcn':
         model = GCNLinkPredictor(
             input_dim=data.num_node_features,
-            output_dim=dataset.num_classes,
+            output_dim=setup['model']['gcn']['output_dim'],
             hidden_dim=setup['model']['gcn']['hidden_dim'],
             priv_input_dim=(data.num_node_features if feature == 'priv' else 0),
             epsilon=epsilon,
