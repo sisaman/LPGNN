@@ -13,12 +13,12 @@ torch.manual_seed(12345)
 
 setup = {
     'datasets': [
-        # 'cora',
+        'cora',
         'citeseer',
-        # 'pubmed',
+        'pubmed',
+        'flickr',
         # 'reddit',
         # 'ppi',
-        # 'flickr',
         # 'yelp',
     ],
     'model': {
@@ -44,21 +44,18 @@ setup = {
                 'walks_per_node': 10,
             },
             'epochs': 100,
-            'batch_size': 512,
+            'batch_size': 128,
             'optim': {
                 'weight_decay': 0,
                 'lr': 0.01
             },
         }
     },
-    'eps': [
-        0.1,
-        1,
-        3,
-        5,
-        7,
-        9,
-    ],
+    'eps': {
+        'general': [0.1, 1, 3, 5, 7, 9],
+        'ratio': [1, 3, 5]
+    },
+    'private_ratio': [0, 0.1, 0.2, 0.50, 1],
     'repeats': 10,
 }
 
@@ -115,20 +112,20 @@ class Node2VecClassifier(Node2Vec):
         return total_corrects / total_nodes
 
 
-def node_classification(dataset, model_name, feature, epsilon):
+def node_classification(dataset, model_name, feature, epsilon, priv_dim):
     device = torch.device('cuda')
     data = dataset[0].to(device)
-    data = convert_data(data, feature, epsilon=epsilon)
+    data = convert_data(data, feature, priv_dim=priv_dim, epsilon=epsilon)
 
     if model_name == 'gcn':
         model = GCNClassifier(
             input_dim=data.num_node_features,
             output_dim=dataset.num_classes,
             hidden_dim=setup['model']['gcn']['hidden_dim'],
-            priv_input_dim=(data.num_node_features if feature == 'priv' else 0),
+            priv_input_dim=(priv_dim if feature == 'priv' else 0),
             epsilon=epsilon,
-            alpha=data.alpha,
-            delta=data.delta,
+            alpha=data.alpha[:priv_dim],
+            delta=data.delta[:priv_dim],
         )
     else:
         model = Node2VecClassifier(
@@ -145,21 +142,51 @@ def node_classification(dataset, model_name, feature, epsilon):
 
 
 def experiment():
+    print('experiment: general')
+    for dataset_name in tqdm(setup['datasets'], desc='Dataset'):
+        results = []
+        dataset = load_dataset(dataset_name)
+        for model in tqdm(setup['model'], desc='Model', leave=False):
+            for run in trange(setup['repeats'], desc='Run', leave=False):
+                for feature in setup['model'][model].get('feature', ['']):
+                    acc = -1
+                    for epsilon in tqdm(setup['eps']['general'], desc='Epsilon', leave=False):
+                        if feature == 'priv' or acc == -1:
+                            acc = node_classification(dataset, model, feature, epsilon,
+                                                      priv_dim=dataset.num_node_features)
+                        results.append((run, f'{model}+{feature}', epsilon, acc))
+
+            df_result = pd.DataFrame(data=results, columns=['run', 'conf', 'eps', 'acc'])
+            df_result.to_pickle(f'results/node_classification_{dataset_name}_{model}.pkl')
+
+
+def private_ratio_experiment():
+    print('experiment: ratio')
     for dataset_name in tqdm(setup['datasets'], desc='Dataset'):
         results = []
         dataset = load_dataset(dataset_name)
         for run in trange(setup['repeats'], desc='Run', leave=False):
-            for model in tqdm(setup['model'], desc='Model', leave=False):
-                for feature in setup['model'][model].get('feature', ['']):
-                    acc = -1
-                    for epsilon in tqdm(setup['eps'], desc='Epsilon', leave=False):
-                        if feature == 'priv' or acc == -1:
-                            acc = node_classification(dataset, model, feature, epsilon)
-                        results.append((run, f'{model}+{feature}', epsilon, acc))
+            for private_ratio in tqdm(setup['private_ratio'], desc='Ratio', leave=False):
+                for epsilon in tqdm(setup['eps']['ratio'], desc='Epsilon', leave=False):
+                    acc = node_classification(dataset, 'gcn', 'priv', epsilon,
+                                              priv_dim=int(private_ratio * dataset.num_node_features))
+                    results.append((run, private_ratio, epsilon, acc))
 
-        df_result = pd.DataFrame(data=results, columns=['run', 'conf', 'eps', 'acc'])
-        df_result.to_pickle(f'results/node_classification_{dataset_name}.pkl')
+        df_result = pd.DataFrame(data=results, columns=['run', 'pr', 'eps', 'acc'])
+        df_result.to_pickle(f'results/node_classification_pr_{dataset_name}.pkl')
+
+
+def test():
+    dataset = load_dataset('cora')
+    print('node features:', dataset.num_node_features)
+    # priv_dim = int(0.1 * dataset.num_node_features)
+    priv_dim = 5
+    print('priv dim:', priv_dim)
+    acc = node_classification(dataset, 'gcn', 'priv', 0.1, priv_dim=priv_dim)
+    print('accuracy:', acc)
 
 
 if __name__ == '__main__':
+    # private_ratio_experiment()
     experiment()
+    # test()
