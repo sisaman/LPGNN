@@ -10,14 +10,15 @@ torch.manual_seed(12345)
 
 def experiment():
     tasks = [
-        # NodeClassification,
+        NodeClassification,
         LinkPrediction,
-        # ErrorEstimation
+        ErrorEstimation
     ]
     datasets = [
-        # 'cora',
+        'cora',
         'citeseer',
-        'pubmed'
+        'pubmed',
+        'flickr'
     ]
     models = [
         'gcn',
@@ -28,6 +29,7 @@ def experiment():
     }
     epsilons = [0.1, 1, 3, 5, 7, 9]
     epsilons_pr = [1, 3, 5]
+    epsilons_err = [0.1, 0.2, 0.5, 1, 2, 5]
     private_ratios = [0.1, 0.2, 0.50, 1]
     repeats = 10
 
@@ -42,7 +44,9 @@ def experiment():
                     pr_list = private_ratios if feature == 'priv' else [0]
                     for pr in tqdm(pr_list, desc=f'(feature={feature}) private ratio', leave=False):
 
-                        if feature == 'priv':
+                        if task is ErrorEstimation:
+                            eps_list = epsilons_err
+                        elif feature == 'priv':
                             eps_list = epsilons if pr == 1 else epsilons_pr
                         else:
                             eps_list = [0]
