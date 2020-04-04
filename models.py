@@ -28,7 +28,7 @@ class Node2VecModel(Node2Vec, Model, ABC):
         self.train()
         for _ in trange(epochs, desc='Epoch', leave=False):
             for data in dataloader:
-                nodes = torch.arange(data.num_nodes, device=data.edge_index.device)
+                nodes = torch.arange(data.num_nodes, device=data.x.device)
                 # noinspection PyTypeChecker
                 node_sampler = DataLoader(nodes, batch_size=self.batch_size, shuffle=True)
                 for subset in node_sampler:
