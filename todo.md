@@ -12,3 +12,4 @@
 - Assess the robustness of the method to the sparsity level of the graph
 - Visualize the embeddings obtained privately and compare with the results with the original GCN
 - Perform experiments over some more datasets, preferably not citation networks
+- Convergence of different models
