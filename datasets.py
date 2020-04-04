@@ -226,4 +226,3 @@ def get_dataloader(dataset_name, data):
         return loader
     else:
         return [data]
-
