@@ -7,8 +7,8 @@ import scipy.sparse as sp
 
 from functools import partial
 from google_drive_downloader import GoogleDriveDownloader as gdd
-from torch_geometric.data import InMemoryDataset, Data, ClusterData, ClusterLoader
-from torch_geometric.datasets import Planetoid, Reddit, PPI
+from torch_geometric.data import InMemoryDataset, Data, ClusterData, ClusterLoader, DataLoader
+from torch_geometric.datasets import Planetoid, Reddit, PPI, SNAPDataset
 
 
 class Flickr(InMemoryDataset):
@@ -205,6 +205,7 @@ datasets = {
     'ppi': partial(PPI, root='datasets/PPI'),
     'flickr': partial(Flickr, root='datasets/Flickr'),
     'yelp': partial(Yelp, root='datasets/Yelp'),
+    'facebook': partial(SNAPDataset, root='datasets/SNAP', name='ego-facebook')
 }
 
 
@@ -224,5 +225,7 @@ def get_dataloader(dataset_name, data):
         loader = ClusterLoader(cluster_data, batch_size=32, shuffle=True)
         loader = [batch for batch in loader]
         return loader
+    elif dataset_name == 'facebook':
+        loader = DataLoader(data)
     else:
         return [data]
