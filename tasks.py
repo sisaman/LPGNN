@@ -6,7 +6,7 @@ from torch_geometric.transforms import LocalDegreeProfile
 from torch_geometric.utils import train_test_split_edges, degree
 
 from datasets import get_dataloader
-from gnn import GCNConv, GConvDP
+from gnn import GCNConv, GConvMixedDP
 from models import GCNClassifier, Node2VecClassifier, GCNLinkPredictor, Node2VecLinkPredictor
 
 params = {
@@ -184,7 +184,7 @@ class ErrorEstimation(Task):
         self.gc = gcnconv(data.x, data.edge_index)
 
     def init_model(self, data):
-        return GConvDP(epsilon=self.epsilon, alpha=data.alpha, delta=data.delta)
+        return GConvMixedDP(priv_dim=self.priv_dim, epsilon=self.epsilon, alpha=data.alpha, delta=data.delta)
 
     @torch.no_grad()
     def run(self):
