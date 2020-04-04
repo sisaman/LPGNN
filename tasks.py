@@ -125,8 +125,8 @@ class NodeClassification(Task):
                 hidden_dim=params['nodeclass']['gcn']['hidden_dim'],
                 priv_input_dim=self.priv_dim,
                 epsilon=self.epsilon,
-                alpha=data.alpha[:self.priv_dim],
-                delta=data.delta[:self.priv_dim],
+                alpha=data.alpha,
+                delta=data.delta,
             )
         else:
             model = Node2VecClassifier(
@@ -156,8 +156,8 @@ class LinkPrediction(Task):
                 hidden_dim=params['linkpred']['gcn']['hidden_dim'],
                 priv_input_dim=self.priv_dim,
                 epsilon=self.epsilon,
-                alpha=data.alpha[:self.priv_dim],
-                delta=data.delta[:self.priv_dim],
+                alpha=data.alpha,
+                delta=data.delta,
             )
         else:
             model = Node2VecLinkPredictor(
@@ -184,7 +184,11 @@ class ErrorEstimation(Task):
         self.gc = gcnconv(data.x, data.edge_index)
 
     def init_model(self, data):
-        return GConvMixedDP(priv_dim=self.priv_dim, epsilon=self.epsilon, alpha=data.alpha, delta=data.delta)
+        return GConvMixedDP(
+            priv_dim=self.priv_dim,
+            epsilon=self.epsilon,
+            alpha=data.alpha,
+            delta=data.delta)
 
     @torch.no_grad()
     def run(self):

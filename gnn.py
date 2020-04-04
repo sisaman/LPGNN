@@ -26,6 +26,7 @@ class GCNConv(MessagePassing):
 
         return x
 
+    # noinspection PyMethodOverriding
     def message(self, x_j, norm):
         # x_j has shape [E, out_channels]
         return norm * x_j
@@ -49,11 +50,11 @@ class GConvDP(GCNConv):
 
 
 class GConvMixedDP(torch.nn.Module):
-    def __init__(self, priv_dim, **dpargs):
+    def __init__(self, priv_dim, epsilon, alpha, delta):
         super().__init__()
-        self.gcnconv = GCNConv()
-        self.gconvdp = GConvDP(**dpargs)
         self.priv_dim = priv_dim
+        self.gcnconv = GCNConv()
+        self.gconvdp = GConvDP(epsilon, alpha[:priv_dim], delta[:priv_dim])
 
     def forward(self, x, edge_index):
         x_left = self.gconvdp(x[:, :self.priv_dim], edge_index)
