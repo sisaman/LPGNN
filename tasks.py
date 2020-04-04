@@ -194,7 +194,7 @@ class ErrorEstimation(Task):
         diff = (self.gc - gc_hat) / self.delta
         error = torch.norm(diff, p=1, dim=1) / diff.shape[1]
         deg = self.get_degree(data)
-        return zip(error.cpu().numpy(), deg.cpu().numpy())
+        return list(zip(error.cpu().numpy(), deg.cpu().numpy()))
 
     @staticmethod
     def get_degree(data):
