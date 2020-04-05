@@ -43,12 +43,11 @@ class GCNClassifier(GCN, Model):
         self.train()
         for _ in trange(epochs, desc='Epoch', leave=False):
             for batch in dataloader:
-                if batch.train_mask.any():
-                    optimizer.zero_grad()
-                    out = self(batch.x, batch.edge_index)
-                    loss = cross_entropy(out[batch.train_mask], batch.y[batch.train_mask])
-                    loss.backward()
-                    optimizer.step()
+                optimizer.zero_grad()
+                out = self(batch.x, batch.edge_index)
+                loss = cross_entropy(out[batch.train_mask], batch.y[batch.train_mask])
+                loss.backward()
+                optimizer.step()
 
     @torch.no_grad()
     def evaluate(self, dataloader):
