@@ -2,7 +2,7 @@ import pandas as pd
 import torch
 from tqdm import tqdm, trange
 
-from datasets import load_dataset
+from datasets import load_dataset, EdgeSplit
 from tasks import LinkPrediction, NodeClassification, ErrorEstimation
 
 torch.manual_seed(12345)
@@ -10,22 +10,26 @@ torch.manual_seed(12345)
 
 def experiment():
     tasks = [
-        NodeClassification,
+        # NodeClassification,
         LinkPrediction,
-        ErrorEstimation
+        # ErrorEstimation
     ]
     datasets = [
-        'cora',
-        'citeseer',
+        # 'cora',
+        # 'citeseer',
         'pubmed',
-        'flickr'
+        # 'flickr'
     ]
     models = [
         'gcn',
         'node2vec'
     ]
     features = {
-        'gcn': ['raw', 'priv', 'locd'],
+        'gcn': [
+            'raw',
+            'priv',
+            'locd'
+        ],
     }
     epsilons = [0.1, 1, 3, 5, 7, 9]
     epsilons_pr = [1, 3, 5]
@@ -35,7 +39,8 @@ def experiment():
 
     for task in tqdm(tasks, desc='task'):
         for dataset_name in tqdm(datasets, desc=f'(task={task.task_name()}) dataset', leave=False):
-            dataset = load_dataset(dataset_name)
+            transform = EdgeSplit() if task is LinkPrediction else None
+            dataset = load_dataset(dataset_name, transform=transform)
             model_list = ['gcn'] if task is ErrorEstimation else models
             for model in tqdm(model_list, desc=f'(dataset={dataset_name}) model', leave=False):
                 feature_list = ['priv'] if task is ErrorEstimation else features.get(model, ['void'])
