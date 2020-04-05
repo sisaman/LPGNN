@@ -1,9 +1,11 @@
 import math
+from abc import ABC
 
 import torch
 from torch.distributions import Bernoulli
 from torch_geometric.transforms import LocalDegreeProfile
-from torch_geometric.utils import train_test_split_edges, degree
+from torch_geometric.utils import degree
+from tsnecuda import TSNE
 
 from datasets import get_dataloader
 from gnn import GCNConv, GConvMixedDP
@@ -29,24 +31,23 @@ params = {
             },
             'epochs': 100,
             'optim': {
-                'weight_decay': 0,
                 'lr': 0.01
             },
         }
     },
     'linkpred': {
         'gcn': {
-            'hidden_dim': 32,
-            'output_dim': 16,
+            'hidden_dim': 128,
+            'output_dim': 64,
+            'dropout': 0,
             'epochs': 200,
             'optim': {
-                'weight_decay': 0,
                 'lr': 0.01
             },
         },
         'node2vec': {
             'params': {
-                'embedding_dim': 128,
+                'embedding_dim': 32,
                 'walk_length': 20,
                 'context_size': 10,
                 'walks_per_node': 10,
@@ -54,11 +55,10 @@ params = {
             },
             'epochs': 100,
             'optim': {
-                'weight_decay': 0,
                 'lr': 0.01
             },
         }
-    },
+    }
 }
 
 
@@ -88,8 +88,7 @@ class Task:
         self.priv_dim = priv_dim if self.feature == 'priv' else 0
 
     @torch.no_grad()
-    def prepare_data(self):
-        data = self.dataset[0]
+    def convert_features(self, data):
         if self.feature == 'priv':
             data.x = self.one_bit_response(data.x, self.epsilon, data.alpha, data.delta, self.priv_dim)
         elif self.feature == 'locd':
@@ -99,72 +98,69 @@ class Task:
             data = LocalDegreeProfile()(data)
         return data
 
-    def init_model(self, data):
+    def run(self):
+        raise NotImplementedError
+
+
+class LearningTask(Task, ABC):
+    def get_model(self, data):
         raise NotImplementedError
 
     def run(self):
-        device = torch.device('cuda')
-        data = self.prepare_data().to(device)
-        model = self.init_model(data).to(device)
+        data = self.dataset[0].to('cuda')
+        data = self.convert_features(data)
+        model = self.get_model(data).to('cuda')
         loader = get_dataloader(self.dataset.name, data)
         optimizer = torch.optim.Adam(model.parameters(), **params[self.task_name()][self.model_name]['optim'])
         model.train_model(loader, optimizer, epochs=params[self.task_name()][self.model_name]['epochs'])
         return model.evaluate(loader)
 
 
-class NodeClassification(Task):
+class NodeClassification(LearningTask):
     @staticmethod
     def task_name():
         return 'nodeclass'
 
-    def init_model(self, data):
+    def get_model(self, data):
         if self.model_name == 'gcn':
-            model = GCNClassifier(
-                input_dim=data.num_node_features,
+            return GCNClassifier(
+                input_dim=data.num_node_features,  # must be "data" otherwise it fails if you change features
                 output_dim=self.dataset.num_classes,
                 hidden_dim=params['nodeclass']['gcn']['hidden_dim'],
                 priv_input_dim=self.priv_dim,
                 epsilon=self.epsilon,
                 alpha=data.alpha,
-                delta=data.delta,
+                delta=data.delta
             )
         else:
-            model = Node2VecClassifier(
+            return Node2VecClassifier(
                 data.num_nodes,
                 **params['nodeclass']['node2vec']['params']
             )
-        return model
 
 
-class LinkPrediction(Task):
+class LinkPrediction(LearningTask):
     @staticmethod
     def task_name():
         return 'linkpred'
 
-    def prepare_data(self):
-        data = super().prepare_data()
-        data.train_mask = data.val_mask = data.test_mask = data.y = None
-        data = train_test_split_edges(data)
-        data.edge_index = data.train_pos_edge_index
-        return data
-
-    def init_model(self, data):
+    def get_model(self, data):
         if self.model_name == 'gcn':
-            model = GCNLinkPredictor(
+            return GCNLinkPredictor(
                 input_dim=data.num_node_features,
                 output_dim=params['linkpred']['gcn']['output_dim'],
                 hidden_dim=params['linkpred']['gcn']['hidden_dim'],
+                dropout=params['linkpred']['gcn']['dropout'],
                 priv_input_dim=self.priv_dim,
                 epsilon=self.epsilon,
                 alpha=data.alpha,
                 delta=data.delta,
             )
         else:
-            model = Node2VecLinkPredictor(
+            return Node2VecLinkPredictor(
                 data.num_nodes,
                 **params['linkpred']['node2vec']['params']
             )
-        return model
 
 
 class ErrorEstimation(Task):
@@ -175,12 +171,11 @@ class ErrorEstimation(Task):
     def __init__(self, dataset, model_name, feature, epsilon, priv_dim):
         assert model_name == 'gcn' and feature == 'priv'
         super().__init__(dataset, model_name, feature, epsilon, priv_dim)
-        self.device = 'cuda'
-        data = self.dataset[0].to(self.device)
+        data = self.dataset[0].to('cuda')
         delta = data.delta.clone()
         delta[delta == 0] = 1  # avoid inf and nan
         self.delta = delta
-        gcnconv = GCNConv().to(self.device)
+        gcnconv = GCNConv().to('cuda')
         self.gc = gcnconv(data.x, data.edge_index)
 
     def init_model(self, data):
@@ -192,8 +187,14 @@ class ErrorEstimation(Task):
 
     @torch.no_grad()
     def run(self):
-        data = self.prepare_data().to(self.device)
-        model = self.init_model(data).to(self.device)
+        data = self.dataset[0].to('cuda')
+        data = self.convert_features(data)
+        model = GConvMixedDP(
+            priv_dim=self.priv_dim,
+            epsilon=self.epsilon,
+            alpha=data.alpha,
+            delta=data.delta
+        ).to('cuda')
         gc_hat = model(data.x, data.edge_index)
         diff = (self.gc - gc_hat) / self.delta
         error = torch.norm(diff, p=1, dim=1) / diff.shape[1]
@@ -204,3 +205,23 @@ class ErrorEstimation(Task):
     def get_degree(data):
         row, col = data.edge_index
         return degree(row, data.num_nodes)
+
+
+class VisualizeEmbedding(LinkPrediction):
+    @staticmethod
+    def task_name():
+        return 'visual'
+
+    def __init__(self, dataset, model_name, feature, epsilon, priv_dim):
+        assert model_name == 'gcn' and feature == 'priv'
+        super().__init__(dataset, model_name, feature, epsilon, priv_dim)
+
+    def run(self):
+        data = self.dataset[0].to('cuda')
+        data = self.convert_features(data)
+        model = self.get_model(data).to('cuda')
+        loader = get_dataloader(self.dataset.name, data)
+        optimizer = torch.optim.Adam(model.parameters(), **params[self.task_name()][self.model_name]['optim'])
+        model.train_model(loader, optimizer, epochs=params[self.task_name()][self.model_name]['epochs'])
+        z = model(data.x, data.edge_index)
+        return TSNE(n_components=2).fit_transform(z.cpu().numpy())
