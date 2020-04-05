@@ -64,25 +64,24 @@ class GConvMixedDP(torch.nn.Module):
 
 
 class GCN(torch.nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=16, priv_input_dim=0, **dpargs):
+    def __init__(self, input_dim, output_dim, hidden_dim=16, dropout=0.5, priv_input_dim=0, **dpargs):
         super().__init__()
-
         if priv_input_dim == 0:
             self.conv1 = GCNConv()
         elif priv_input_dim == input_dim:
             self.conv1 = GConvDP(**dpargs)
         else:
             self.conv1 = GConvMixedDP(priv_input_dim, **dpargs)
-
         self.lin1 = Linear(input_dim, hidden_dim)
         self.conv2 = GCNConv()
         self.lin2 = Linear(hidden_dim, output_dim)
+        self.dropout = dropout
 
     def forward(self, x, edge_index):
         x = self.conv1(x, edge_index)
         x = self.lin1(x)
         x = F.relu(x)
-        x = F.dropout(x, training=self.training)
+        x = F.dropout(x, p=self.dropout, training=self.training)
         x = self.conv2(x, edge_index)
         x = self.lin2(x)
         return x
