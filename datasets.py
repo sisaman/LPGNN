@@ -9,6 +9,8 @@ from functools import partial
 from google_drive_downloader import GoogleDriveDownloader as gdd
 from torch_geometric.data import InMemoryDataset, Data, ClusterData, ClusterLoader, DataLoader
 from torch_geometric.datasets import Planetoid, Reddit, PPI, SNAPDataset
+from torch_geometric.transforms import Compose
+from torch_geometric.utils import train_test_split_edges
 
 
 class Flickr(InMemoryDataset):
@@ -197,6 +199,19 @@ class DataRange:
         return data
 
 
+class EdgeSplit:
+    def __init__(self, val_ratio=0.05, test_ratio=0.1):
+        self.val_ratio = val_ratio
+        self.test_ratio = test_ratio
+
+    def __call__(self, data):
+        torch.manual_seed(0)  # same partition
+        data.train_mask = data.val_mask = data.test_mask = data.y = None
+        data = train_test_split_edges(data, self.val_ratio, self.test_ratio)
+        data.edge_index = data.train_pos_edge_index
+        return data
+
+
 datasets = {
     'cora': partial(Planetoid, root='datasets/Planetoid', name='cora'),
     'citeseer': partial(Planetoid, root='datasets/Planetoid', name='citeseer'),
@@ -213,8 +228,11 @@ def get_availabel_datasets():
     return list(datasets.keys())
 
 
-def load_dataset(dataset_name):
-    dataset = datasets[dataset_name](transform=DataRange())
+def load_dataset(dataset_name, transform=None):
+    transforms = [DataRange()]
+    if transform is not None:
+        transforms += [transform]
+    dataset = datasets[dataset_name](transform=Compose(transforms))
     dataset.name = dataset_name
     return dataset
 
