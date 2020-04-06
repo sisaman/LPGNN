@@ -45,6 +45,8 @@ class GConvDP(GCNConv):
         self.delta = delta
 
     def message(self, x_j, norm):
+        self.alpha = self.alpha.type_as(norm)
+        self.delta = self.delta.type_as(norm)
         exp = math.exp(self.eps)
         return norm * ((((exp + 1) * x_j - 1) * self.delta) / (exp - 1) + self.alpha)
 
