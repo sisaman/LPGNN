@@ -1,84 +1,85 @@
-import math
-from abc import ABC
+from abc import abstractmethod
 
 import torch
-from torch.distributions import Bernoulli
-from torch_geometric.transforms import LocalDegreeProfile
+from pytorch_lightning import Trainer
+from pytorch_lightning.loggers import LightningLoggerBase, rank_zero_only
 from torch_geometric.utils import degree
 from tsnecuda import TSNE
 
-from datasets import get_dataloader
 from gnn import GCNConv, GConvMixedDP
-from models import GCNClassifier, Node2VecClassifier, GCNLinkPredictor, Node2VecLinkPredictor
+from models import GCNClassifier, Node2VecClassifier, GCNLinkPredictor, Node2VecLinkPredictor, transform_features
 
 params = {
     'nodeclass': {
         'gcn': {
-            'hidden_dim': 16,
-            'epochs': 200,
-            'optim': {
+            'params': {
+                'hidden_dim': 16,
                 'weight_decay': 5e-4,
                 'lr': 0.01
             },
+            'epochs': 200,
         },
         'node2vec': {
             'params': {
-                'embedding_dim': 128,
+                'embedding_dim': 64,
                 'walk_length': 20,
                 'context_size': 10,
                 'walks_per_node': 10,
                 'batch_size': 128,
-            },
-            'epochs': 100,
-            'optim': {
                 'lr': 0.01
             },
+            'epochs': 100,
         }
     },
     'linkpred': {
         'gcn': {
-            'hidden_dim': 128,
-            'output_dim': 64,
-            'dropout': 0,
             'epochs': 200,
-            'optim': {
+            'params': {
+                'hidden_dim': 128,
+                'output_dim': 64,
+                'dropout': 0,
                 'lr': 0.01
             },
         },
         'node2vec': {
             'params': {
-                'embedding_dim': 32,
+                'embedding_dim': 64,
                 'walk_length': 20,
                 'context_size': 10,
                 'walks_per_node': 10,
                 'batch_size': 128,
-            },
-            'epochs': 100,
-            'optim': {
                 'lr': 0.01
             },
+            'epochs': 100,
         }
     }
 }
 
 
+class ResultLogger(LightningLoggerBase):
+    @property
+    def experiment(self):
+        return self
+
+    @rank_zero_only
+    def log_metrics(self, metrics, step=None):
+        if 'test_result' in metrics:
+            # noinspection PyAttributeOutsideInit
+            self.result = metrics['test_result']
+
+    @rank_zero_only
+    def log_hyperparams(self, parameters): pass
+
+    @property
+    def name(self): return 'ResultLogger'
+
+    @property
+    def version(self): return 0.1
+
+
 class Task:
     @staticmethod
-    def task_name():
-        raise NotImplementedError
-
-    @staticmethod
-    def one_bit_response(x, epsilon, alpha, delta, priv_dim=-1):
-        if priv_dim == -1:
-            priv_dim = x.size(1)
-        exp = math.exp(epsilon)
-        x_priv = x[:, :priv_dim]
-        p = (x_priv - alpha[:priv_dim]) / delta[:priv_dim]
-        p[torch.isnan(p)] = 0.  # nan happens when alpha = beta, so also data.x = alpha, so the prev fraction must be 0
-        p = p * (exp - 1) / (exp + 1) + 1 / (exp + 1)
-        x_priv = Bernoulli(p).sample()
-        x = torch.cat([x_priv, x[:, priv_dim:]], dim=1)
-        return x
+    def task_name(): raise NotImplementedError
 
     def __init__(self, dataset, model_name, feature, epsilon, priv_dim):
         self.dataset = dataset
@@ -87,79 +88,59 @@ class Task:
         self.epsilon = epsilon
         self.priv_dim = priv_dim if self.feature == 'priv' else 0
 
-    @torch.no_grad()
-    def convert_features(self, data):
-        if self.feature == 'priv':
-            data.x = self.one_bit_response(data.x, self.epsilon, data.alpha, data.delta, self.priv_dim)
-        elif self.feature == 'locd':
-            num_nodes = data.num_nodes
-            data.x = None
-            data.num_nodes = num_nodes
-            data = LocalDegreeProfile()(data)
-        return data
-
-    def run(self):
-        raise NotImplementedError
+    @abstractmethod
+    def run(self): pass
 
 
-class LearningTask(Task, ABC):
-    def get_model(self, data):
-        raise NotImplementedError
+class LearningTask(Task):
 
-    def run(self):
-        data = self.dataset[0].to('cuda')
-        data = self.convert_features(data)
-        model = self.get_model(data).to('cuda')
-        loader = get_dataloader(self.dataset.name, data)
-        optimizer = torch.optim.Adam(model.parameters(), **params[self.task_name()][self.model_name]['optim'])
-        model.train_model(loader, optimizer, epochs=params[self.task_name()][self.model_name]['epochs'])
-        return model.evaluate(loader)
+    @abstractmethod
+    def get_model(self): pass
+
+    def run(self, **train_args):
+        logger = ResultLogger()
+        model = self.get_model()
+        trainer = Trainer(logger=logger, **train_args)
+        trainer.fit(model)
+        trainer.test()
+        return logger.result
 
 
 class NodeClassification(LearningTask):
-    @staticmethod
-    def task_name():
-        return 'nodeclass'
+    task_name = 'nodeclass'
 
-    def get_model(self, data):
+    def get_model(self):
         if self.model_name == 'gcn':
             return GCNClassifier(
-                input_dim=data.num_node_features,  # must be "data" otherwise it fails if you change features
-                output_dim=self.dataset.num_classes,
-                hidden_dim=params['nodeclass']['gcn']['hidden_dim'],
-                priv_input_dim=self.priv_dim,
+                dataset=self.dataset,
+                feature=self.feature,
+                priv_dim=self.priv_dim,
                 epsilon=self.epsilon,
-                alpha=data.alpha,
-                delta=data.delta
+                **params['nodeclass']['gcn']['params']
             )
         else:
             return Node2VecClassifier(
-                data.num_nodes,
+                dataset=self.dataset,
                 **params['nodeclass']['node2vec']['params']
             )
 
 
 class LinkPrediction(LearningTask):
-    @staticmethod
-    def task_name():
-        return 'linkpred'
+    task_name = 'linkpred'
 
-    def get_model(self, data):
+    def get_model(self):
         if self.model_name == 'gcn':
             return GCNLinkPredictor(
-                input_dim=data.num_node_features,
-                output_dim=params['linkpred']['gcn']['output_dim'],
-                hidden_dim=params['linkpred']['gcn']['hidden_dim'],
-                dropout=params['linkpred']['gcn']['dropout'],
-                priv_input_dim=self.priv_dim,
+                dataset=self.dataset,
+                feature=self.feature,
+                priv_dim=self.priv_dim,
                 epsilon=self.epsilon,
-                alpha=data.alpha,
-                delta=data.delta,
+                **params['nodeclass']['gcn']['params']
             )
         else:
             return Node2VecLinkPredictor(
-                data.num_nodes,
-                **params['linkpred']['node2vec']['params']
+                dataset=self.dataset,
+                **params['nodeclass']['node2vec']['params']
             )
 
 
@@ -178,17 +159,10 @@ class ErrorEstimation(Task):
         gcnconv = GCNConv().to('cuda')
         self.gc = gcnconv(data.x, data.edge_index)
 
-    def init_model(self, data):
-        return GConvMixedDP(
-            priv_dim=self.priv_dim,
-            epsilon=self.epsilon,
-            alpha=data.alpha,
-            delta=data.delta)
-
     @torch.no_grad()
     def run(self):
         data = self.dataset[0].to('cuda')
-        data = self.convert_features(data)
+        data = transform_features(data, self.feature)
         model = GConvMixedDP(
             priv_dim=self.priv_dim,
             epsilon=self.epsilon,
@@ -216,12 +190,9 @@ class VisualizeEmbedding(LinkPrediction):
         assert model_name == 'gcn' and feature == 'priv'
         super().__init__(dataset, model_name, feature, epsilon, priv_dim)
 
-    def run(self):
-        data = self.dataset[0].to('cuda')
-        data = self.convert_features(data)
-        model = self.get_model(data).to('cuda')
-        loader = get_dataloader(self.dataset.name, data)
-        optimizer = torch.optim.Adam(model.parameters(), **params[self.task_name()][self.model_name]['optim'])
-        model.train_model(loader, optimizer, epochs=params[self.task_name()][self.model_name]['epochs'])
-        z = model(data.x, data.edge_index)
+    def run(self, **train_args):
+        model = self.get_model()
+        trainer = Trainer(**train_args)
+        trainer.fit(model)
+        z = model(self.dataset[0])
         return TSNE(n_components=2).fit_transform(z.cpu().numpy())
