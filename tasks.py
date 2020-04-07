@@ -150,7 +150,8 @@ class NodeClassification(LearningTask):
             )
 
     def run(self, **train_args):
-        early_stop_callback = EarlyStopping(monitor='val_loss', mode='min', **params['nodeclass']['early_stop'])
+        monitor = 'val_loss' if self.model_name == 'gcn' else 'val_acc'
+        early_stop_callback = EarlyStopping(monitor=monitor, mode='auto', **params['nodeclass']['early_stop'])
         return super().run(early_stop_callback=early_stop_callback, **train_args)
 
 

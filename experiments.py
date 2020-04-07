@@ -59,7 +59,7 @@ def experiment():
                             eps_list = [0]
 
                         for eps in eps_list:
-                            for run in range(repeats):
+                            for run in range(1 if task is ErrorEstimation else repeats):
                                 t = task(
                                     dataset=dataset, model_name=model, feature=feature, epsilon=eps,
                                     priv_dim=int(pr * dataset.num_node_features)
@@ -69,13 +69,11 @@ def experiment():
                                 result = t.run(max_epochs=500)
                                 if task is not ErrorEstimation:
                                     print(result)
-                                results.append(
-                                    (task.task_name, dataset_name, f'{model}+{feature}', pr, eps, run, result)
-                                )
+                                results.append((f'{model}+{feature}', pr, eps, run, result))
 
                     df_result = pd.DataFrame(
                         data=results,
-                        columns=['task', 'dataset', 'method', 'pr', 'eps', 'run', 'perf']
+                        columns=['method', 'pr', 'eps', 'run', 'perf']
                     )
                     df_result.to_pickle(f'results/{task.task_name}_{dataset_name}_{model}_{feature}.pkl')
 
