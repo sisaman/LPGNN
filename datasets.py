@@ -205,7 +205,6 @@ class EdgeSplit:
         self.test_ratio = test_ratio
 
     def __call__(self, data):
-        # data.train_mask = data.val_mask = data.test_mask = data.y = None
         data = train_test_split_edges(data, self.val_ratio, self.test_ratio)
         data.edge_index = data.train_pos_edge_index
         return data
@@ -227,11 +226,11 @@ def get_availabel_datasets():
     return list(datasets.keys())
 
 
-def load_dataset(dataset_name, transform=None):
+def load_dataset(dataset_name, transform=None, pre_transforms=None):
     transforms = [DataRange()]
-    if transform is not None:
-        transforms += [transform]
-    dataset = datasets[dataset_name](transform=Compose(transforms))
+    if transform is not None: transforms += [transform]
+    if pre_transforms is None: pre_transforms = []
+    dataset = datasets[dataset_name](transform=Compose(transforms), pre_transform=Compose(pre_transforms))
     dataset.name = dataset_name
     return dataset
 
