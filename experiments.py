@@ -1,3 +1,6 @@
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
 import pandas as pd
 import torch
 from tqdm import tqdm, trange
@@ -10,15 +13,15 @@ torch.manual_seed(12345)
 
 def experiment():
     tasks = [
-        # NodeClassification,
+        NodeClassification,
         LinkPrediction,
-        # ErrorEstimation
+        ErrorEstimation
     ]
     datasets = [
-        # 'cora',
-        # 'citeseer',
+        'cora',
+        'citeseer',
         'pubmed',
-        # 'flickr'
+        'flickr'
     ]
     models = [
         'gcn',
@@ -35,10 +38,10 @@ def experiment():
     epsilons_pr = [1, 3, 5]
     epsilons_err = [0.1, 0.2, 0.5, 1, 2, 5]
     private_ratios = [0.1, 0.2, 0.50, 1]
-    repeats = 10
+    repeats = 1
 
     for task in tqdm(tasks, desc='task'):
-        for dataset_name in tqdm(datasets, desc=f'(task={task.task_name()}) dataset', leave=False):
+        for dataset_name in tqdm(datasets, desc=f'(task={task.task_name}) dataset', leave=False):
             transform = EdgeSplit() if task is LinkPrediction else None
             dataset = load_dataset(dataset_name, transform=transform)
             model_list = ['gcn'] if task is ErrorEstimation else models
@@ -62,11 +65,11 @@ def experiment():
                                 priv_dim=int(pr * dataset.num_node_features)
                             )
                             for run in trange(repeats, desc=f'(epsilon={eps}) run', leave=False):
-                                result = task_instance.run()
+                                result = task_instance.run(max_epochs=500)
                                 results.append((f'{model}+{feature}', pr, eps, run, result))
 
                     df_result = pd.DataFrame(data=results, columns=['method', 'pr', 'eps', 'run', 'perf'])
-                    df_result.to_pickle(f'results/{task.task_name()}_{dataset_name}_{model}_{feature}.pkl')
+                    df_result.to_pickle(f'results/{task.task_name}_{dataset_name}_{model}_{feature}.pkl')
 
 
 if __name__ == '__main__':
