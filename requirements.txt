@@ -1,0 +1,8 @@
+colorama
+scikit-learn
+tsnecuda
+scipy
+numpy
+pandas
+tqdm
+torch
