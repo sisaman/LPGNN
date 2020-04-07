@@ -5,8 +5,7 @@ import pandas as pd
 import torch
 from colorama import Fore, Style
 from datasets import load_dataset, EdgeSplit
-from tasks import LinkPrediction, NodeClassification
-from backup import ErrorEstimation
+from tasks import LinkPrediction, NodeClassification, ErrorEstimation
 
 
 def experiment():
@@ -58,12 +57,13 @@ def experiment():
 
                         for eps in eps_list:
                             for run in range(repeats):
-                                print(Fore.BLUE + f'\ntask={task.task_name} / dataset={dataset_name} / model={model} / '
-                                      f'feature={feature} / pr={pr} / eps={eps} / run={run}' + Style.RESET_ALL)
-                                result = task(
+                                t = task(
                                     dataset=dataset, model_name=model, feature=feature, epsilon=eps,
                                     priv_dim=int(pr * dataset.num_node_features)
-                                ).run()
+                                )
+                                print(Fore.BLUE + f'\ntask={task.task_name} / dataset={dataset_name} / model={model} / '
+                                      f'feature={feature} / pr={pr} / eps={eps} / run={run}' + Style.RESET_ALL)
+                                result = t.run(max_epochs=500)
                                 if task is not ErrorEstimation:
                                     print(result)
                                 results.append(

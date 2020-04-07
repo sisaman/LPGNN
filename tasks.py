@@ -195,7 +195,7 @@ class ErrorEstimation(Task):
     @torch.no_grad()
     def run(self, **kwargs):
         data = self.dataset[0].to('cuda')
-        data = transform_features(data, self.feature)
+        data = transform_features(data, self.feature, self.priv_dim, self.epsilon)
         model = GConvMixedDP(
             priv_dim=self.priv_dim,
             epsilon=self.epsilon,
