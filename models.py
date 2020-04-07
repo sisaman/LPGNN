@@ -1,9 +1,6 @@
 # todo make it work for datasets with more than one graph
 
 import math
-import warnings
-
-warnings.simplefilter(action='ignore', category=FutureWarning)
 from sklearn.metrics import roc_auc_score
 from torch.distributions import Bernoulli
 from torch.utils.data import DataLoader
@@ -11,6 +8,7 @@ from torch_geometric.transforms import LocalDegreeProfile
 from torch_geometric.utils import add_remaining_self_loops, negative_sampling
 
 from pytorch_lightning import Trainer, LightningModule
+from pytorch_lightning.callbacks import EarlyStopping
 import torch
 from torch.nn.functional import binary_cross_entropy_with_logits, cross_entropy
 from torch.optim import Adam
@@ -88,22 +86,37 @@ class LitNode2Vec(LightningModule):
 
 
 class Node2VecClassifier(LitNode2Vec):
-    def test_dataloader(self):
-        return self.dataset
-
-    def test_step(self, data, idx):
+    def evaluate(self, data, mask):
         nodes = torch.arange(data.num_nodes).type_as(data.edge_index)
         z = self.model(nodes)
         acc = self.model.test(
             z[data.train_mask], data.y[data.train_mask],
-            z[data.test_mask], data.y[data.test_mask], max_iter=150
-        )
-        return {'val_acc': acc.item()}
+            z[mask], data.y[mask], max_iter=150
+        ).item()
+        return {'val_acc': acc}
+
+    def val_dataloader(self):
+        return self.dataset
+
+    def validation_step(self, data, idx):
+        return self.evaluate(data, data.val_mask)
+
+    def test_dataloader(self):
+        return self.dataset
+
+    def test_step(self, data, idx):
+        return self.evaluate(data, data.test_mask)
+
+    def validation_epoch_end(self, outputs):
+        avg_acc = torch.tensor([x['val_acc'] for x in outputs]).mean()
+        logs = {'val_acc': avg_acc}
+        return {'avg_val_acc': avg_acc, 'log': logs, 'progress_bar': logs}
 
     def test_epoch_end(self, outputs):
-        avg_acc = torch.tensor([x['val_acc'] for x in outputs]).mean()
-        logs = {'test_acc': avg_acc}
-        return {'avg_test_acc': avg_acc, 'log': logs, 'progress_bar': logs}
+        result = self.validation_epoch_end(outputs)
+        acc = result['log']['val_acc']
+        result['log']['test_result'] = acc
+        return result
 
 
 class Node2VecLinkPredictor(LitNode2Vec):
@@ -305,11 +318,12 @@ class GCNLinkPredictor(LightningModule):
 def main():
     dataset = load_dataset(
         dataset_name='cora',
-        transform=EdgeSplit()
+        # transform=EdgeSplit()
     )
-    model = GCNLinkPredictor(dataset, 'priv', priv_dim=dataset.num_node_features, epsilon=3)
+    model = GCNClassifier(dataset, 'priv', priv_dim=dataset.num_node_features, epsilon=3)
+    early_stop_callback = EarlyStopping(monitor='val_acc', min_delta=0, patience=10, verbose=True, mode='max')
     trainer = Trainer(gpus=1, max_epochs=1000, check_val_every_n_epoch=20, checkpoint_callback=False,
-                      early_stop_callback=False)
+                      early_stop_callback=early_stop_callback)
     trainer.fit(model)
     trainer.test()
 
