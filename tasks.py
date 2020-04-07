@@ -8,7 +8,8 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import LightningLoggerBase, rank_zero_only
 from pytorch_lightning.callbacks import EarlyStopping
 from torch_geometric.utils import degree
-from tsnecuda import TSNE
+try: from tsnecuda import TSNE
+except ImportError: from sklearn.manifold import TSNE
 
 from datasets import load_dataset
 from gnn import GCNConv, GConvMixedDP
@@ -22,21 +23,19 @@ params = {
                 'weight_decay': 5e-4,
                 'lr': 0.01
             },
-            'epochs': 200,
         },
         'node2vec': {
             'params': {
-                'embedding_dim': 64,
+                'embedding_dim': 128,
                 'walk_length': 20,
                 'context_size': 10,
                 'walks_per_node': 10,
                 'batch_size': 128,
                 'lr': 0.01
             },
-            'epochs': 100,
         },
         'early_stop': {
-            'min_delta': 0.001,
+            'min_delta': 0,
             'patience': 5
         }
     },
@@ -44,26 +43,28 @@ params = {
         'gcn': {
             'epochs': 200,
             'params': {
-                'hidden_dim': 128,
-                'output_dim': 64,
+                'hidden_dim': 64,
+                'output_dim': 32,
                 'dropout': 0,
-                'lr': 0.01
+                'lr': 0.01,
+                'weight_decay': 0
             },
         },
         'node2vec': {
             'params': {
-                'embedding_dim': 64,
+                'embedding_dim': 32,
                 'walk_length': 20,
                 'context_size': 10,
                 'walks_per_node': 10,
                 'batch_size': 128,
-                'lr': 0.01
+                'lr': 0.01,
+                'weight_decay': 0
             },
             'epochs': 100,
         },
         'early_stop': {
-            'min_delta': 0.001,
-            'patience': 1
+            'min_delta': 0,
+            'patience': 5
         }
     }
 }
@@ -165,23 +166,21 @@ class LinkPrediction(LearningTask):
                 feature=self.feature,
                 priv_dim=self.priv_dim,
                 epsilon=self.epsilon,
-                **params['nodeclass']['gcn']['params']
+                **params['linkpred']['gcn']['params']
             )
         else:
             return Node2VecLinkPredictor(
                 dataset=self.dataset,
-                **params['nodeclass']['node2vec']['params']
+                **params['linkpred']['node2vec']['params']
             )
 
     def run(self, **train_args):
-        early_stop_callback = EarlyStopping(monitor='val_auc', mode='max', **params['linkpred']['early_stop'])
+        early_stop_callback = EarlyStopping(monitor='val_loss', mode='min', **params['linkpred']['early_stop'])
         return super().run(early_stop_callback=early_stop_callback, **train_args)
 
 
 class ErrorEstimation(Task):
-    @staticmethod
-    def task_name():
-        return 'errorest'
+    task_name = 'errorest'
 
     def __init__(self, dataset, model_name, feature, epsilon, priv_dim):
         assert model_name == 'gcn' and feature == 'priv'
@@ -194,7 +193,7 @@ class ErrorEstimation(Task):
         self.gc = gcnconv(data.x, data.edge_index)
 
     @torch.no_grad()
-    def run(self):
+    def run(self, **kwargs):
         data = self.dataset[0].to('cuda')
         data = transform_features(data, self.feature)
         model = GConvMixedDP(
@@ -234,12 +233,17 @@ class VisualizeEmbedding(LinkPrediction):
 
 
 def main():
+    torch.manual_seed(12345)
     dataset = load_dataset(
         dataset_name='cora',
         # transform=EdgeSplit()
     )
-    result = NodeClassification(dataset, 'gcn', 'raw', 3, dataset.num_node_features).run(max_epochs=500)
-    print(result)
+    for i in range(10):
+        result = LinkPrediction(
+            dataset, model_name='gcn', feature='raw', epsilon=0, priv_dim=dataset.num_node_features
+        ).run(max_epochs=500)
+        print(result)
+
 
 if __name__ == '__main__':
     main()
