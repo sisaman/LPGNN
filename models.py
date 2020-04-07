@@ -267,7 +267,6 @@ class GCNLinkPredictor(LightningModule):
 
     def prepare_data(self):
         data = transform_features(self.dataset[0], self.feature, self.priv_dim, self.epsilon)
-        data.train_mask = data.val_mask = data.test_mask = data.y = None
         self.dataset = [data]
 
     def train_dataloader(self):
