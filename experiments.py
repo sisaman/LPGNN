@@ -7,18 +7,20 @@ from colorama import Fore, Style
 from datasets import load_dataset, EdgeSplit
 from tasks import LinkPrediction, NodeClassification, ErrorEstimation
 
+torch.manual_seed(12345)
+
 
 def experiment():
     tasks = [
         ErrorEstimation,
-        # NodeClassification,
-        # LinkPrediction,
+        NodeClassification,
+        LinkPrediction,
     ]
     datasets = [
         'cora',
-        # 'citeseer',
-        # 'pubmed',
-        # 'flickr'
+        'citeseer',
+        'pubmed',
+        'flickr'
     ]
     models = [
         'gcn',
@@ -39,7 +41,8 @@ def experiment():
 
     for task in tasks:
         for dataset_name in datasets:
-            dataset = load_dataset(dataset_name)
+            transform = EdgeSplit(random_state=hash(dataset_name)) if task is LinkPrediction else None
+            dataset = load_dataset(dataset_name, transform=transform)
             model_list = ['gcn'] if task is ErrorEstimation else models
             for model in model_list:
                 feature_list = ['priv'] if task is ErrorEstimation else features.get(model, ['void'])
@@ -77,16 +80,5 @@ def experiment():
                     df_result.to_pickle(f'results/{task.task_name}_{dataset_name}_{model}_{feature}.pkl')
 
 
-def preprocess_datasets():
-    print('---DATASET PREPROCESSING---')
-    datasets = ['cora', 'citeseer', 'pubmed', 'flickr']
-    for i, dataset in enumerate(datasets):
-        torch.manual_seed(i)
-        load_dataset(dataset, pre_transforms=[EdgeSplit()])
-    print('---DONE---')
-
-
 if __name__ == '__main__':
-    # preprocess_datasets()
-    torch.manual_seed(12345)
     experiment()
