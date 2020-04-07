@@ -205,8 +205,7 @@ class EdgeSplit:
         self.test_ratio = test_ratio
 
     def __call__(self, data):
-        torch.manual_seed(0)  # same partition
-        data.train_mask = data.val_mask = data.test_mask = data.y = None
+        # data.train_mask = data.val_mask = data.test_mask = data.y = None
         data = train_test_split_edges(data, self.val_ratio, self.test_ratio)
         data.edge_index = data.train_pos_edge_index
         return data
@@ -236,14 +235,3 @@ def load_dataset(dataset_name, transform=None):
     dataset.name = dataset_name
     return dataset
 
-
-def get_dataloader(dataset_name, data):
-    if dataset_name == 'reddit':
-        cluster_data = ClusterData(data, num_parts=5000, recursive=False, save_dir='datasets/Reddit/processed')
-        loader = ClusterLoader(cluster_data, batch_size=32, shuffle=True)
-        loader = [batch for batch in loader]
-        return loader
-    elif dataset_name == 'facebook':
-        loader = DataLoader(data)
-    else:
-        return [data]
