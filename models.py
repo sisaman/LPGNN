@@ -13,7 +13,7 @@ import torch
 from torch.nn.functional import binary_cross_entropy_with_logits, cross_entropy
 from torch.optim import Adam
 from torch_geometric.nn import Node2Vec
-from datasets import load_dataset, EdgeSplit
+from datasets import load_dataset
 from gnn import GCN
 
 
@@ -48,14 +48,17 @@ def get_link_labels(pos_edge_index, neg_edge_index):
     return link_labels
 
 
-def aggregate_link_prediction_results(outputs):
+def aggregate_link_prediction_results(outputs, metric='loss'):
     link_labels = torch.stack([x['labels'] for x in outputs])
     link_logits = torch.stack([x['logits'] for x in outputs])
-    link_probs = torch.sigmoid(link_logits)
-    auc = roc_auc_score(link_labels.cpu().numpy().ravel(), link_probs.cpu().numpy().ravel())
-    loss = binary_cross_entropy_with_logits(link_logits, link_labels).item()
-    logs = {'val_loss': loss, 'val_auc': auc}
-    return {'val_loss': loss, 'log': logs, 'progress_bar': logs}
+    if metric == 'auc':
+        link_probs = torch.sigmoid(link_logits)
+        result = roc_auc_score(link_labels.cpu().numpy().ravel(), link_probs.cpu().numpy().ravel())
+    else:
+        result = binary_cross_entropy_with_logits(link_logits, link_labels).item()
+
+    logs = {'val_'+metric: result}
+    return {'val_'+metric: result, 'log': logs, 'progress_bar': logs}
 
 
 class LitNode2Vec(LightningModule):
@@ -124,7 +127,7 @@ class Node2VecLinkPredictor(LitNode2Vec):
         total_edge_index = torch.cat([pos_edge_index, neg_edge_index], dim=-1)
         x_j = self(total_edge_index[0])
         x_i = self(total_edge_index[1])
-        return torch.einsum("ef,ef->e", x_i, x_j)
+        return (x_i * x_j).sum(dim=1)
 
     def validation_step(self, data, index):
         pos_edge_index, neg_edge_index = data.val_pos_edge_index, data.val_neg_edge_index
@@ -139,7 +142,7 @@ class Node2VecLinkPredictor(LitNode2Vec):
         return self.dataset
 
     def validation_epoch_end(self, outputs):
-        return aggregate_link_prediction_results(outputs)
+        return aggregate_link_prediction_results(outputs, 'loss')
 
     def test_step(self, data, index):
         pos_edge_index, neg_edge_index = data.test_pos_edge_index, data.test_neg_edge_index
@@ -148,7 +151,7 @@ class Node2VecLinkPredictor(LitNode2Vec):
         return {'labels': link_labels, 'logits': link_logits}
 
     def test_epoch_end(self, outputs):
-        result = self.validation_epoch_end(outputs)
+        result = aggregate_link_prediction_results(outputs, 'auc')
         auc = result['log']['val_auc']
         result['log']['test_result'] = auc
         return result
@@ -230,7 +233,7 @@ class GCNClassifier(LightningModule):
 
 class GCNLinkPredictor(LightningModule):
     def __init__(self, dataset, feature, hidden_dim=128, output_dim=64, priv_dim=0, epsilon=0,
-                 dropout=0, lr=0.01, weight_decay=5e-4):
+                 dropout=0, lr=0.01, weight_decay=0):
         super().__init__()
         self.dataset = dataset
         self.feature = feature
@@ -255,7 +258,7 @@ class GCNLinkPredictor(LightningModule):
         total_edge_index = torch.cat([pos_edge_index, neg_edge_index], dim=-1)
         x_j = torch.index_select(x, 0, total_edge_index[0])
         x_i = torch.index_select(x, 0, total_edge_index[1])
-        return torch.einsum("ef,ef->e", x_i, x_j)
+        return (x_i * x_j).sum(dim=1)
 
     def forward(self, data):
         x, edge_index = data.x, data.edge_index
@@ -264,6 +267,7 @@ class GCNLinkPredictor(LightningModule):
 
     def prepare_data(self):
         data = transform_features(self.dataset[0], self.feature, self.priv_dim, self.epsilon)
+        data.train_mask = data.val_mask = data.test_mask = data.y = None
         self.dataset = [data]
 
     def train_dataloader(self):
@@ -281,10 +285,10 @@ class GCNLinkPredictor(LightningModule):
 
     def training_step(self, data, index):
         x, pos_edge_index = data.x, data.train_pos_edge_index
-        pos_edge_index_with_self_loops, _ = add_remaining_self_loops(pos_edge_index, num_nodes=x.size(0))
+        pos_edge_index_with_self_loops, _ = add_remaining_self_loops(pos_edge_index, num_nodes=data.num_nodes)
 
         neg_edge_index = negative_sampling(
-            edge_index=pos_edge_index_with_self_loops, num_nodes=x.size(0),
+            edge_index=pos_edge_index_with_self_loops, num_nodes=data.num_nodes,
             num_neg_samples=pos_edge_index.size(1))
 
         link_logits = self.get_link_logits(x, pos_edge_index, neg_edge_index)
@@ -300,7 +304,7 @@ class GCNLinkPredictor(LightningModule):
         return {'labels': link_labels, 'logits': link_logits}
 
     def validation_epoch_end(self, outputs):
-        return aggregate_link_prediction_results(outputs)
+        return aggregate_link_prediction_results(outputs, 'loss')
 
     def test_step(self, data, index):
         pos_edge_index, neg_edge_index = data.test_pos_edge_index, data.test_neg_edge_index
@@ -309,7 +313,7 @@ class GCNLinkPredictor(LightningModule):
         return {'labels': link_labels, 'logits': link_logits}
 
     def test_epoch_end(self, outputs):
-        result = self.validation_epoch_end(outputs)
+        result = aggregate_link_prediction_results(outputs, 'auc')
         auc = result['log']['val_auc']
         result['log']['test_result'] = auc
         return result
