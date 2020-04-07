@@ -41,7 +41,6 @@ params = {
     },
     'linkpred': {
         'gcn': {
-            'epochs': 200,
             'params': {
                 'hidden_dim': 64,
                 'output_dim': 32,
@@ -60,7 +59,6 @@ params = {
                 'lr': 0.01,
                 'weight_decay': 0
             },
-            'epochs': 100,
         },
         'early_stop': {
             'min_delta': 0,
@@ -152,7 +150,7 @@ class NodeClassification(LearningTask):
             )
 
     def run(self, **train_args):
-        early_stop_callback = EarlyStopping(monitor='val_acc', mode='max', **params['nodeclass']['early_stop'])
+        early_stop_callback = EarlyStopping(monitor='val_loss', mode='min', **params['nodeclass']['early_stop'])
         return super().run(early_stop_callback=early_stop_callback, **train_args)
 
 
