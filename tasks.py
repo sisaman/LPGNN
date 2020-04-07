@@ -1,11 +1,16 @@
+import os
+import sys
 from abc import abstractmethod
+from contextlib import contextmanager
 
 import torch
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import LightningLoggerBase, rank_zero_only
+from pytorch_lightning.callbacks import EarlyStopping
 from torch_geometric.utils import degree
 from tsnecuda import TSNE
 
+from datasets import load_dataset
 from gnn import GCNConv, GConvMixedDP
 from models import GCNClassifier, Node2VecClassifier, GCNLinkPredictor, Node2VecLinkPredictor, transform_features
 
@@ -29,6 +34,10 @@ params = {
                 'lr': 0.01
             },
             'epochs': 100,
+        },
+        'early_stop': {
+            'min_delta': 0.001,
+            'patience': 5
         }
     },
     'linkpred': {
@@ -51,9 +60,24 @@ params = {
                 'lr': 0.01
             },
             'epochs': 100,
+        },
+        'early_stop': {
+            'min_delta': 0.001,
+            'patience': 1
         }
     }
 }
+
+
+@contextmanager
+def silence_stdout():
+    new_target = open(os.devnull, "w")
+    old_target = sys.stdout
+    sys.stdout = new_target
+    try:
+        yield new_target
+    finally:
+        sys.stdout = old_target
 
 
 class ResultLogger(LightningLoggerBase):
@@ -100,9 +124,11 @@ class LearningTask(Task):
     def run(self, **train_args):
         logger = ResultLogger()
         model = self.get_model()
-        trainer = Trainer(logger=logger, **train_args)
+        trainer = Trainer(
+            gpus=1, check_val_every_n_epoch=10, checkpoint_callback=False, logger=logger, **train_args
+        )
         trainer.fit(model)
-        trainer.test()
+        with silence_stdout(): trainer.test()
         return logger.result
 
 
@@ -124,6 +150,10 @@ class NodeClassification(LearningTask):
                 **params['nodeclass']['node2vec']['params']
             )
 
+    def run(self, **train_args):
+        early_stop_callback = EarlyStopping(monitor='val_acc', mode='max', **params['nodeclass']['early_stop'])
+        return super().run(early_stop_callback=early_stop_callback, **train_args)
+
 
 class LinkPrediction(LearningTask):
     task_name = 'linkpred'
@@ -142,6 +172,10 @@ class LinkPrediction(LearningTask):
                 dataset=self.dataset,
                 **params['nodeclass']['node2vec']['params']
             )
+
+    def run(self, **train_args):
+        early_stop_callback = EarlyStopping(monitor='val_auc', mode='max', **params['linkpred']['early_stop'])
+        return super().run(early_stop_callback=early_stop_callback, **train_args)
 
 
 class ErrorEstimation(Task):
@@ -192,7 +226,20 @@ class VisualizeEmbedding(LinkPrediction):
 
     def run(self, **train_args):
         model = self.get_model()
-        trainer = Trainer(**train_args)
+        early_stop_callback = EarlyStopping(monitor='val_auc', mode='max', **params['linkpred']['early_stop'])
+        trainer = Trainer(early_stop_callback=early_stop_callback, **train_args)
         trainer.fit(model)
         z = model(self.dataset[0])
         return TSNE(n_components=2).fit_transform(z.cpu().numpy())
+
+
+def main():
+    dataset = load_dataset(
+        dataset_name='cora',
+        # transform=EdgeSplit()
+    )
+    result = NodeClassification(dataset, 'gcn', 'raw', 3, dataset.num_node_features).run(max_epochs=500)
+    print(result)
+
+if __name__ == '__main__':
+    main()
