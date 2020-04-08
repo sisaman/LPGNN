@@ -235,12 +235,12 @@ def main():
     torch.manual_seed(12345)
     dataset = load_dataset(
         dataset_name='cora',
-        # transform=EdgeSplit()
+        task_name='linkpred'
     )
-    for i in range(10):
+    for i in range(1):
         result = LinkPrediction(
-            dataset, model_name='gcn', feature='raw', epsilon=0, priv_dim=dataset.num_node_features
-        ).run(max_epochs=500)
+            dataset, model_name='node2vec', feature='void', epsilon=0, priv_dim=dataset.num_node_features
+        ).run(max_epochs=10)
         print(result)
 
 
