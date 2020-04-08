@@ -65,7 +65,7 @@ def experiment(args):
                                 )
                                 print(Fore.BLUE + f'\ntask={task.task_name} / dataset={dataset_name} / model={model} / '
                                       f'feature={feature} / pr={pr} / eps={eps} / run={run}' + Style.RESET_ALL)
-                                result = t.run(max_epochs=500)
+                                result = t.run(max_epochs=args.epochs)
                                 if task is not ErrorEstimation:
                                     print(result)
                                 results.append((f'{model}+{feature}', pr, eps, run, result))
@@ -78,12 +78,17 @@ def experiment(args):
 
 
 if __name__ == '__main__':
+    tasks = ['nodeclass', 'linkpred', 'errorest']
+    datasets = ['cora', 'citeseer', 'pubmed', 'flickr']
+    models = ['gcn', 'node2vec']
+    features = ['raw', 'priv', 'locd']
     parser = ArgumentParser()
-    parser.add_argument('-t', '--tasks', nargs='+', choices=['nodeclass', 'linkpred', 'errorest'], required=True)
-    parser.add_argument('-d', '--datasets', nargs='+', choices=['cora', 'citeseer', 'pubmed', 'flickr'], required=True)
-    parser.add_argument('-m', '--models', nargs='*', choices=['gcn', 'node2vec'], default=['gcn'])
-    parser.add_argument('-f', '--features', nargs='*', choices=['raw', 'priv', 'locd'], default=['raw'])
+    parser.add_argument('-t', '--tasks', nargs='*', choices=tasks, default=tasks)
+    parser.add_argument('-d', '--datasets', nargs='*', choices=datasets, default=datasets)
+    parser.add_argument('-m', '--models', nargs='*', choices=models, default=models)
+    parser.add_argument('-f', '--features', nargs='*', choices=features, default=features)
     parser.add_argument('-r', '--repeats', type=int, default=10)
+    parser.add_argument('-e', '--epochs', type=int, default=500)
 
     args = parser.parse_args()
     print(args)
