@@ -12,8 +12,8 @@ torch.manual_seed(12345)
 
 def experiment():
     tasks = [
-        ErrorEstimation,
-        NodeClassification,
+        # ErrorEstimation,
+        # NodeClassification,
         LinkPrediction,
     ]
     datasets = [
@@ -41,8 +41,7 @@ def experiment():
 
     for task in tasks:
         for dataset_name in datasets:
-            transform = EdgeSplit(random_state=hash(dataset_name)) if task is LinkPrediction else None
-            dataset = load_dataset(dataset_name, transform=transform)
+            dataset = load_dataset(dataset_name, task_name=task.task_name)
             model_list = ['gcn'] if task is ErrorEstimation else models
             for model in model_list:
                 feature_list = ['priv'] if task is ErrorEstimation else features.get(model, ['void'])
