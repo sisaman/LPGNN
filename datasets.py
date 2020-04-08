@@ -272,12 +272,12 @@ class EdgeSplit:
     def __init__(self, val_ratio=0.05, test_ratio=0.1, random_state=None):
         self.val_ratio = val_ratio
         self.test_ratio = test_ratio
-        if random_state is not None:
-            self.rng = torch.Generator().manual_seed(random_state)
+        self.random_state = random_state
 
     def __call__(self, data):
+        rng = torch.Generator().manual_seed(self.random_state)
         data.train_mask = data.val_mask = data.test_mask = data.y = None
-        data = train_test_split_edges(data, self.val_ratio, self.test_ratio, rng=self.rng)
+        data = train_test_split_edges(data, self.val_ratio, self.test_ratio, rng=rng)
         data.edge_index = data.train_pos_edge_index
         return data
 
@@ -298,11 +298,12 @@ def get_availabel_datasets():
     return list(datasets.keys())
 
 
-def load_dataset(dataset_name, transform=None, pre_transforms=None):
+def load_dataset(dataset_name, task_name=None):
     transforms = [DataRange()]
-    if transform is not None: transforms += [transform]
-    if pre_transforms is None: pre_transforms = []
-    dataset = datasets[dataset_name](transform=Compose(transforms), pre_transform=Compose(pre_transforms))
+    if task_name == 'linkpred':
+        seed = sum([ord(c) for c in dataset_name])
+        transforms += [EdgeSplit(random_state=seed)]
+    dataset = datasets[dataset_name](transform=Compose(transforms))
     dataset.name = dataset_name
     return dataset
 
