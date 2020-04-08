@@ -84,6 +84,7 @@ class LitNode2Vec(LightningModule):
 
     def train_dataloader(self):
         data = self.dataset[0]
+        # noinspection PyTypeChecker
         sampler = DataLoader(torch.arange(data.num_nodes), batch_size=self.batch_size, shuffle=True)
         return [(data.edge_index, subset) for subset in sampler]
 
@@ -123,6 +124,12 @@ class Node2VecClassifier(LitNode2Vec):
 
 
 class Node2VecLinkPredictor(LitNode2Vec):
+    def __init__(self, dataset, embedding_dim, walk_length, context_size, walks_per_node, batch_size,
+                 lr=0.01, weight_decay=0):
+        super().__init__(dataset, embedding_dim, walk_length, context_size, walks_per_node, batch_size,
+                         lr, weight_decay)
+        self.dataset = [dataset[0]]
+
     def get_link_logits(self, pos_edge_index, neg_edge_index):
         total_edge_index = torch.cat([pos_edge_index, neg_edge_index], dim=-1)
         x_j = self(total_edge_index[0])
@@ -136,10 +143,10 @@ class Node2VecLinkPredictor(LitNode2Vec):
         return {'labels': link_labels, 'logits': link_logits}
 
     def val_dataloader(self):
-        return self.dataset
+        return [self.dataset]
 
     def test_dataloader(self):
-        return self.dataset
+        return self.val_dataloader()
 
     def validation_epoch_end(self, outputs):
         return aggregate_link_prediction_results(outputs, 'loss')

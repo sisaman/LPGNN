@@ -18,9 +18,9 @@ def experiment():
     ]
     datasets = [
         'cora',
-        'citeseer',
-        'pubmed',
-        'flickr'
+        # 'citeseer',
+        # 'pubmed',
+        # 'flickr'
     ]
     models = [
         'gcn',
