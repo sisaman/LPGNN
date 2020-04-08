@@ -4,48 +4,47 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 import pandas as pd
 import torch
 from colorama import Fore, Style
-from datasets import load_dataset, EdgeSplit
+from datasets import load_dataset
 from tasks import LinkPrediction, NodeClassification, ErrorEstimation
-
+from argparse import ArgumentParser
 torch.manual_seed(12345)
 
 
-def experiment():
-    tasks = [
-        ErrorEstimation,
-        NodeClassification,
-        LinkPrediction,
-    ]
-    datasets = [
-        'cora',
-        'citeseer',
-        'pubmed',
-        'flickr'
-    ]
-    models = [
-        'gcn',
-        'node2vec'
-    ]
-    features = {
-        'gcn': [
-            'raw',
-            'priv',
-            'locd'
-        ],
+def experiment(args):
+    task_class = {
+        'nodeclass': NodeClassification,
+        'linkpred': LinkPrediction,
+        'errorest': ErrorEstimation
     }
+    # datasets = [
+    #     # 'cora',
+    #     # 'citeseer',
+    #     # 'pubmed',
+    #     'flickr'
+    # ]
+    # models = [
+    #     'gcn',
+    #     'node2vec'
+    # ]
+    # features = {
+    #     'gcn': [
+    #         'raw',
+    #         'priv',
+    #         'locd'
+    #     ],
+    # }
     epsilons = [0.1, 1, 3, 5, 7, 9]
     epsilons_pr = [1, 3, 5]
     epsilons_err = [0.1, 0.2, 0.5, 1, 2, 5]
     private_ratios = [0.1, 0.2, 0.50, 1]
-    repeats = 10
 
-    for task in tasks:
-        for dataset_name in datasets:
-            transform = EdgeSplit(random_state=hash(dataset_name)) if task is LinkPrediction else None
-            dataset = load_dataset(dataset_name, transform=transform)
-            model_list = ['gcn'] if task is ErrorEstimation else models
+    for task in args.tasks:
+        task = task_class[task]
+        for dataset_name in args.datasets:
+            dataset = load_dataset(dataset_name, task_name=task.task_name)
+            model_list = ['gcn'] if task is ErrorEstimation else args.models
             for model in model_list:
-                feature_list = ['priv'] if task is ErrorEstimation else features.get(model, ['void'])
+                feature_list = ['priv'] if task is ErrorEstimation else args.features
                 for feature in feature_list:
                     results = []
                     pr_list = private_ratios if feature == 'priv' else [0]
@@ -59,7 +58,7 @@ def experiment():
                             eps_list = [0]
 
                         for eps in eps_list:
-                            for run in range(1 if task is ErrorEstimation else repeats):
+                            for run in range(1 if task is ErrorEstimation else args.repeats):
                                 t = task(
                                     dataset=dataset, model_name=model, feature=feature, epsilon=eps,
                                     priv_dim=int(pr * dataset.num_node_features)
@@ -79,4 +78,13 @@ def experiment():
 
 
 if __name__ == '__main__':
-    experiment()
+    parser = ArgumentParser()
+    parser.add_argument('-t', '--tasks', nargs='+', choices=['nodeclass', 'linkpred', 'errorest'], required=True)
+    parser.add_argument('-d', '--datasets', nargs='+', choices=['cora', 'citeseer', 'pubmed', 'flickr'], required=True)
+    parser.add_argument('-m', '--models', nargs='*', choices=['gcn', 'node2vec'], default=['gcn'])
+    parser.add_argument('-f', '--features', nargs='*', choices=['raw', 'priv', 'locd'], default=['raw'])
+    parser.add_argument('-r', '--repeats', type=int, default=10)
+
+    args = parser.parse_args()
+    print(args)
+    experiment(args)
