@@ -8,8 +8,9 @@
 - ~~Shallow node embedding baselines~~
 - ~~Run the experiments for a wider range of epsilon~~
 - ~~Experiment for combination of private/non-private features~~
-- Adapt other differentially private mechanisms for mean/summation estimation
-- Assess the robustness of the method to the sparsity level of the graph
-- Visualize the embeddings obtained privately and compare with the results with the original GCN
 - Perform experiments over some more datasets, preferably not citation networks
+- Visualize the embeddings obtained privately and compare with the results with the original GCN
+- Adapt other differentially private mechanisms for mean/summation estimation
+- Generalize beyond GCNs
 - Convergence of different models
+- Experiment on the percentage of nodes with private features
