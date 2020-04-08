@@ -1,44 +1,14 @@
-# todo make it work for datasets with more than one graph
-
-import math
-from sklearn.metrics import roc_auc_score
-from torch.distributions import Bernoulli
-from torch.utils.data import DataLoader
-from torch_geometric.transforms import LocalDegreeProfile
-from torch_geometric.utils import add_remaining_self_loops, negative_sampling
-
-from pytorch_lightning import Trainer, LightningModule
-from pytorch_lightning.callbacks import EarlyStopping
 import torch
+from pytorch_lightning import Trainer, LightningModule
+from sklearn.metrics import roc_auc_score
 from torch.nn.functional import binary_cross_entropy_with_logits, cross_entropy
 from torch.optim import Adam
+from torch.utils.data import DataLoader
 from torch_geometric.nn import Node2Vec
-from datasets import load_dataset
+from torch_geometric.utils import add_remaining_self_loops, negative_sampling
+
+from datasets import load_dataset, GraphLoader
 from gnn import GCN
-
-
-def one_bit_response(x, epsilon, alpha, delta, priv_dim=-1):
-    if priv_dim == -1:
-        priv_dim = x.size(1)
-    exp = math.exp(epsilon)
-    x_priv = x[:, :priv_dim]
-    p = (x_priv - alpha[:priv_dim]) / delta[:priv_dim]
-    p[torch.isnan(p)] = 0.  # nan happens when alpha = beta, so also data.x = alpha, so the prev fraction must be 0
-    p = p * (exp - 1) / (exp + 1) + 1 / (exp + 1)
-    x_priv = Bernoulli(p).sample()
-    x = torch.cat([x_priv, x[:, priv_dim:]], dim=1)
-    return x
-
-
-def transform_features(data, feature, priv_dim=0, epsilon=0):
-    if feature == 'priv':
-        data.x = one_bit_response(data.x, epsilon, data.alpha, data.delta, priv_dim)
-    elif feature == 'locd':
-        num_nodes = data.num_nodes
-        data.x = None
-        data.num_nodes = num_nodes
-        data = LocalDegreeProfile()(data)
-    return data
 
 
 def get_link_labels(pos_edge_index, neg_edge_index):
@@ -62,10 +32,10 @@ def aggregate_link_prediction_results(outputs, metric='loss'):
 
 
 class LitNode2Vec(LightningModule):
-    def __init__(self, dataset, embedding_dim, walk_length, context_size, walks_per_node, batch_size,
+    def __init__(self, data, embedding_dim, walk_length, context_size, walks_per_node, batch_size,
                  lr=0.01, weight_decay=0):
         super().__init__()
-        self.data = dataset[0]
+        self.data = data
         self.model = Node2Vec(self.data.num_nodes, embedding_dim, walk_length, context_size, walks_per_node)
         self.batch_size = batch_size
         self.lr = lr
@@ -97,13 +67,13 @@ class Node2VecClassifier(LitNode2Vec):
         return {'val_acc': acc}
 
     def val_dataloader(self):
-        return [[self.data]]
+        return GraphLoader(self.data)
 
     def validation_step(self, data, idx):
         return self.evaluate(data.val_mask)
 
     def test_dataloader(self):
-        return self.val_dataloader()
+        return GraphLoader(self.data)
 
     def test_step(self, data, idx):
         return self.evaluate(data.test_mask)
@@ -134,10 +104,10 @@ class Node2VecLinkPredictor(LitNode2Vec):
         return {'labels': link_labels, 'logits': link_logits}
 
     def val_dataloader(self):
-        return [[self.data]]
+        return GraphLoader(self.data)
 
     def test_dataloader(self):
-        return self.val_dataloader()
+        return GraphLoader(self.data)
 
     def validation_epoch_end(self, outputs):
         return aggregate_link_prediction_results(outputs, 'loss')
@@ -156,24 +126,20 @@ class Node2VecLinkPredictor(LitNode2Vec):
 
 
 class GCNClassifier(LightningModule):
-    def __init__(self, dataset, feature, hidden_dim=16, priv_dim=0, epsilon=0, dropout=0.5, lr=0.01, weight_decay=5e-4):
+    def __init__(self, data, hidden_dim=16, priv_dim=0, epsilon=0, dropout=0.5, lr=0.01, weight_decay=5e-4):
         super().__init__()
-        self.dataset = dataset
-        self.feature = feature
-        self.epsilon = epsilon
-        self.priv_dim = priv_dim
+        self.data = data
         self.lr = lr
         self.weight_decay = weight_decay
-        input_dim = 5 if feature == 'locd' else dataset.num_node_features
         self.gcn = GCN(
-            input_dim=input_dim,
-            output_dim=dataset.num_classes,
+            input_dim=data.num_node_features,
+            output_dim=data.num_classes,
             hidden_dim=hidden_dim,
             dropout=dropout,
             priv_input_dim=priv_dim,
             epsilon=epsilon,
-            alpha=dataset[0].alpha,
-            delta=dataset[0].delta
+            alpha=data.alpha,
+            delta=data.delta
         )
 
     def forward(self, data):
@@ -182,12 +148,8 @@ class GCNClassifier(LightningModule):
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
-    def prepare_data(self):
-        data = transform_features(self.dataset[0], self.feature, self.priv_dim, self.epsilon)
-        self.dataset = [data]
-
     def train_dataloader(self):
-        return self.dataset
+        return GraphLoader(self.data)
 
     def training_step(self, data, index):
         out = self(data)
@@ -195,7 +157,7 @@ class GCNClassifier(LightningModule):
         return {'loss': loss}
 
     def val_dataloader(self):
-        return [self.dataset]
+        return GraphLoader(self.data)
 
     def evaluate(self, data, mask):
         out = self(data)
@@ -217,7 +179,7 @@ class GCNClassifier(LightningModule):
         return {'avg_val_loss': avg_loss, 'avg_val_acc': avg_acc, 'log': logs, 'progress_bar': logs}
 
     def test_dataloader(self):
-        return [self.dataset]
+        return GraphLoader(self.data)
 
     def test_step(self, data, index):
         return self.evaluate(data, data.test_mask)
@@ -230,25 +192,21 @@ class GCNClassifier(LightningModule):
 
 
 class GCNLinkPredictor(LightningModule):
-    def __init__(self, dataset, feature, hidden_dim=128, output_dim=64, priv_dim=0, epsilon=0,
+    def __init__(self, data, hidden_dim=128, output_dim=64, priv_dim=0, epsilon=0,
                  dropout=0, lr=0.01, weight_decay=0):
         super().__init__()
-        self.dataset = dataset
-        self.feature = feature
-        self.epsilon = epsilon
-        self.priv_dim = priv_dim
+        self.data = data
         self.lr = lr
         self.weight_decay = weight_decay
-        input_dim = 5 if feature == 'locd' else dataset.num_node_features
         self.gcn = GCN(
-            input_dim=input_dim,
+            input_dim=data.num_node_features,
             output_dim=output_dim,
             hidden_dim=hidden_dim,
             dropout=dropout,
             priv_input_dim=priv_dim,
             epsilon=epsilon,
-            alpha=dataset[0].alpha,
-            delta=dataset[0].delta
+            alpha=data.alpha,
+            delta=data.delta
         )
 
     def get_link_logits(self, x, pos_edge_index, neg_edge_index):
@@ -263,19 +221,14 @@ class GCNLinkPredictor(LightningModule):
         x = self.gcn(x, edge_index)
         return x
 
-    def prepare_data(self):
-        data = transform_features(self.dataset[0], self.feature, self.priv_dim, self.epsilon)
-        self.dataset = [data]
-
     def train_dataloader(self):
-        # return DataLoader(self.dataset)
-        return self.dataset
+        return GraphLoader(self.data)
 
     def val_dataloader(self):
-        return [self.dataset]
+        return GraphLoader(self.data)
 
     def test_dataloader(self):
-        return [self.dataset]
+        return GraphLoader(self.data)
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)

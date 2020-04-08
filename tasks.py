@@ -1,3 +1,4 @@
+import math
 import os
 import sys
 from abc import abstractmethod
@@ -7,13 +8,16 @@ import torch
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import LightningLoggerBase, rank_zero_only
 from pytorch_lightning.callbacks import EarlyStopping
+from torch.distributions import Bernoulli
+from torch_geometric.data import Data
+from torch_geometric.transforms import LocalDegreeProfile
 from torch_geometric.utils import degree
 try: from tsnecuda import TSNE
 except ImportError: from sklearn.manifold import TSNE
 
 from datasets import load_dataset
 from gnn import GCNConv, GConvMixedDP
-from models import GCNClassifier, Node2VecClassifier, GCNLinkPredictor, Node2VecLinkPredictor, transform_features
+from models import GCNClassifier, Node2VecClassifier, GCNLinkPredictor, Node2VecLinkPredictor
 
 params = {
     'nodeclass': {
@@ -100,16 +104,42 @@ class ResultLogger(LightningLoggerBase):
     def version(self): return 0.1
 
 
+def one_bit_response(x, epsilon, alpha, delta, priv_dim=-1):
+    if priv_dim == -1:
+        priv_dim = x.size(1)
+    exp = math.exp(epsilon)
+    x_priv = x[:, :priv_dim]
+    p = (x_priv - alpha[:priv_dim]) / delta[:priv_dim]
+    p[torch.isnan(p)] = 0.  # nan happens when alpha = beta, so also data.x = alpha, so the prev fraction must be 0
+    p = p * (exp - 1) / (exp + 1) + 1 / (exp + 1)
+    x_priv = Bernoulli(p).sample()
+    x = torch.cat([x_priv, x[:, priv_dim:]], dim=1)
+    return x
+
+
+@torch.no_grad()
+def transform_features(data, feature, priv_dim=0, epsilon=0):
+    data = Data(**dict(data()))  # copy data to avoid changing the original
+    if feature == 'priv':
+        # noinspection PyUnresolvedReferences
+        data.x = one_bit_response(data.x, epsilon, data.alpha, data.delta, priv_dim)
+    elif feature == 'locd':
+        num_nodes = data.num_nodes
+        data.x = None
+        data.num_nodes = num_nodes
+        data = LocalDegreeProfile()(data)
+    return data
+
+
 class Task:
     @staticmethod
     def task_name(): raise NotImplementedError
 
-    def __init__(self, dataset, model_name, feature, epsilon, priv_dim):
-        self.dataset = dataset
+    def __init__(self, data, model_name, feature, epsilon, priv_dim):
         self.model_name = model_name
-        self.feature = feature
         self.epsilon = epsilon
-        self.priv_dim = priv_dim if self.feature == 'priv' else 0
+        self.priv_dim = priv_dim if feature == 'priv' else 0  # this condition is important
+        self.data = transform_features(data, feature, priv_dim, epsilon)
 
     @abstractmethod
     def run(self): pass
@@ -137,15 +167,14 @@ class NodeClassification(LearningTask):
     def get_model(self):
         if self.model_name == 'gcn':
             return GCNClassifier(
-                dataset=self.dataset,
-                feature=self.feature,
+                data=self.data,
                 priv_dim=self.priv_dim,
                 epsilon=self.epsilon,
                 **params['nodeclass']['gcn']['params']
             )
         else:
             return Node2VecClassifier(
-                dataset=self.dataset,
+                data=self.data,
                 **params['nodeclass']['node2vec']['params']
             )
 
@@ -161,15 +190,14 @@ class LinkPrediction(LearningTask):
     def get_model(self):
         if self.model_name == 'gcn':
             return GCNLinkPredictor(
-                dataset=self.dataset,
-                feature=self.feature,
+                data=self.data,
                 priv_dim=self.priv_dim,
                 epsilon=self.epsilon,
                 **params['linkpred']['gcn']['params']
             )
         else:
             return Node2VecLinkPredictor(
-                dataset=self.dataset,
+                data=self.data,
                 **params['linkpred']['node2vec']['params']
             )
 
@@ -181,10 +209,10 @@ class LinkPrediction(LearningTask):
 class ErrorEstimation(Task):
     task_name = 'errorest'
 
-    def __init__(self, dataset, model_name, feature, epsilon, priv_dim):
+    def __init__(self, data, model_name, feature, epsilon, priv_dim):
         assert model_name == 'gcn' and feature == 'priv'
-        super().__init__(dataset, model_name, feature, epsilon, priv_dim)
-        data = self.dataset[0].to('cuda')
+        super().__init__(data, model_name, feature, epsilon, priv_dim)
+        data = data.to('cuda')
         delta = data.delta.clone()
         delta[delta == 0] = 1  # avoid inf and nan
         self.delta = delta
@@ -193,8 +221,8 @@ class ErrorEstimation(Task):
 
     @torch.no_grad()
     def run(self, **kwargs):
-        data = self.dataset[0].to('cuda')
-        data = transform_features(data, self.feature, self.priv_dim, self.epsilon)
+        data = self.data.to('cuda')
+        # data = transform_features(data, self.feature, self.priv_dim, self.epsilon)
         model = GConvMixedDP(
             priv_dim=self.priv_dim,
             epsilon=self.epsilon,
@@ -213,34 +241,34 @@ class ErrorEstimation(Task):
         return degree(row, data.num_nodes)
 
 
-class VisualizeEmbedding(LinkPrediction):
-    @staticmethod
-    def task_name():
-        return 'visual'
-
-    def __init__(self, dataset, model_name, feature, epsilon, priv_dim):
-        assert model_name == 'gcn' and feature == 'priv'
-        super().__init__(dataset, model_name, feature, epsilon, priv_dim)
-
-    def run(self, **train_args):
-        model = self.get_model()
-        early_stop_callback = EarlyStopping(monitor='val_auc', mode='max', **params['linkpred']['early_stop'])
-        trainer = Trainer(early_stop_callback=early_stop_callback, **train_args)
-        trainer.fit(model)
-        z = model(self.dataset[0])
-        return TSNE(n_components=2).fit_transform(z.cpu().numpy())
+# class VisualizeEmbedding(LinkPrediction):
+#     @staticmethod
+#     def task_name():
+#         return 'visual'
+#
+#     def __init__(self, dataset, model_name, feature, epsilon, priv_dim):
+#         assert model_name == 'gcn' and feature == 'priv'
+#         super().__init__(dataset, model_name, feature, epsilon, priv_dim)
+#
+#     def run(self, **train_args):
+#         model = self.get_model()
+#         early_stop_callback = EarlyStopping(monitor='val_auc', mode='max', **params['linkpred']['early_stop'])
+#         trainer = Trainer(early_stop_callback=early_stop_callback, **train_args)
+#         trainer.fit(model)
+#         z = model(self.dataset[0])
+#         return TSNE(n_components=2).fit_transform(z.cpu().numpy())
 
 
 def main():
     torch.manual_seed(12345)
     dataset = load_dataset(
         dataset_name='cora',
-        task_name='linkpred'
+        # task_name='linkpred'
     )
     for i in range(1):
-        result = LinkPrediction(
-            dataset, model_name='node2vec', feature='void', epsilon=0, priv_dim=dataset.num_node_features
-        ).run(max_epochs=10)
+        result = NodeClassification(
+            dataset, model_name='gcn', feature='locd', epsilon=2, priv_dim=dataset.num_node_features
+        ).run(max_epochs=100)
         print(result)
 
 
