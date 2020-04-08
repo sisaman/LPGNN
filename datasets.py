@@ -282,6 +282,20 @@ class EdgeSplit:
         return data
 
 
+class GraphLoader:
+    def __init__(self, data):
+        self.data = data
+
+    def __len__(self):
+        return 1
+
+    def __getitem__(self, idx):
+        if idx == 0:
+            return self.data
+        else:
+            raise IndexError
+
+
 datasets = {
     'cora': partial(Planetoid, root='datasets/Planetoid', name='cora'),
     'citeseer': partial(Planetoid, root='datasets/Planetoid', name='citeseer'),
@@ -304,5 +318,7 @@ def load_dataset(dataset_name, task_name=None):
         seed = sum([ord(c) for c in dataset_name])
         transforms += [EdgeSplit(random_state=seed)]
     dataset = datasets[dataset_name](transform=Compose(transforms))
-    dataset.name = dataset_name
-    return dataset
+    data = dataset[0]
+    data.name = dataset_name
+    data.num_classes = dataset.num_classes
+    return data
