@@ -65,8 +65,8 @@ class LitNode2Vec(LightningModule):
     def __init__(self, dataset, embedding_dim, walk_length, context_size, walks_per_node, batch_size,
                  lr=0.01, weight_decay=0):
         super().__init__()
-        self.dataset = dataset
-        self.model = Node2Vec(dataset[0].num_nodes, embedding_dim, walk_length, context_size, walks_per_node)
+        self.data = dataset[0]
+        self.model = Node2Vec(self.data.num_nodes, embedding_dim, walk_length, context_size, walks_per_node)
         self.batch_size = batch_size
         self.lr = lr
         self.weight_decay = weight_decay
@@ -77,41 +77,39 @@ class LitNode2Vec(LightningModule):
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
-    def training_step(self, batch, idx):
-        edge_index, subset = batch
-        loss = self.model.loss(edge_index, subset)
+    def training_step(self, subset, idx):
+        loss = self.model.loss(self.data.edge_index, subset)
         return {'loss': loss}
 
     def train_dataloader(self):
         # noinspection PyTypeChecker
-        sampler = DataLoader(torch.arange(self.dataset[0].num_nodes), batch_size=self.batch_size, shuffle=True)
-        return [(self.dataset[0].edge_index, subset) for subset in sampler]
+        return DataLoader(torch.arange(self.data.num_nodes), batch_size=self.batch_size, shuffle=True)
 
 
 class Node2VecClassifier(LitNode2Vec):
-    def evaluate(self, data, mask):
-        nodes = torch.arange(data.num_nodes).type_as(data.edge_index)
+    def evaluate(self, mask):
+        nodes = torch.arange(self.data.num_nodes).type_as(self.data.edge_index)
         z = self.model(nodes)
         acc = self.model.test(
-            z[data.train_mask], data.y[data.train_mask],
-            z[mask], data.y[mask], max_iter=150
+            z[self.data.train_mask], self.data.y[self.data.train_mask],
+            z[mask], self.data.y[mask], max_iter=150
         ).item()
         return {'val_acc': acc}
 
     def val_dataloader(self):
-        return self.dataset
+        return [[self.data]]
 
     def validation_step(self, data, idx):
-        return self.evaluate(data, data.val_mask)
+        return self.evaluate(data.val_mask)
 
     def test_dataloader(self):
-        return self.dataset
+        return self.val_dataloader()
 
     def test_step(self, data, idx):
-        return self.evaluate(data, data.test_mask)
+        return self.evaluate(data.test_mask)
 
     def validation_epoch_end(self, outputs):
-        avg_acc = torch.tensor([x['val_acc'] for x in outputs]).mean()
+        avg_acc = torch.tensor([x['val_acc'] for x in outputs]).mean().item()
         logs = {'val_acc': avg_acc}
         return {'avg_val_acc': avg_acc, 'log': logs, 'progress_bar': logs}
 
@@ -136,10 +134,10 @@ class Node2VecLinkPredictor(LitNode2Vec):
         return {'labels': link_labels, 'logits': link_logits}
 
     def val_dataloader(self):
-        return self.dataset
+        return [[self.data]]
 
     def test_dataloader(self):
-        return self.dataset
+        return self.val_dataloader()
 
     def validation_epoch_end(self, outputs):
         return aggregate_link_prediction_results(outputs, 'loss')
@@ -320,15 +318,17 @@ class GCNLinkPredictor(LightningModule):
 
 def main():
     dataset = load_dataset(
-        dataset_name='cora',
+        dataset_name='citeseer',
+        task_name='linkpred'
         # transform=EdgeSplit()
     )
-    model = GCNClassifier(dataset, 'priv', priv_dim=dataset.num_node_features, epsilon=3)
-    early_stop_callback = EarlyStopping(monitor='val_acc', min_delta=0, patience=10, verbose=True, mode='max')
-    trainer = Trainer(gpus=1, max_epochs=1000, check_val_every_n_epoch=20, checkpoint_callback=False,
-                      early_stop_callback=early_stop_callback)
-    trainer.fit(model)
-    trainer.test()
+    model = Node2VecLinkPredictor(dataset, 128, 20, 10, 10, 128)
+    # early_stop_callback = EarlyStopping(monitor='val_acc', min_delta=0, patience=10, verbose=True, mode='max')
+    for i in range(10):
+        trainer = Trainer(gpus=1, max_epochs=50, check_val_every_n_epoch=20, checkpoint_callback=False,
+                          early_stop_callback=False)
+        trainer.fit(model)
+        trainer.test()
 
 
 if __name__ == '__main__':
