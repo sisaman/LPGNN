@@ -1,5 +1,6 @@
 import torch
 from pytorch_lightning import Trainer, LightningModule
+from pytorch_lightning.callbacks import EarlyStopping
 from sklearn.metrics import roc_auc_score
 from torch.nn.functional import binary_cross_entropy_with_logits, cross_entropy
 from torch.optim import Adam
@@ -126,7 +127,7 @@ class Node2VecLinkPredictor(LitNode2Vec):
 
 
 class GCNClassifier(LightningModule):
-    def __init__(self, data, hidden_dim=16, priv_dim=0, epsilon=0, dropout=0.5, lr=0.01, weight_decay=5e-4):
+    def __init__(self, data, hidden_dim=16, epsilon=1, dropout=0.5, lr=0.01, weight_decay=5e-4):
         super().__init__()
         self.data = data
         self.lr = lr
@@ -136,14 +137,13 @@ class GCNClassifier(LightningModule):
             output_dim=data.num_classes,
             hidden_dim=hidden_dim,
             dropout=dropout,
-            priv_input_dim=priv_dim,
             epsilon=epsilon,
             alpha=data.alpha,
             delta=data.delta
         )
 
     def forward(self, data):
-        return self.gcn(data.x, data.edge_index)
+        return self.gcn(data.x, data.edge_index, data.priv_mask)
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
@@ -192,8 +192,7 @@ class GCNClassifier(LightningModule):
 
 
 class GCNLinkPredictor(LightningModule):
-    def __init__(self, data, hidden_dim=128, output_dim=64, priv_dim=0, epsilon=0,
-                 dropout=0, lr=0.01, weight_decay=0):
+    def __init__(self, data, hidden_dim=128, output_dim=64, epsilon=1, dropout=0, lr=0.01, weight_decay=0):
         super().__init__()
         self.data = data
         self.lr = lr
@@ -203,7 +202,6 @@ class GCNLinkPredictor(LightningModule):
             output_dim=output_dim,
             hidden_dim=hidden_dim,
             dropout=dropout,
-            priv_input_dim=priv_dim,
             epsilon=epsilon,
             alpha=data.alpha,
             delta=data.delta
@@ -217,8 +215,7 @@ class GCNLinkPredictor(LightningModule):
         return (x_i * x_j).sum(dim=1)
 
     def forward(self, data):
-        x, edge_index = data.x, data.edge_index
-        x = self.gcn(x, edge_index)
+        x = self.gcn(data.x, data.edge_index, data.priv_mask)
         return x
 
     def train_dataloader(self):
@@ -271,15 +268,15 @@ class GCNLinkPredictor(LightningModule):
 
 def main():
     dataset = load_dataset(
-        dataset_name='citeseer',
-        task_name='linkpred'
+        dataset_name='cora',
+        # task_name='linkpred'
         # transform=EdgeSplit()
-    )
-    model = Node2VecLinkPredictor(dataset, 128, 20, 10, 10, 128)
-    # early_stop_callback = EarlyStopping(monitor='val_acc', min_delta=0, patience=10, verbose=True, mode='max')
-    for i in range(10):
-        trainer = Trainer(gpus=1, max_epochs=50, check_val_every_n_epoch=20, checkpoint_callback=False,
-                          early_stop_callback=False)
+    ).to('cuda')
+    model = GCNClassifier(dataset, 16)
+    early_stop_callback = EarlyStopping(monitor='val_loss', min_delta=0, patience=5, verbose=True, mode='min')
+    for i in range(1):
+        trainer = Trainer(gpus=1, max_epochs=500, check_val_every_n_epoch=20, checkpoint_callback=False,
+                          early_stop_callback=early_stop_callback)
         trainer.fit(model)
         trainer.test()
 

@@ -7,10 +7,8 @@ from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_remaining_self_loops, degree
 
 
-class GCNConv(MessagePassing):
-    def __init__(self):
-        super().__init__(aggr='add')  # "Add" aggregation.
-
+# noinspection PyMethodOverriding
+class GConvDP(MessagePassing):
     @staticmethod
     def norm(edge_index, num_nodes, dtype):
         edge_index, _ = add_remaining_self_loops(edge_index, num_nodes=num_nodes)
@@ -19,71 +17,44 @@ class GCNConv(MessagePassing):
         deg_inv_sqrt = deg.pow(-0.5)
         return edge_index, (deg_inv_sqrt[row] * deg_inv_sqrt[col]).view(-1, 1)
 
-    def forward(self, x, edge_index):
+    def __init__(self, epsilon=1, alpha=0, delta=0):
+        super().__init__(aggr='add')  # "Add" aggregation.
+        self.eps = epsilon
+        self.alpha = alpha
+        self.delta = delta
+
+    def forward(self, x, edge_index, priv_mask):
         num_nodes = x.size(0)
         edge_index, norm = self.norm(edge_index, num_nodes, x.dtype)
-        x = self.propagate(edge_index, x=x, norm=norm)
-
+        x = self.propagate(edge_index, x=x, norm=norm, p=priv_mask)
         return x
 
-    # noinspection PyMethodOverriding
-    def message(self, x_j, norm):
-        # x_j has shape [E, out_channels]
-        return norm * x_j
+    def message(self, x_j, p_j, norm):
+        exp = math.exp(self.eps)
+        msg = norm * (p_j * ((((exp + 1) * x_j - 1) * self.delta) / (exp - 1) + self.alpha) + (~p_j) * x_j)
+        return msg
 
     def update(self, aggr_out):
         # aggr_out has shape [N, out_channels]
         return aggr_out
 
 
-# noinspection PyMethodOverriding
-class GConvDP(GCNConv):
-    def __init__(self, epsilon, alpha, delta):
-        super().__init__()
-        self.eps = epsilon
-        self.alpha = alpha
-        self.delta = delta
-
-    def message(self, x_j, norm):
-        self.alpha = self.alpha.type_as(norm)
-        self.delta = self.delta.type_as(norm)
-        exp = math.exp(self.eps)
-        return norm * ((((exp + 1) * x_j - 1) * self.delta) / (exp - 1) + self.alpha)
-
-
-class GConvMixedDP(torch.nn.Module):
-    def __init__(self, priv_dim, epsilon, alpha, delta):
-        super().__init__()
-        self.priv_dim = priv_dim
-        self.gcnconv = GCNConv()
-        self.gconvdp = GConvDP(epsilon, alpha[:priv_dim], delta[:priv_dim])
-
-    def forward(self, x, edge_index):
-        x_left = self.gconvdp(x[:, :self.priv_dim], edge_index)
-        x_right = self.gcnconv(x[:, self.priv_dim:], edge_index)
-        x = torch.cat([x_left, x_right], dim=1)
-        return x
-
-
 class GCN(torch.nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=16, dropout=0.5, priv_input_dim=0, **dpargs):
+    def __init__(self, input_dim, output_dim, hidden_dim, dropout=0.5, epsilon=1, alpha=0, delta=0):
+        assert epsilon > 0
         super().__init__()
-        if priv_input_dim == 0:
-            self.conv1 = GCNConv()
-        elif priv_input_dim == input_dim:
-            self.conv1 = GConvDP(**dpargs)
-        else:
-            self.conv1 = GConvMixedDP(priv_input_dim, **dpargs)
+        self.conv1 = GConvDP(epsilon, alpha, delta)
         self.lin1 = Linear(input_dim, hidden_dim)
-        self.conv2 = GCNConv()
+        self.conv2 = GConvDP()
         self.lin2 = Linear(hidden_dim, output_dim)
         self.dropout = dropout
 
-    def forward(self, x, edge_index):
-        x = self.conv1(x, edge_index)
+    def forward(self, x, edge_index, priv_mask):
+        x = self.conv1(x, edge_index, priv_mask)
         x = self.lin1(x)
-        x = F.relu(x)
+        x = torch.relu(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
-        x = self.conv2(x, edge_index)
+        # mask = torch.zeros_like(x, dtype=torch.bool)
+        x = self.conv2(x, edge_index, priv_mask=False)
         x = self.lin2(x)
         return x
