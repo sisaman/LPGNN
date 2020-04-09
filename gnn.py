@@ -1,8 +1,8 @@
 import math
 
 import torch
-from torch.nn import Linear
 import torch.nn.functional as F
+from torch.nn import Linear
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_remaining_self_loops, degree
 
@@ -54,7 +54,6 @@ class GCN(torch.nn.Module):
         x = self.lin1(x)
         x = torch.relu(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
-        # mask = torch.zeros_like(x, dtype=torch.bool)
         x = self.conv2(x, edge_index, priv_mask=False)
         x = self.lin2(x)
         return x
