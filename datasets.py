@@ -9,7 +9,6 @@ import torch
 from google_drive_downloader import GoogleDriveDownloader as gdd
 from torch_geometric.data import InMemoryDataset, Data
 from torch_geometric.datasets import Planetoid, Reddit, PPI, SNAPDataset
-from torch_geometric.transforms import Compose
 from torch_geometric.utils import to_undirected
 
 
@@ -257,17 +256,6 @@ class Yelp(InMemoryDataset):
         return '{}()'.format(self.__class__.__name__)
 
 
-class DataRange:
-    def __call__(self, data):
-        alpha = data.x.min(dim=0)[0]
-        beta = data.x.max(dim=0)[0]
-        delta = beta - alpha
-        data.alpha = alpha
-        data.beta = beta
-        data.delta = delta
-        return data
-
-
 class EdgeSplit:
     def __init__(self, val_ratio=0.05, test_ratio=0.1, random_state=None):
         self.val_ratio = val_ratio
@@ -313,11 +301,11 @@ def get_availabel_datasets():
 
 
 def load_dataset(dataset_name, task_name=None):
-    transforms = [DataRange()]
+    transform = None
     if task_name == 'linkpred':
         seed = sum([ord(c) for c in dataset_name])
-        transforms += [EdgeSplit(random_state=seed)]
-    dataset = datasets[dataset_name](transform=Compose(transforms))
+        transform = EdgeSplit(random_state=seed)
+    dataset = datasets[dataset_name](transform=transform)
     data = dataset[0]
     data.name = dataset_name
     data.num_classes = dataset.num_classes
