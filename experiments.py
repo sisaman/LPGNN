@@ -1,10 +1,9 @@
 import math
 import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 from torch_geometric.data import Data
 from torch_geometric.transforms import LocalDegreeProfile
-
-warnings.simplefilter(action='ignore', category=FutureWarning)
 
 import pandas as pd
 import torch
@@ -51,6 +50,7 @@ def privatize(data, pnr, pfr, eps):
         beta = data.x.max(dim=0)[0]
         data.alpha = alpha
         data.delta = beta - alpha
+        # noinspection PyTypeChecker
         data = one_bit_response(data, eps)
     else:
         data.alpha = data.delta = 0
@@ -152,6 +152,5 @@ if __name__ == '__main__':
     parser.add_argument('-e', '--epochs', type=int, default=500)
 
     args = parser.parse_args()
-
     print(args)
     experiment(args)
