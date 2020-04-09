@@ -270,7 +270,6 @@ def main():
     dataset = load_dataset(
         dataset_name='cora',
         # task_name='linkpred'
-        # transform=EdgeSplit()
     ).to('cuda')
     model = GCNClassifier(dataset, 16)
     early_stop_callback = EarlyStopping(monitor='val_loss', min_delta=0, patience=5, verbose=True, mode='min')
