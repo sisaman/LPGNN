@@ -80,7 +80,7 @@ def experiment(args):
     epsilons_err_estimation = [.1, .2, .5, 1, 2, 5]
     private_node_ratios = [.2, .4, .6, .8, 1]
     # private_node_ratios = [.1, .2, .3, .4, .5, .6, .7, .8, .9, 1]
-    private_feature_ratios = [.1, .2, .5, 1]
+    private_feature_ratios = [.1, .2, .5, .75, 1]
     # private_feature_ratios = [.1, .2, .3, .4, .5, .6, .7, .8, .9, 1]
 
     for task in args.tasks:
@@ -154,7 +154,7 @@ def experiment(args):
 if __name__ == '__main__':
     task_choices = ['nodeclass', 'linkpred', 'errorest', 'visualize']
     dataset_choices = ['cora', 'citeseer', 'pubmed', 'flickr', 'yelp']
-    model_choices = ['gcn', 'node2vec']
+    model_choices = ['gcn', 'node2vec', 'vgae']
     feature_choices = ['raw', 'priv', 'deg']
     parser = ArgumentParser()
     parser.add_argument('-t', '--tasks', nargs='*', choices=task_choices, default=task_choices)
