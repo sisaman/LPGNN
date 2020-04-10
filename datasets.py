@@ -264,7 +264,7 @@ class EdgeSplit:
 
     def __call__(self, data):
         rng = torch.Generator().manual_seed(self.random_state)
-        data.train_mask = data.val_mask = data.test_mask = data.y = None
+        data.train_mask = data.val_mask = data.test_mask = None
         data = train_test_split_edges(data, self.val_ratio, self.test_ratio, rng=rng)
         data.edge_index = data.train_pos_edge_index
         return data
@@ -300,13 +300,15 @@ def get_availabel_datasets():
     return list(datasets.keys())
 
 
-def load_dataset(dataset_name, task_name=None):
+def load_dataset(dataset_name, split_edges=False):
     transform = None
-    if task_name == 'linkpred':
+    if split_edges:
         seed = sum([ord(c) for c in dataset_name])
         transform = EdgeSplit(random_state=seed)
     dataset = datasets[dataset_name](transform=transform)
     data = dataset[0]
     data.name = dataset_name
     data.num_classes = dataset.num_classes
+    data.alpha = data.delta = 0
+    data.priv_mask = False
     return data
