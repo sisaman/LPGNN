@@ -17,7 +17,7 @@ class GConvDP(MessagePassing):
         deg_inv_sqrt = deg.pow(-0.5)
         return edge_index, (deg_inv_sqrt[row] * deg_inv_sqrt[col]).view(-1, 1)
 
-    def __init__(self, epsilon=1, alpha=0, delta=0, cached=True):
+    def __init__(self, epsilon=1, alpha=0, delta=0, cached=False):
         super().__init__(aggr='add')  # "Add" aggregation.
         self.eps = epsilon
         self.alpha = alpha
@@ -46,9 +46,9 @@ class GCN(torch.nn.Module):
     def __init__(self, input_dim, output_dim, hidden_dim, dropout=0.5, epsilon=1, alpha=0, delta=0, cached=True):
         assert epsilon > 0
         super().__init__()
-        self.conv1 = GConvDP(epsilon, alpha, delta, cached)
+        self.conv1 = GConvDP(epsilon, alpha, delta, cached=cached)
         self.lin1 = Linear(input_dim, hidden_dim)
-        self.conv2 = GCNConv(hidden_dim, output_dim, cached=True)
+        self.conv2 = GCNConv(hidden_dim, output_dim, cached=cached)
         self.dropout = dropout
         self.cached = cached
         self.cached_gc = None
