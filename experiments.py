@@ -79,9 +79,7 @@ def experiment(args):
     epsilons_priv_ratio = [1, 3, 5]
     epsilons_err_estimation = [.1, .2, .5, 1, 2, 5]
     private_node_ratios = [.2, .4, .6, .8, 1]
-    # private_node_ratios = [.1, .2, .3, .4, .5, .6, .7, .8, .9, 1]
     private_feature_ratios = [.1, .2, .5, .75, 1]
-    # private_feature_ratios = [.1, .2, .3, .4, .5, .6, .7, .8, .9, 1]
 
     for task in args.tasks:
         task = task_class[task]
