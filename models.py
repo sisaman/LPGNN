@@ -112,7 +112,7 @@ class Node2VecLinkPredictor(LitNode2Vec):
         return GraphLoader(self.data)
 
     def validation_epoch_end(self, outputs):
-        return aggregate_link_prediction_results(outputs, 'loss')
+        return aggregate_link_prediction_results(outputs, 'auc')
 
     def test_step(self, data, index):
         pos_edge_index, neg_edge_index = data.test_pos_edge_index, data.test_neg_edge_index
@@ -181,7 +181,6 @@ class GCNClassifier(LightningModule):
         avg_acc = total_corrects / total_nodes
         logs = {'val_loss': avg_loss, 'val_acc': avg_acc}
         return {'avg_val_loss': avg_loss, 'avg_val_acc': avg_acc, 'log': logs, 'progress_bar': logs}
-
 
     def test_step(self, data, index):
         return self.evaluate(data, data.test_mask)
