@@ -2,7 +2,6 @@ import os
 import sys
 from abc import abstractmethod
 from contextlib import contextmanager
-import pandas as pd
 import torch
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import EarlyStopping
@@ -14,7 +13,7 @@ except ImportError: from sklearn.manifold import TSNE
 
 from datasets import load_dataset
 from gnn import GConvDP
-from models import GCNClassifier, Node2VecClassifier, GCNLinkPredictor, Node2VecLinkPredictor
+from models import GCNClassifier, Node2VecClassifier, GCNLinkPredictor, Node2VecLinkPredictor, VGAELinkPredictor
 
 params = {
     'nodeclass': {
@@ -50,9 +49,16 @@ params = {
                 'weight_decay': 0
             },
         },
+        'vgae': {
+            'params': {
+                'output_dim': 16,
+                'lr': 0.01,
+                'weight_decay': 0
+            },
+        },
         'node2vec': {
             'params': {
-                'embedding_dim': 32,
+                'embedding_dim': 16,
                 'walk_length': 20,
                 'context_size': 10,
                 'walks_per_node': 10,
@@ -163,6 +169,12 @@ class LinkPrediction(LearningTask):
                 epsilon=self.epsilon,
                 **params['linkpred']['gcn']['params']
             )
+        elif self.model_name == 'vgae':
+            return VGAELinkPredictor(
+                data=self.data,
+                epsilon=self.epsilon,
+                **params['linkpred']['vgae']['params']
+            )
         else:
             return Node2VecLinkPredictor(
                 data=self.data,
@@ -170,7 +182,7 @@ class LinkPrediction(LearningTask):
             )
 
     def run(self, **train_args):
-        early_stop_callback = EarlyStopping(monitor='val_loss', mode='min', **params['linkpred']['early_stop'])
+        early_stop_callback = EarlyStopping(monitor='val_auc', mode='max', **params['linkpred']['early_stop'])
         return super().run(early_stop_callback=early_stop_callback, **train_args)
 
 

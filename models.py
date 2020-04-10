@@ -1,15 +1,16 @@
 import torch
+import numpy as np
 from pytorch_lightning import Trainer, LightningModule
 from pytorch_lightning.callbacks import EarlyStopping
 from sklearn.metrics import roc_auc_score
 from torch.nn.functional import binary_cross_entropy_with_logits, cross_entropy
 from torch.optim import Adam
 from torch.utils.data import DataLoader
-from torch_geometric.nn import Node2Vec
+from torch_geometric.nn import Node2Vec, VGAE
 from torch_geometric.utils import add_remaining_self_loops, negative_sampling
 
 from datasets import load_dataset, GraphLoader
-from gnn import GCN
+from gnn import GCN, GraphEncoder
 
 
 def get_link_labels(pos_edge_index, neg_edge_index):
@@ -70,11 +71,11 @@ class Node2VecClassifier(LitNode2Vec):
     def val_dataloader(self):
         return GraphLoader(self.data)
 
-    def validation_step(self, data, idx):
-        return self.evaluate(data.val_mask)
-
     def test_dataloader(self):
         return GraphLoader(self.data)
+
+    def validation_step(self, data, idx):
+        return self.evaluate(data.val_mask)
 
     def test_step(self, data, idx):
         return self.evaluate(data.test_mask)
@@ -151,13 +152,16 @@ class GCNClassifier(LightningModule):
     def train_dataloader(self):
         return GraphLoader(self.data)
 
+    def val_dataloader(self):
+        return GraphLoader(self.data)
+
+    def test_dataloader(self):
+        return GraphLoader(self.data)
+
     def training_step(self, data, index):
         out = self(data)
         loss = cross_entropy(out[data.train_mask], data.y[data.train_mask])
         return {'loss': loss}
-
-    def val_dataloader(self):
-        return GraphLoader(self.data)
 
     def evaluate(self, data, mask):
         out = self(data)
@@ -178,8 +182,6 @@ class GCNClassifier(LightningModule):
         logs = {'val_loss': avg_loss, 'val_acc': avg_acc}
         return {'avg_val_loss': avg_loss, 'avg_val_acc': avg_acc, 'log': logs, 'progress_bar': logs}
 
-    def test_dataloader(self):
-        return GraphLoader(self.data)
 
     def test_step(self, data, index):
         return self.evaluate(data, data.test_mask)
@@ -251,7 +253,7 @@ class GCNLinkPredictor(LightningModule):
         return {'labels': link_labels, 'logits': link_logits}
 
     def validation_epoch_end(self, outputs):
-        return aggregate_link_prediction_results(outputs, 'loss')
+        return aggregate_link_prediction_results(outputs, 'auc')
 
     def test_step(self, data, index):
         pos_edge_index, neg_edge_index = data.test_pos_edge_index, data.test_neg_edge_index
@@ -266,15 +268,81 @@ class GCNLinkPredictor(LightningModule):
         return result
 
 
+class VGAELinkPredictor(LightningModule):
+    def __init__(self, data, output_dim=16, epsilon=1, lr=0.01, weight_decay=0):
+        super().__init__()
+        self.data = data
+        self.lr = lr
+        self.weight_decay = weight_decay
+
+        encoder = GraphEncoder(
+            input_dim=data.num_node_features,
+            output_dim=output_dim,
+            epsilon=epsilon,
+            alpha=data.alpha,
+            delta=data.delta
+        )
+
+        self.model = VGAE(encoder=encoder)
+
+    def forward(self, data):
+        x = self.model.encode(data.x, data.train_pos_edge_index, data.priv_mask)
+        return x
+
+    def train_dataloader(self):
+        return GraphLoader(self.data)
+
+    def val_dataloader(self):
+        return GraphLoader(self.data)
+
+    def test_dataloader(self):
+        return GraphLoader(self.data)
+
+    def configure_optimizers(self):
+        return Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+
+    def training_step(self, data, index):
+        z = self(data)
+        loss = self.model.recon_loss(z, data.train_pos_edge_index)
+        loss = loss + (1 / data.num_nodes) * self.model.kl_loss()
+        logs = {'loss': loss}
+        return {'loss': loss, 'log': logs}
+
+    def evaluate(self, data, pos_edge_index, neg_edge_index):
+        z = self(data)
+        auc, ap = self.model.test(z, pos_edge_index, neg_edge_index)
+        logs = {'auc': auc, 'ap': ap}
+        return {'auc': auc, 'ap': ap, 'log': logs}
+
+    def validation_step(self, data, index):
+        return self.evaluate(data, data.val_pos_edge_index, data.val_neg_edge_index)
+
+    def validation_epoch_end(self, outputs):
+        avg_auc = np.stack([x['auc'] for x in outputs]).mean().item()
+        avg_ap = np.stack([x['ap'] for x in outputs]).mean().item()
+        log = {'val_auc': avg_auc, 'val_ap': avg_ap}
+        return {'val_auc': avg_auc, 'val_ap': avg_ap, 'log': log, 'progress_bar': log}
+
+    def test_step(self, data, index):
+        return self.evaluate(data, data.test_pos_edge_index, data.test_neg_edge_index)
+
+    def test_epoch_end(self, outputs):
+        result = self.validation_epoch_end(outputs)
+        auc = result['log']['val_auc']
+        result['log']['test_result'] = auc
+        return result
+
+
 def main():
     dataset = load_dataset(
         dataset_name='cora',
-        # task_name='linkpred'
+        split_edges=True
     ).to('cuda')
-    model = GCNClassifier(dataset, 16)
-    early_stop_callback = EarlyStopping(monitor='val_loss', min_delta=0, patience=5, verbose=True, mode='min')
+
+    model = VGAELinkPredictor(dataset)
+    early_stop_callback = EarlyStopping(monitor='val_auc', min_delta=0, patience=5, verbose=True, mode='max')
     for i in range(1):
-        trainer = Trainer(gpus=1, max_epochs=500, check_val_every_n_epoch=20, checkpoint_callback=False,
+        trainer = Trainer(gpus=1, max_epochs=500, check_val_every_n_epoch=10, checkpoint_callback=False,
                           early_stop_callback=early_stop_callback)
         trainer.fit(model)
         trainer.test()
