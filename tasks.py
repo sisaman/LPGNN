@@ -2,6 +2,7 @@ import os
 import sys
 from abc import abstractmethod
 from contextlib import contextmanager
+
 import torch
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import EarlyStopping
@@ -11,7 +12,6 @@ from torch_geometric.utils import degree
 try: from tsnecuda import TSNE
 except ImportError: from sklearn.manifold import TSNE
 
-from datasets import load_dataset
 from gnn import GConvDP
 from models import GCNClassifier, Node2VecClassifier, GCNLinkPredictor, Node2VecLinkPredictor, VGAELinkPredictor
 
@@ -122,6 +122,10 @@ class Task:
 
 class LearningTask(Task):
 
+    def __init__(self, data, model_name, epsilon, **kwargs):
+        super().__init__(data, model_name, epsilon, **kwargs)
+        self.trained_model = None
+
     @abstractmethod
     def get_model(self): pass
 
@@ -191,7 +195,7 @@ class ErrorEstimation(Task):
 
     def __init__(self, data, orig_features, model_name, epsilon):
         super().__init__(data, model_name, epsilon)
-        self.model = GConvDP(epsilon=self.epsilon, alpha=data.alpha, delta=data.delta)
+        self.model = GConvDP(epsilon=self.epsilon, alpha=data.alpha, delta=data.delta, cached=False)
         self.gc = self.model(orig_features, data.edge_index, False)
 
     @torch.no_grad()
@@ -217,11 +221,3 @@ class Visualization(LinkPrediction):
         embedding = TSNE(n_components=2).fit_transform(z.cpu().detach().numpy())
         label = self.data.y.cpu().numpy()
         return {'data': embedding, 'label': label}
-
-
-def main():
-    torch.manual_seed(12345)
-    dataset = 'cora'
-
-if __name__ == '__main__':
-    main()
