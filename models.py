@@ -207,8 +207,8 @@ class GCNLinkPredictor(LightningModule):
             delta=data.delta
         )
 
-    def get_link_logits(self, x, pos_edge_index, neg_edge_index):
-        x = self.gcn(x, pos_edge_index)
+    def get_link_logits(self, data, pos_edge_index, neg_edge_index):
+        x = self.gcn(data.x, pos_edge_index, data.priv_mask)
         total_edge_index = torch.cat([pos_edge_index, neg_edge_index], dim=-1)
         x_j = torch.index_select(x, 0, total_edge_index[0])
         x_i = torch.index_select(x, 0, total_edge_index[1])
@@ -238,7 +238,7 @@ class GCNLinkPredictor(LightningModule):
             edge_index=pos_edge_index_with_self_loops, num_nodes=data.num_nodes,
             num_neg_samples=pos_edge_index.size(1))
 
-        link_logits = self.get_link_logits(x, pos_edge_index, neg_edge_index)
+        link_logits = self.get_link_logits(data, pos_edge_index, neg_edge_index)
         link_labels = get_link_labels(pos_edge_index, neg_edge_index)
         loss = binary_cross_entropy_with_logits(link_logits, link_labels)
         logs = {'loss': loss}
@@ -246,7 +246,7 @@ class GCNLinkPredictor(LightningModule):
 
     def validation_step(self, data, index):
         pos_edge_index, neg_edge_index = data.val_pos_edge_index, data.val_neg_edge_index
-        link_logits = self.get_link_logits(data.x, pos_edge_index, neg_edge_index)
+        link_logits = self.get_link_logits(data, pos_edge_index, neg_edge_index)
         link_labels = get_link_labels(pos_edge_index, neg_edge_index)
         return {'labels': link_labels, 'logits': link_logits}
 
@@ -255,7 +255,7 @@ class GCNLinkPredictor(LightningModule):
 
     def test_step(self, data, index):
         pos_edge_index, neg_edge_index = data.test_pos_edge_index, data.test_neg_edge_index
-        link_logits = self.get_link_logits(data.x, pos_edge_index, neg_edge_index)
+        link_logits = self.get_link_logits(data, pos_edge_index, neg_edge_index)
         link_labels = get_link_labels(pos_edge_index, neg_edge_index)
         return {'labels': link_labels, 'logits': link_logits}
 
