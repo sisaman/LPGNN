@@ -3,7 +3,7 @@ import math
 import torch
 import torch.nn.functional as F
 from torch.nn import Linear
-from torch_geometric.nn import MessagePassing
+from torch_geometric.nn import MessagePassing, GCNConv
 from torch_geometric.utils import add_remaining_self_loops, degree
 
 
@@ -45,8 +45,7 @@ class GCN(torch.nn.Module):
         super().__init__()
         self.conv1 = GConvDP(epsilon, alpha, delta)
         self.lin1 = Linear(input_dim, hidden_dim)
-        self.conv2 = GConvDP()
-        self.lin2 = Linear(hidden_dim, output_dim)
+        self.conv2 = GCNConv(hidden_dim, output_dim, cached=True)
         self.dropout = dropout
 
     def forward(self, x, edge_index, priv_mask):
@@ -54,6 +53,20 @@ class GCN(torch.nn.Module):
         x = self.lin1(x)
         x = torch.relu(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
-        x = self.conv2(x, edge_index, priv_mask=False)
-        x = self.lin2(x)
+        x = self.conv2(x, edge_index)
         return x
+
+
+class GraphEncoder(torch.nn.Module):
+    def __init__(self, input_dim, output_dim, epsilon=1, alpha=0, delta=0):
+        super().__init__()
+        self.conv1 = GConvDP(epsilon, alpha, delta)
+        self.lin1 = Linear(input_dim, 2 * output_dim)
+        self.conv_mu = GCNConv(2 * output_dim, output_dim, cached=True)
+        self.conv_logvar = GCNConv(2 * output_dim, output_dim, cached=True)
+
+    def forward(self, x, edge_index, priv_mask):
+        x = self.conv1(x, edge_index, priv_mask)
+        x = self.lin1(x)
+        x = torch.relu(x)
+        return self.conv_mu(x, edge_index), self.conv_logvar(x, edge_index)
