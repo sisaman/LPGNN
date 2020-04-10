@@ -9,7 +9,7 @@ import pandas as pd
 import torch
 from colorama import Fore, Style
 from datasets import load_dataset
-from tasks import LinkPrediction, NodeClassification, ErrorEstimation
+from tasks import LinkPrediction, NodeClassification, ErrorEstimation, Visualization
 from argparse import ArgumentParser
 torch.manual_seed(12345)
 
@@ -52,10 +52,18 @@ def privatize(data, pnr, pfr, eps):
         data.delta = beta - alpha
         # noinspection PyTypeChecker
         data = one_bit_response(data, eps)
-    else:
-        data.alpha = data.delta = 0
-        data.priv_mask = 0
     return data
+
+
+def visualize(dataset):
+    eps_list = [0.1, 1, 10]
+    for eps in eps_list:
+        data = privatize(dataset, pnr=1, pfr=1, eps=eps)
+        task = Visualization(data=data, model_name='gcn', epsilon=eps)
+        result = task.run(max_epochs=500)
+        df = pd.DataFrame(data=result['data'], columns=['x', 'y'])
+        df['label'] = result['label']
+        df.to_pickle(f'results/visualize_{data.name}_{eps}.pkl')
 
 
 # noinspection PyShadowingNames
@@ -63,7 +71,8 @@ def experiment(args):
     task_class = {
         'nodeclass': NodeClassification,
         'linkpred': LinkPrediction,
-        'errorest': ErrorEstimation
+        'errorest': ErrorEstimation,
+        'visualize': Visualization
     }
 
     epsilons_methods = [0.1, 1, 3, 5, 7, 9]
@@ -78,8 +87,12 @@ def experiment(args):
         task = task_class[task]
 
         for dataset_name in args.datasets:
-            dataset = load_dataset(dataset_name, task_name=task.task_name)
+            dataset = load_dataset(dataset_name, split_edges=(task.task_name in ['linkpred', 'visualize']))
             dataset = dataset.to('cuda')
+
+            if task is Visualization:
+                visualize(dataset)
+                continue
 
             if task is ErrorEstimation: model_list = ['gcn']
             else: model_list = args.models
@@ -139,8 +152,8 @@ def experiment(args):
 
 
 if __name__ == '__main__':
-    task_choices = ['nodeclass', 'linkpred', 'errorest']
-    dataset_choices = ['cora', 'citeseer', 'pubmed', 'flickr']
+    task_choices = ['nodeclass', 'linkpred', 'errorest', 'visualize']
+    dataset_choices = ['cora', 'citeseer', 'pubmed', 'flickr', 'yelp']
     model_choices = ['gcn', 'node2vec']
     feature_choices = ['raw', 'priv', 'deg']
     parser = ArgumentParser()

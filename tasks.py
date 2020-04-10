@@ -2,7 +2,7 @@ import os
 import sys
 from abc import abstractmethod
 from contextlib import contextmanager
-
+import pandas as pd
 import torch
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import EarlyStopping
@@ -127,6 +127,7 @@ class LearningTask(Task):
         )
         trainer.fit(model)
         with silence_stdout(): trainer.test()
+        self.trained_model = model
         return logger.result
 
 
@@ -195,36 +196,20 @@ class ErrorEstimation(Task):
         return degree(row, data.num_nodes)
 
 
-# class VisualizeEmbedding(LinkPrediction):
-#     @staticmethod
-#     def task_name():
-#         return 'visual'
-#
-#     def __init__(self, dataset, model_name, feature, epsilon, priv_dim):
-#         assert model_name == 'gcn' and feature == 'priv'
-#         super().__init__(dataset, model_name, feature, epsilon, priv_dim)
-#
-#     def run(self, **train_args):
-#         model = self.get_model()
-#         early_stop_callback = EarlyStopping(monitor='val_auc', mode='max', **params['linkpred']['early_stop'])
-#         trainer = Trainer(early_stop_callback=early_stop_callback, **train_args)
-#         trainer.fit(model)
-#         z = model(self.dataset[0])
-#         return TSNE(n_components=2).fit_transform(z.cpu().numpy())
+class Visualization(LinkPrediction):
+    task_name = 'visualize'
+
+    def run(self, **train_args):
+        super().run(**train_args)
+        z = self.trained_model(self.data)
+        embedding = TSNE(n_components=2).fit_transform(z.cpu().detach().numpy())
+        label = self.data.y.cpu().numpy()
+        return {'data': embedding, 'label': label}
 
 
 def main():
     torch.manual_seed(12345)
-    data = load_dataset(
-        dataset_name='cora',
-        # task_name='linkpred'
-    ).to('cuda')
-    for i in range(1):
-        result = NodeClassification(
-            data, model_name='gcn', feature='priv', epsilon=2, priv_dim=data.num_node_features//2
-        ).run(max_epochs=100)
-        print(result)
-
+    dataset = 'cora'
 
 if __name__ == '__main__':
     main()
