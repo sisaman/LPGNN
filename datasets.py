@@ -8,7 +8,7 @@ import scipy.sparse as sp
 import torch
 from google_drive_downloader import GoogleDriveDownloader as gdd
 from torch_geometric.data import InMemoryDataset, Data
-from torch_geometric.datasets import Planetoid, Reddit, PPI, SNAPDataset
+from torch_geometric.datasets import Planetoid, Reddit, PPI, SNAPDataset, Amazon
 from torch_geometric.utils import to_undirected
 
 
@@ -57,16 +57,12 @@ def train_test_split_edges(data, val_ratio=0.05, test_ratio=0.1, rng=None):
 
     # Negative edges.
     num_nodes = data.num_nodes
-    neg_adj_mask = torch.ones(num_nodes, num_nodes, dtype=torch.uint8)
-    neg_adj_mask = neg_adj_mask.triu(diagonal=1).to(torch.bool)
+    neg_adj_mask = torch.ones(num_nodes, num_nodes, dtype=torch.bool)
+    neg_adj_mask = neg_adj_mask.triu(diagonal=1)
     neg_adj_mask[row, col] = 0
 
     neg_row, neg_col = neg_adj_mask.nonzero().t()
     perm = torch.randperm(neg_row.size(0), generator=rng, dtype=torch.long)[:min(n_v + n_t, neg_row.size(0))]
-    # perm = random.sample(range(neg_row.size(0)),
-    #                      min(n_v + n_t, neg_row.size(0)))
-    # perm = torch.tensor(perm)
-    # perm = perm.to(torch.long)
     neg_row, neg_col = neg_row[perm], neg_col[perm]
 
     neg_adj_mask[neg_row, neg_col] = 0
@@ -256,20 +252,6 @@ class Yelp(InMemoryDataset):
         return '{}()'.format(self.__class__.__name__)
 
 
-class EdgeSplit:
-    def __init__(self, val_ratio=0.05, test_ratio=0.1, random_state=None):
-        self.val_ratio = val_ratio
-        self.test_ratio = test_ratio
-        self.random_state = random_state
-
-    def __call__(self, data):
-        rng = torch.Generator().manual_seed(self.random_state)
-        data.train_mask = data.val_mask = data.test_mask = None
-        data = train_test_split_edges(data, self.val_ratio, self.test_ratio, rng=rng)
-        data.edge_index = data.train_pos_edge_index
-        return data
-
-
 class GraphLoader:
     def __init__(self, data):
         self.data = data
@@ -292,7 +274,9 @@ datasets = {
     'ppi': partial(PPI, root='datasets/PPI'),
     'flickr': partial(Flickr, root='datasets/Flickr'),
     'yelp': partial(Yelp, root='datasets/Yelp'),
-    'facebook': partial(SNAPDataset, root='datasets/SNAP', name='ego-facebook')
+    'facebook': partial(SNAPDataset, root='datasets/SNAP', name='ego-facebook'),
+    'amazon-photo': partial(Amazon, root='datasets/Amazon/photo', name='photo'),
+    'amazon-computers': partial(Amazon, root='datasets/Amazon/computers', name='computers'),
 }
 
 
@@ -300,15 +284,43 @@ def get_availabel_datasets():
     return list(datasets.keys())
 
 
+def train_test_split_nodes(data, val_ratio=.25, test_ratio=.25, rng=None):
+    n_val = int(val_ratio * data.num_nodes)
+    n_test = int(test_ratio * data.num_nodes)
+    perm = torch.randperm(data.num_nodes, generator=rng)
+    val_nodes = perm[:n_val]
+    test_nodes = perm[n_val:n_val+n_test]
+    train_nodes = perm[n_val+n_test:]
+    val_mask = torch.zeros(data.num_nodes, dtype=torch.bool)
+    val_mask[val_nodes] = True
+    test_mask = torch.zeros(data.num_nodes, dtype=torch.bool)
+    test_mask[test_nodes] = True
+    train_mask = torch.zeros(data.num_nodes, dtype=torch.bool)
+    train_mask[train_nodes] = True
+    data.val_mask = val_mask
+    data.test_mask = test_mask
+    data.train_mask = train_mask
+    return data
+
+
 def load_dataset(dataset_name, split_edges=False):
-    transform = None
-    if split_edges:
-        seed = sum([ord(c) for c in dataset_name])
-        transform = EdgeSplit(random_state=seed)
-    dataset = datasets[dataset_name](transform=transform)
+    dataset = datasets[dataset_name]()
     data = dataset[0]
     data.name = dataset_name
     data.num_classes = dataset.num_classes
     data.alpha = data.delta = 0
     data.priv_mask = False
+    seed = sum([ord(c) for c in dataset_name])
+    rng = torch.Generator().manual_seed(seed)
+
+    if split_edges:
+        data = train_test_split_edges(data, val_ratio=0.05, test_ratio=0.1, rng=rng)
+        data.edge_index = data.train_pos_edge_index
+    elif not hasattr(data, 'train_mask'):
+        data = train_test_split_nodes(data, val_ratio=.25, test_ratio=.25, rng=rng)
+
     return data
+
+
+if __name__ == '__main__':
+    load_dataset('flickr', True)
