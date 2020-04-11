@@ -13,7 +13,7 @@ try: from tsnecuda import TSNE
 except ImportError: from sklearn.manifold import TSNE
 
 from gnn import GConvDP
-from models import GCNClassifier, Node2VecClassifier, GCNLinkPredictor, Node2VecLinkPredictor, VGAELinkPredictor
+from models import GCNClassifier, Node2VecClassifier, Node2VecLinkPredictor, VGAELinkPredictor
 
 params = {
     'nodeclass': {
@@ -21,56 +21,40 @@ params = {
             'params': {
                 'hidden_dim': 16,
                 'weight_decay': 5e-4,
-                'lr': 0.01
+                'lr': 1
             },
         },
         'node2vec': {
             'params': {
                 'embedding_dim': 128,
-                'walk_length': 20,
+                'walk_length': 80,
                 'context_size': 10,
                 'walks_per_node': 10,
-                'batch_size': 128,
-                'lr': 0.01
-            },
-        },
-        'early_stop': {
-            'min_delta': 0,
-            'patience': 5
-        }
-    },
-    'linkpred': {
-        'gcn': {
-            'params': {
-                'hidden_dim': 64,
-                'output_dim': 32,
-                'dropout': 0,
+                'batch_size': 1,
                 'lr': 0.01,
                 'weight_decay': 0
             },
-        },
+        }
+    },
+    'linkpred': {
         'vgae': {
             'params': {
                 'output_dim': 16,
-                'lr': 0.01,
+                'lr': 1,
                 'weight_decay': 0
             },
         },
         'node2vec': {
             'params': {
-                'embedding_dim': 16,
-                'walk_length': 20,
+                'embedding_dim': 128,
+                'walk_length': 80,
                 'context_size': 10,
                 'walks_per_node': 10,
-                'batch_size': 128,
-                'lr': 0.01,
+                'batch_size': 1,
+                'lr': 0.025,
                 'weight_decay': 0
             },
         },
-        'early_stop': {
-            'min_delta': 0,
-            'patience': 5
-        }
     }
 }
 
@@ -151,7 +135,7 @@ class NodeClassification(LearningTask):
                 epsilon=self.epsilon,
                 **params['nodeclass']['gcn']['params']
             )
-        else:
+        elif self.model_name == 'node2vec':
             return Node2VecClassifier(
                 data=self.data,
                 **params['nodeclass']['node2vec']['params']
@@ -159,7 +143,7 @@ class NodeClassification(LearningTask):
 
     def run(self, **train_args):
         monitor = 'val_loss' if self.model_name == 'gcn' else 'val_acc'
-        early_stop_callback = EarlyStopping(monitor=monitor, mode='auto', **params['nodeclass']['early_stop'])
+        early_stop_callback = EarlyStopping(monitor=monitor, mode='auto', min_delta=0, patience=5)
         return super().run(early_stop_callback=early_stop_callback, **train_args)
 
 
@@ -167,26 +151,20 @@ class LinkPrediction(LearningTask):
     task_name = 'linkpred'
 
     def get_model(self):
-        if self.model_name == 'gcn':
-            return GCNLinkPredictor(
-                data=self.data,
-                epsilon=self.epsilon,
-                **params['linkpred']['gcn']['params']
-            )
-        elif self.model_name == 'vgae':
+        if self.model_name == 'vgae':
             return VGAELinkPredictor(
                 data=self.data,
                 epsilon=self.epsilon,
                 **params['linkpred']['vgae']['params']
             )
-        else:
+        elif self.model_name == 'node2vec':
             return Node2VecLinkPredictor(
                 data=self.data,
                 **params['linkpred']['node2vec']['params']
             )
 
     def run(self, **train_args):
-        early_stop_callback = EarlyStopping(monitor='val_auc', mode='max', **params['linkpred']['early_stop'])
+        early_stop_callback = EarlyStopping(monitor='val_auc', mode='max', min_delta=0, patience=5)
         return super().run(early_stop_callback=early_stop_callback, **train_args)
 
 
