@@ -8,8 +8,9 @@
 - ~~Shallow node embedding baselines~~
 - ~~Run the experiments for a wider range of epsilon~~
 - ~~Experiment for combination of private/non-private features~~
-- Perform experiments over some more datasets, preferably not citation networks
+- ~~Perform experiments over some more datasets, preferably not citation networks~~
 - ~~Visualize the embeddings obtained privately and compare with the results with the original GCN~~
+- ~~Experiment on the percentage of nodes with private features~~
+- ~~Replace GCN by VGAE for link prediction~~
 - Adapt other differentially private mechanisms for mean/summation estimation
 - Generalize beyond GCNs
-- ~~Experiment on the percentage of nodes with private features~~
