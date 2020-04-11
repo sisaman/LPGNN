@@ -56,10 +56,10 @@ def privatize(data, pnr, pfr, eps):
 
 
 def visualize(dataset):
-    eps_list = [0.1, 1, 10]
+    eps_list = [0.1, 1, 5, 10]
     for eps in eps_list:
         data = privatize(dataset, pnr=1, pfr=1, eps=eps)
-        task = Visualization(data=data, model_name='gcn', epsilon=eps)
+        task = Visualization(data=data, model_name='vgae', epsilon=eps)
         result = task.run(max_epochs=500)
         df = pd.DataFrame(data=result['data'], columns=['x', 'y'])
         df['label'] = result['label']
@@ -97,6 +97,7 @@ def experiment(args):
 
             for model in model_list:
 
+                if model == 'gcn' and task is LinkPrediction: model = 'vgae'
                 if task is ErrorEstimation: feature_list = ['priv']
                 elif model == 'node2vec': feature_list = ['void']
                 else: feature_list = args.features
@@ -135,7 +136,7 @@ def experiment(args):
 
                                     data = privatize(transformed_data, pnr=pnr, pfr=pfr, eps=eps)
                                     t = task(data=data, model_name=model, epsilon=eps, orig_features=dataset.x)
-                                    result = t.run(max_epochs=args.epochs)
+                                    result = t.run(max_epochs=1 if model == 'node2vec' else args.epochs)
 
                                     if task is not ErrorEstimation:
                                         print(result)
@@ -151,8 +152,8 @@ def experiment(args):
 
 if __name__ == '__main__':
     task_choices = ['nodeclass', 'linkpred', 'errorest', 'visualize']
-    dataset_choices = ['cora', 'citeseer', 'pubmed', 'flickr', 'yelp']
-    model_choices = ['gcn', 'node2vec', 'vgae']
+    dataset_choices = ['cora', 'citeseer', 'pubmed', 'flickr', 'yelp', 'amazon-photo', 'amazon-computers']
+    model_choices = ['gcn', 'node2vec']
     feature_choices = ['raw', 'priv', 'deg']
     parser = ArgumentParser()
     parser.add_argument('-t', '--tasks', nargs='*', choices=task_choices, default=task_choices)
