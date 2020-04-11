@@ -4,33 +4,12 @@ from pytorch_lightning import Trainer, LightningModule
 from pytorch_lightning.callbacks import EarlyStopping
 from sklearn.metrics import roc_auc_score
 from torch.nn.functional import binary_cross_entropy_with_logits, cross_entropy
-from torch.optim import Adam
+from torch.optim import Adam, Adadelta
 from torch.utils.data import DataLoader
 from torch_geometric.nn import Node2Vec, VGAE
-from torch_geometric.utils import add_remaining_self_loops, negative_sampling
 
 from datasets import load_dataset, GraphLoader
 from gnn import GCN, GraphEncoder
-
-
-def get_link_labels(pos_edge_index, neg_edge_index):
-    link_labels = torch.zeros(pos_edge_index.size(1) +
-                              neg_edge_index.size(1), device=pos_edge_index.device).float()
-    link_labels[:pos_edge_index.size(1)] = 1.
-    return link_labels
-
-
-def aggregate_link_prediction_results(outputs, metric='loss'):
-    link_labels = torch.stack([x['labels'] for x in outputs])
-    link_logits = torch.stack([x['logits'] for x in outputs])
-    if metric == 'auc':
-        link_probs = torch.sigmoid(link_logits)
-        result = roc_auc_score(link_labels.cpu().numpy().ravel(), link_probs.cpu().numpy().ravel())
-    else:
-        result = binary_cross_entropy_with_logits(link_logits, link_labels).item()
-
-    logs = {'val_'+metric: result}
-    return {'val_'+metric: result, 'log': logs, 'progress_bar': logs}
 
 
 class LitNode2Vec(LightningModule):
@@ -93,6 +72,26 @@ class Node2VecClassifier(LitNode2Vec):
 
 
 class Node2VecLinkPredictor(LitNode2Vec):
+    @staticmethod
+    def get_link_labels(pos_edge_index, neg_edge_index):
+        link_labels = torch.zeros(pos_edge_index.size(1) +
+                                  neg_edge_index.size(1), device=pos_edge_index.device).float()
+        link_labels[:pos_edge_index.size(1)] = 1.
+        return link_labels
+
+    @staticmethod
+    def aggregate_link_prediction_results(outputs, metric='loss'):
+        link_labels = torch.stack([x['labels'] for x in outputs])
+        link_logits = torch.stack([x['logits'] for x in outputs])
+        if metric == 'auc':
+            link_probs = torch.sigmoid(link_logits)
+            result = roc_auc_score(link_labels.cpu().numpy().ravel(), link_probs.cpu().numpy().ravel())
+        else:
+            result = binary_cross_entropy_with_logits(link_logits, link_labels).item()
+
+        logs = {'val_' + metric: result}
+        return {'val_' + metric: result, 'log': logs, 'progress_bar': logs}
+
     def get_link_logits(self, pos_edge_index, neg_edge_index):
         total_edge_index = torch.cat([pos_edge_index, neg_edge_index], dim=-1)
         x_j = self(total_edge_index[0])
@@ -102,7 +101,7 @@ class Node2VecLinkPredictor(LitNode2Vec):
     def validation_step(self, data, index):
         pos_edge_index, neg_edge_index = data.val_pos_edge_index, data.val_neg_edge_index
         link_logits = self.get_link_logits(pos_edge_index, neg_edge_index)
-        link_labels = get_link_labels(pos_edge_index, neg_edge_index)
+        link_labels = self.get_link_labels(pos_edge_index, neg_edge_index)
         return {'labels': link_labels, 'logits': link_logits}
 
     def val_dataloader(self):
@@ -112,23 +111,23 @@ class Node2VecLinkPredictor(LitNode2Vec):
         return GraphLoader(self.data)
 
     def validation_epoch_end(self, outputs):
-        return aggregate_link_prediction_results(outputs, 'auc')
+        return self.aggregate_link_prediction_results(outputs, 'auc')
 
     def test_step(self, data, index):
         pos_edge_index, neg_edge_index = data.test_pos_edge_index, data.test_neg_edge_index
         link_logits = self.get_link_logits(pos_edge_index, neg_edge_index)
-        link_labels = get_link_labels(pos_edge_index, neg_edge_index)
+        link_labels = self.get_link_labels(pos_edge_index, neg_edge_index)
         return {'labels': link_labels, 'logits': link_logits}
 
     def test_epoch_end(self, outputs):
-        result = aggregate_link_prediction_results(outputs, 'auc')
+        result = self.aggregate_link_prediction_results(outputs, 'auc')
         auc = result['log']['val_auc']
         result['log']['test_result'] = auc
         return result
 
 
 class GCNClassifier(LightningModule):
-    def __init__(self, data, hidden_dim=16, epsilon=1, dropout=0.5, lr=0.01, weight_decay=5e-4):
+    def __init__(self, data, hidden_dim=16, epsilon=1, dropout=0.5, lr=1, weight_decay=5e-4):
         super().__init__()
         self.data = data
         self.lr = lr
@@ -147,7 +146,7 @@ class GCNClassifier(LightningModule):
         return self.gcn(data.x, data.edge_index, data.priv_mask)
 
     def configure_optimizers(self):
-        return Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        return Adadelta(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
     def train_dataloader(self):
         return GraphLoader(self.data)
@@ -192,83 +191,8 @@ class GCNClassifier(LightningModule):
         return result
 
 
-class GCNLinkPredictor(LightningModule):
-    def __init__(self, data, hidden_dim=128, output_dim=64, epsilon=1, dropout=0, lr=0.01, weight_decay=0):
-        super().__init__()
-        self.data = data
-        self.lr = lr
-        self.weight_decay = weight_decay
-        self.gcn = GCN(
-            input_dim=data.num_node_features,
-            output_dim=output_dim,
-            hidden_dim=hidden_dim,
-            dropout=dropout,
-            epsilon=epsilon,
-            alpha=data.alpha,
-            delta=data.delta
-        )
-
-    def get_link_logits(self, data, pos_edge_index, neg_edge_index):
-        x = self.gcn(data.x, pos_edge_index, data.priv_mask)
-        total_edge_index = torch.cat([pos_edge_index, neg_edge_index], dim=-1)
-        x_j = torch.index_select(x, 0, total_edge_index[0])
-        x_i = torch.index_select(x, 0, total_edge_index[1])
-        return (x_i * x_j).sum(dim=1)
-
-    def forward(self, data):
-        x = self.gcn(data.x, data.edge_index, data.priv_mask)
-        return x
-
-    def train_dataloader(self):
-        return GraphLoader(self.data)
-
-    def val_dataloader(self):
-        return GraphLoader(self.data)
-
-    def test_dataloader(self):
-        return GraphLoader(self.data)
-
-    def configure_optimizers(self):
-        return Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-
-    def training_step(self, data, index):
-        x, pos_edge_index = data.x, data.train_pos_edge_index
-        pos_edge_index_with_self_loops, _ = add_remaining_self_loops(pos_edge_index, num_nodes=data.num_nodes)
-
-        neg_edge_index = negative_sampling(
-            edge_index=pos_edge_index_with_self_loops, num_nodes=data.num_nodes,
-            num_neg_samples=pos_edge_index.size(1))
-
-        link_logits = self.get_link_logits(data, pos_edge_index, neg_edge_index)
-        link_labels = get_link_labels(pos_edge_index, neg_edge_index)
-        loss = binary_cross_entropy_with_logits(link_logits, link_labels)
-        logs = {'loss': loss}
-        return {'loss': loss, 'log': logs}
-
-    def validation_step(self, data, index):
-        pos_edge_index, neg_edge_index = data.val_pos_edge_index, data.val_neg_edge_index
-        link_logits = self.get_link_logits(data, pos_edge_index, neg_edge_index)
-        link_labels = get_link_labels(pos_edge_index, neg_edge_index)
-        return {'labels': link_labels, 'logits': link_logits}
-
-    def validation_epoch_end(self, outputs):
-        return aggregate_link_prediction_results(outputs, 'auc')
-
-    def test_step(self, data, index):
-        pos_edge_index, neg_edge_index = data.test_pos_edge_index, data.test_neg_edge_index
-        link_logits = self.get_link_logits(data, pos_edge_index, neg_edge_index)
-        link_labels = get_link_labels(pos_edge_index, neg_edge_index)
-        return {'labels': link_labels, 'logits': link_logits}
-
-    def test_epoch_end(self, outputs):
-        result = aggregate_link_prediction_results(outputs, 'auc')
-        auc = result['log']['val_auc']
-        result['log']['test_result'] = auc
-        return result
-
-
 class VGAELinkPredictor(LightningModule):
-    def __init__(self, data, output_dim=16, epsilon=1, lr=0.01, weight_decay=0):
+    def __init__(self, data, output_dim=16, epsilon=1, lr=1, weight_decay=0):
         super().__init__()
         self.data = data
         self.lr = lr
@@ -298,7 +222,7 @@ class VGAELinkPredictor(LightningModule):
         return GraphLoader(self.data)
 
     def configure_optimizers(self):
-        return Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        return Adadelta(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
     def training_step(self, data, index):
         z = self(data)
