@@ -216,6 +216,14 @@ class ErrorEstimation(Task):
 class Visualization(LinkPrediction):
     task_name = 'visualize'
 
+    def get_model(self):
+        return VGAELinkPredictor(
+            data=self.data,
+            epsilon=self.epsilon,
+            **params['linkpred'][self.model_name]['params'],
+            **params['linkpred'][self.model_name]['optim'][self.data.name],
+        )
+
     def run(self, **train_args):
         super().run(**train_args)
         z = self.trained_model(self.data)
