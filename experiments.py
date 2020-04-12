@@ -1,6 +1,7 @@
 import math
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.simplefilter(action='ignore', category=RuntimeWarning)
 
 from torch_geometric.data import Data
 from torch_geometric.transforms import LocalDegreeProfile
@@ -58,9 +59,14 @@ def privatize(data, pnr, pfr, eps):
 def visualize(dataset):
     eps_list = [0.1, 1, 5, 10]
     for eps in eps_list:
+        print(
+            Fore.BLUE +
+            f'\ntask=visualize / dataset={dataset.name} / eps={eps}'
+            + Style.RESET_ALL
+        )
         data = privatize(dataset, pnr=1, pfr=1, eps=eps)
         task = Visualization(data=data, model_name='vgae', epsilon=eps)
-        result = task.run(max_epochs=500)
+        result = task.run(max_epochs=500, min_epochs=50)
         df = pd.DataFrame(data=result['data'], columns=['x', 'y'])
         df['label'] = result['label']
         df.to_pickle(f'results/visualize_{data.name}_{eps}.pkl')
