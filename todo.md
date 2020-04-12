@@ -12,5 +12,6 @@
 - ~~Visualize the embeddings obtained privately and compare with the results with the original GCN~~
 - ~~Experiment on the percentage of nodes with private features~~
 - ~~Replace GCN by VGAE for link prediction~~
+- ~~Fine-tuning models to get best results~~
 - Adapt other differentially private mechanisms for mean/summation estimation
 - Generalize beyond GCNs
