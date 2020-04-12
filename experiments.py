@@ -78,8 +78,6 @@ def experiment(args):
     epsilons_methods = [0.1, 1, 3, 5, 7, 9]
     epsilons_priv_ratio = [1, 3, 5]
     epsilons_err_estimation = [.1, .2, .5, 1, 2, 5]
-    private_node_ratios = [.2, .4, .6, .8, 1]
-    private_feature_ratios = [.1, .2, .5, .75, 1]
 
     for task in args.tasks:
         task = task_class[task]
@@ -107,13 +105,13 @@ def experiment(args):
 
                     transformed_data = transform_features(dataset, feature)
 
-                    if feature == 'priv': pnr_list = private_node_ratios
+                    if feature == 'priv': pnr_list = args.private_node_ratios
                     else: pnr_list = [0]  # when using other features / models
 
                     for pnr in pnr_list:
 
                         if feature != 'priv': pfr_list = [0]  # when no privacy
-                        elif pnr == 1: pfr_list = private_feature_ratios  # vary pfr only when pnr = 1
+                        elif pnr == 1: pfr_list = args.private_feature_ratios  # vary pfr only when pnr = 1
                         else: pfr_list = [1]  # vary pnr only when pfr = 1
 
                         for pfr in pfr_list:
@@ -136,7 +134,10 @@ def experiment(args):
 
                                     data = privatize(transformed_data, pnr=pnr, pfr=pfr, eps=eps)
                                     t = task(data=data, model_name=model, epsilon=eps, orig_features=dataset.x)
-                                    result = t.run(max_epochs=1 if model == 'node2vec' else args.epochs)
+                                    result = t.run(
+                                        max_epochs=1 if model == 'node2vec' else args.epochs,
+                                        min_epochs=0 if model == 'node2vec' else 10,
+                                    )
 
                                     if task is not ErrorEstimation:
                                         print(result)
@@ -147,7 +148,10 @@ def experiment(args):
                         data=results,
                         columns=['method', 'pnr', 'pfr', 'eps', 'run', 'perf']
                     )
-                    df_result.to_pickle(f'results/{task.task_name}_{dataset_name}_{model}_{feature}.pkl')
+
+                    path = args.output
+                    if path[-1] == '/': path = path[:-1]
+                    df_result.to_pickle(f'{path}/{task.task_name}_{dataset_name}_{model}_{feature}.pkl')
 
 
 if __name__ == '__main__':
@@ -155,6 +159,8 @@ if __name__ == '__main__':
     dataset_choices = ['cora', 'citeseer', 'pubmed', 'flickr', 'yelp', 'amazon-photo', 'amazon-computers']
     model_choices = ['gcn', 'node2vec']
     feature_choices = ['raw', 'priv', 'deg']
+    private_node_ratios = [.2, .4, .6, .8, 1]
+    private_feature_ratios = [.2, .4, .6, .8, 1]
     parser = ArgumentParser()
     parser.add_argument('-t', '--tasks', nargs='*', choices=task_choices, default=task_choices)
     parser.add_argument('-d', '--datasets', nargs='*', choices=dataset_choices, default=dataset_choices)
@@ -162,6 +168,9 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--features', nargs='*', choices=feature_choices, default=feature_choices)
     parser.add_argument('-r', '--repeats', type=int, default=10)
     parser.add_argument('-e', '--epochs', type=int, default=500)
+    parser.add_argument('-o', '--output', type=str, default='results')
+    parser.add_argument('--pnr', nargs='*', type=float, default=private_node_ratios, dest='private_node_ratios')
+    parser.add_argument('--pfr', nargs='*', type=float, default=private_feature_ratios, dest='private_feature_ratios')
 
     args = parser.parse_args()
     print(args)
