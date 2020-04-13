@@ -1,3 +1,4 @@
+import gc
 import json
 import math
 import os.path as osp
@@ -7,8 +8,9 @@ import numpy as np
 import scipy.sparse as sp
 import torch
 from google_drive_downloader import GoogleDriveDownloader as gdd
+from torch.distributions import Laplace
 from torch_geometric.data import InMemoryDataset, Data
-from torch_geometric.datasets import Planetoid, Reddit, PPI, SNAPDataset, Amazon
+from torch_geometric.datasets import Planetoid, Amazon, Coauthor
 from torch_geometric.utils import to_undirected
 
 
@@ -61,7 +63,7 @@ def train_test_split_edges(data, val_ratio=0.05, test_ratio=0.1, rng=None):
     neg_adj_mask = neg_adj_mask.triu(diagonal=1)
     neg_adj_mask[row, col] = 0
 
-    neg_row, neg_col = neg_adj_mask.nonzero().t()
+    neg_row, neg_col = neg_adj_mask.nonzero(as_tuple=True)
     perm = torch.randperm(neg_row.size(0), generator=rng, dtype=torch.long)[:min(n_v + n_t, neg_row.size(0))]
     neg_row, neg_col = neg_row[perm], neg_col[perm]
 
@@ -270,11 +272,9 @@ datasets = {
     'cora': partial(Planetoid, root='datasets/Planetoid', name='cora'),
     'citeseer': partial(Planetoid, root='datasets/Planetoid', name='citeseer'),
     'pubmed': partial(Planetoid, root='datasets/Planetoid', name='pubmed'),
-    'reddit': partial(Reddit, root='datasets/Reddit'),
-    'ppi': partial(PPI, root='datasets/PPI'),
+    'coauthor-cs': partial(Coauthor, root='datasets/Coauthor/cs', name='cs'),
+    'coauthor-ph': partial(Coauthor, root='datasets/Coauthor/ph', name='physics'),
     'flickr': partial(Flickr, root='datasets/Flickr'),
-    'yelp': partial(Yelp, root='datasets/Yelp'),
-    'facebook': partial(SNAPDataset, root='datasets/SNAP', name='ego-facebook'),
     'amazon-photo': partial(Amazon, root='datasets/Amazon/photo', name='photo'),
     'amazon-computers': partial(Amazon, root='datasets/Amazon/computers', name='computers'),
 }
@@ -314,11 +314,57 @@ def load_dataset(dataset_name, split_edges=False):
     rng = torch.Generator().manual_seed(seed)
 
     if split_edges:
+        data.train_mask = data.val_mask = data.test_mask = None
+        gc.collect()
         data = train_test_split_edges(data, val_ratio=0.05, test_ratio=0.1, rng=rng)
         data.edge_index = data.train_pos_edge_index
     elif not hasattr(data, 'train_mask'):
         data = train_test_split_nodes(data, val_ratio=.25, test_ratio=.25, rng=rng)
 
+    return data
+
+
+def laplace_mechanism(data, eps):
+    loc = torch.zeros_like(data.x)
+    scale = torch.ones_like(data.x) * (2.0 / eps)
+    x_priv = Laplace(loc, scale).sample()
+    data.x = data.priv_mask * x_priv + ~data.priv_mask * data.x
+    return data
+
+
+def one_bit_mechanism(data, eps):
+    exp = math.exp(eps)
+    p = (data.x - data.alpha) / data.delta
+    p[:, (data.delta == 0)] = 0
+    p = p * (exp - 1) / (exp + 1) + 1 / (exp + 1)
+    x_priv = torch.bernoulli(p)
+    data.x = data.priv_mask * x_priv + ~data.priv_mask * data.x
+    return data
+
+
+def privatize(data, pnr, pfr, eps, method='bit'):
+    if pnr > 0 and pfr > 0:
+        data = Data(**dict(data()))  # copy data to avoid changing the original
+        mask = torch.zeros_like(data.x, dtype=torch.bool)
+        n_rows = int(pnr * mask.size(0))
+        n_cols = int(pfr * mask.size(1))
+        priv_rows = torch.randperm(mask.size(0))[:n_rows]
+        priv_cols = torch.randperm(mask.size(1))[:n_cols]
+        mask[priv_rows.unsqueeze(1), priv_cols] = True
+        data.priv_mask = mask
+        alpha = data.x.min(dim=0)[0]
+        beta = data.x.max(dim=0)[0]
+        data.alpha = alpha
+        data.delta = beta - alpha
+        # data.delta[data.delta == 0] = 1e-7  # avoid division by zero
+
+        if method == 'bit':
+            # noinspection PyTypeChecker
+            data = one_bit_mechanism(data, eps)
+        elif method == 'lap':
+            # noinspection PyTypeChecker
+            data = laplace_mechanism(data, eps)
+            data.priv_mask = False
     return data
 
 

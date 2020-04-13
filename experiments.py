@@ -1,4 +1,3 @@
-import math
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
@@ -9,10 +8,16 @@ from torch_geometric.transforms import LocalDegreeProfile
 import pandas as pd
 import torch
 from colorama import Fore, Style
-from datasets import load_dataset
+from datasets import load_dataset, privatize
 from tasks import LinkPrediction, NodeClassification, ErrorEstimation, Visualization
 from argparse import ArgumentParser
 torch.manual_seed(12345)
+
+priv_feature_set = {'bit', 'lap'}
+
+
+def is_private(feature):
+    return feature in priv_feature_set
 
 
 @torch.no_grad()
@@ -23,36 +28,6 @@ def transform_features(data, feature):
         data.x = None
         data.num_nodes = num_nodes
         data = LocalDegreeProfile()(data)
-    return data
-
-
-def one_bit_response(data, eps):
-    exp = math.exp(eps)
-    delta = data.delta
-    delta[delta == 0] = 1e-7  # avoid division by zero
-    p = (data.x - data.alpha) / delta
-    p = p * (exp - 1) / (exp + 1) + 1 / (exp + 1)
-    x_priv = torch.bernoulli(p)
-    data.x = data.priv_mask * x_priv + ~data.priv_mask * data.x
-    return data
-
-
-def privatize(data, pnr, pfr, eps):
-    if pnr > 0 and pfr > 0:
-        data = Data(**dict(data()))  # copy data to avoid changing the original
-        mask = torch.zeros_like(data.x, dtype=torch.bool)
-        n_rows = int(pnr * mask.size(0))
-        n_cols = int(pfr * mask.size(1))
-        priv_rows = torch.randperm(mask.size(0))[:n_rows]
-        priv_cols = torch.randperm(mask.size(1))[:n_cols]
-        mask[priv_rows.unsqueeze(1), priv_cols] = True
-        data.priv_mask = mask
-        alpha = data.x.min(dim=0)[0]
-        beta = data.x.max(dim=0)[0]
-        data.alpha = alpha
-        data.delta = beta - alpha
-        # noinspection PyTypeChecker
-        data = one_bit_response(data, eps)
     return data
 
 
@@ -102,7 +77,7 @@ def experiment(args):
             for model in model_list:
 
                 if model == 'gcn' and task is LinkPrediction: model = 'vgae'
-                if task is ErrorEstimation: feature_list = ['priv']
+                if task is ErrorEstimation: feature_list = priv_feature_set.intersection(args.features)
                 elif model == 'node2vec': feature_list = ['void']
                 else: feature_list = args.features
 
@@ -111,19 +86,19 @@ def experiment(args):
 
                     transformed_data = transform_features(dataset, feature)
 
-                    if feature == 'priv': pnr_list = args.private_node_ratios
+                    if is_private(feature): pnr_list = args.private_node_ratios
                     else: pnr_list = [0]  # when using other features / models
 
                     for pnr in pnr_list:
 
-                        if feature != 'priv': pfr_list = [0]  # when no privacy
+                        if not is_private(feature): pfr_list = [0]  # when no privacy
                         elif pnr == 1: pfr_list = args.private_feature_ratios  # vary pfr only when pnr = 1
                         else: pfr_list = [1]  # vary pnr only when pfr = 1
 
                         for pfr in pfr_list:
 
                             if task is ErrorEstimation: eps_list = epsilons_err_estimation
-                            elif feature != 'priv': eps_list = [1]
+                            elif not is_private(feature): eps_list = [1]
                             elif pnr == pfr == 1: eps_list = epsilons_methods
                             else: eps_list = epsilons_priv_ratio
 
@@ -138,7 +113,7 @@ def experiment(args):
                                         + Style.RESET_ALL
                                     )
 
-                                    data = privatize(transformed_data, pnr=pnr, pfr=pfr, eps=eps)
+                                    data = privatize(transformed_data, pnr=pnr, pfr=pfr, eps=eps, method=feature)
                                     t = task(data=data, model_name=model, epsilon=eps, orig_features=dataset.x)
                                     result = t.run(
                                         max_epochs=1 if model == 'node2vec' else args.epochs,
@@ -162,9 +137,9 @@ def experiment(args):
 
 if __name__ == '__main__':
     task_choices = ['nodeclass', 'linkpred', 'errorest', 'visualize']
-    dataset_choices = ['cora', 'citeseer', 'pubmed', 'flickr', 'yelp', 'amazon-photo', 'amazon-computers']
+    dataset_choices = ['cora', 'citeseer', 'pubmed', 'flickr', 'amazon-photo', 'amazon-computers']
     model_choices = ['gcn', 'node2vec']
-    feature_choices = ['raw', 'priv', 'deg']
+    feature_choices = ['raw', 'bit', 'deg', 'lap']
     private_node_ratios = [.2, .4, .6, .8, 1]
     private_feature_ratios = [.2, .4, .6, .8, 1]
     parser = ArgumentParser()
