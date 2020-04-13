@@ -225,6 +225,7 @@ class Visualization(LinkPrediction):
     task_name = 'visualize'
 
     def get_model(self):
+        # noinspection PyArgumentList
         return VGAELinkPredictor(
             data=self.data,
             epsilon=self.epsilon,
