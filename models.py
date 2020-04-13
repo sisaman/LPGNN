@@ -1,3 +1,9 @@
+import warnings
+
+from torch_geometric.transforms import NormalizeFeatures
+
+warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.simplefilter(action='ignore', category=RuntimeWarning)
 import torch
 from pytorch_lightning import Trainer, LightningModule
 from pytorch_lightning.callbacks import EarlyStopping
@@ -8,7 +14,7 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from torch_geometric.nn import Node2Vec, VGAE
-from datasets import load_dataset, GraphLoader
+from datasets import load_dataset, GraphLoader, privatize
 from gnn import GCN, GraphEncoder
 import logging
 logging.disable(logging.INFO)
@@ -118,7 +124,7 @@ class Node2VecLinkPredictor(LitNode2Vec):
 
 
 class GCNClassifier(LightningModule):
-    def __init__(self, data, hidden_dim=16, epsilon=1, dropout=0.5, lr=0.01, weight_decay=5e-4):
+    def __init__(self, data, hidden_dim=16, epsilon=1.0, dropout=0.5, lr=0.01, weight_decay=5e-4):
         super().__init__()
         self.data = data
         self.lr = lr
@@ -153,7 +159,8 @@ class GCNClassifier(LightningModule):
     def training_step(self, data, index):
         out = self(data)
         loss = cross_entropy(out[data.train_mask], data.y[data.train_mask])
-        return {'loss': loss}
+        logs = {'loss': loss}
+        return {'loss': loss, 'log': logs}
 
     def validation_step(self, data, index):
         out = self(data)
@@ -182,7 +189,7 @@ class GCNClassifier(LightningModule):
 
 
 class VGAELinkPredictor(LightningModule):
-    def __init__(self, data, output_dim=16, epsilon=1, lr=0.01, weight_decay=0.0):
+    def __init__(self, data, output_dim=16, epsilon=1.0, lr=0.01, weight_decay=0.0):
         super().__init__()
         self.data = data
         self.lr = lr
@@ -250,20 +257,25 @@ class VGAELinkPredictor(LightningModule):
 def main():
     torch.manual_seed(12345678)
     dataset = load_dataset(
-        dataset_name='citeseer',
+        dataset_name='amazon-computers',
         split_edges=True
     ).to('cuda')
+
+    eps = 1
+    # dataset = privatize(dataset, pnr=1, pfr=1, eps=eps, method='bit')
     # dataset = NormalizeFeatures()(dataset)
-    # model = Node2VecClassifier(dataset, 128, 80, 10, 10, 1, lr=0.01)
-    # model = Node2VecLinkPredictor(dataset, 128, 80, 10, 10, 1, lr=0.01)
+    # print(dataset.x.sum(dim=1))
+
     for i in range(10):
-        # model = GCNClassifier(dataset, lr=.001, weight_decay=0.01)
+        # model = GCNClassifier(dataset, lr=.01, weight_decay=0.001, epsilon=eps)
         model = VGAELinkPredictor(dataset, lr=0.01, weight_decay=0.01)
         early_stop_callback = EarlyStopping(monitor='val_loss', min_delta=0, patience=10)
         # noinspection PyTypeChecker
-        trainer = Trainer(gpus=1, max_epochs=500, checkpoint_callback=False,
-                          early_stop_callback=early_stop_callback, weights_summary=None, min_epochs=10,
-                          logger=ResultLogger())
+        trainer = Trainer(gpus=1, max_epochs=1000, checkpoint_callback=False,
+                          early_stop_callback=early_stop_callback,
+                          weights_summary=None, min_epochs=10,
+                          logger=ResultLogger()
+                          )
         trainer.fit(model)
         trainer.test()
 

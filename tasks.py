@@ -1,5 +1,12 @@
 import os
 import sys
+import warnings
+
+from torch_geometric.transforms import NormalizeFeatures
+
+warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.simplefilter(action='ignore', category=RuntimeWarning)
+
 from abc import abstractmethod
 from contextlib import contextmanager
 
@@ -8,7 +15,7 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import EarlyStopping
 from torch_geometric.utils import degree
 
-from datasets import load_dataset
+from datasets import load_dataset, privatize
 
 try: from tsnecuda import TSNE
 except ImportError: from sklearn.manifold import TSNE
@@ -203,6 +210,7 @@ class ErrorEstimation(Task):
     def run(self, **kwargs):
         gc_hat = self.model(self.data.x, self.data.edge_index, self.data.priv_mask)
         diff = (self.gc - gc_hat) / self.data.delta
+        diff[:, (self.data.delta == 0)] = 0  # eliminate division by zero
         error = torch.norm(diff, p=1, dim=1) / diff.shape[1]
         deg = self.get_degree(self.data)
         return list(zip(error.cpu().numpy(), deg.cpu().numpy()))
@@ -234,5 +242,8 @@ class Visualization(LinkPrediction):
 
 if __name__ == '__main__':
     dataset = load_dataset('cora', split_edges=True).to('cuda')
-    task = NodeClassification(dataset, 'node2vec')
-    print(task.run(min_epochs=0, max_epochs=1))
+    eps = 5
+    dataset = privatize(dataset, pnr=1, pfr=1, eps=eps, method='lap')
+    dataset = NormalizeFeatures()(dataset)
+    task = NodeClassification(dataset, 'gcn', epsilon=eps)
+    print(task.run(min_epochs=10, max_epochs=500))
