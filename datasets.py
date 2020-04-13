@@ -14,6 +14,7 @@ from torch_geometric.datasets import Planetoid, Amazon, Coauthor
 from torch_geometric.utils import to_undirected
 
 
+# noinspection DuplicatedCode
 def train_test_split_edges(data, val_ratio=0.05, test_ratio=0.1, rng=None):
     r"""Splits the edges of a :obj:`torch_geometric.data.Data` object
     into positive and negative train/val/test edges, and adds attributes of
@@ -79,6 +80,7 @@ def train_test_split_edges(data, val_ratio=0.05, test_ratio=0.1, rng=None):
     return data
 
 
+# noinspection DuplicatedCode
 class Flickr(InMemoryDataset):
     r"""The Flickr dataset from the `"GraphSAINT: Graph Sampling Based
     Inductive Learning Method" <https://arxiv.org/abs/1907.04931>`_ paper,
@@ -167,6 +169,7 @@ class Flickr(InMemoryDataset):
         return '{}()'.format(self.__class__.__name__)
 
 
+# noinspection DuplicatedCode
 class Yelp(InMemoryDataset):
     r"""The Yelp dataset from the `"GraphSAINT: Graph Sampling Based
     Inductive Learning Method" <https://arxiv.org/abs/1907.04931>`_ paper,
