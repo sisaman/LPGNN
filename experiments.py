@@ -1,4 +1,6 @@
 import warnings
+from functools import partial
+
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 
@@ -9,7 +11,7 @@ import pandas as pd
 import torch
 from colorama import Fore, Style
 from datasets import load_dataset, privatize
-from tasks import LinkPrediction, NodeClassification, ErrorEstimation, Visualization
+from tasks import LearningTask, ErrorEstimation, Visualization
 from argparse import ArgumentParser
 torch.manual_seed(12345)
 
@@ -40,8 +42,8 @@ def visualize(dataset):
             + Style.RESET_ALL
         )
         data = privatize(dataset, pnr=1, pfr=1, eps=eps)
-        task = Visualization(data=data, model_name='vgae', epsilon=eps)
-        result = task.run(max_epochs=500, min_epochs=50)
+        task = Visualization(data=data, epsilon=eps)
+        result = task.run()
         df = pd.DataFrame(data=result['data'], columns=['x', 'y'])
         df['label'] = result['label']
         df.to_pickle(f'results/visualize_{data.name}_{eps}.pkl')
@@ -49,35 +51,27 @@ def visualize(dataset):
 
 # noinspection PyShadowingNames
 def experiment(args):
-    task_class = {
-        'nodeclass': NodeClassification,
-        'linkpred': LinkPrediction,
-        'errorest': ErrorEstimation,
-        'visualize': Visualization
-    }
 
     epsilons_methods = [0.1, 1, 3, 5, 7, 9]
     epsilons_priv_ratio = [1, 3, 5]
     epsilons_err_estimation = [.1, .2, .5, 1, 2, 5]
 
     for task in args.tasks:
-        task = task_class[task]
 
         for dataset_name in args.datasets:
-            dataset = load_dataset(dataset_name, split_edges=(task.task_name in ['linkpred', 'visualize']))
+            dataset = load_dataset(dataset_name, split_edges=(task in ['linkpred', 'visualize']))
             dataset = dataset.to('cuda')
 
-            if task is Visualization:
+            if task == 'visualize':
                 visualize(dataset)
                 continue
 
-            if task is ErrorEstimation: model_list = ['gcn']
+            if task == 'errorest': model_list = ['gcn']
             else: model_list = args.models
 
             for model in model_list:
 
-                if model == 'gcn' and task is LinkPrediction: model = 'vgae'
-                if task is ErrorEstimation: feature_list = priv_feature_set.intersection(args.features)
+                if task == 'errorest': feature_list = priv_feature_set.intersection(args.features)
                 elif model == 'node2vec': feature_list = ['void']
                 else: feature_list = args.features
 
@@ -97,30 +91,38 @@ def experiment(args):
 
                         for pfr in pfr_list:
 
-                            if task is ErrorEstimation: eps_list = epsilons_err_estimation
+                            if task == 'errorest': eps_list = epsilons_err_estimation
                             elif not is_private(feature): eps_list = [1]
                             elif pnr == pfr == 1: eps_list = epsilons_methods
                             else: eps_list = epsilons_priv_ratio
 
                             for eps in eps_list:
 
+                                task_class = {
+                                    'nodeclass': partial(LearningTask, task_name='nodeclass'),
+                                    'linkpred': partial(LearningTask, task_name='linkpred'),
+                                    'errorest': partial(ErrorEstimation, orig_features=dataset.x),
+                                    'visualize': Visualization
+                                }
+
                                 for run in range(args.repeats):
 
                                     print(
                                         Fore.BLUE +
-                                        f'\ntask={task.task_name} / dataset={dataset_name} / model={model} / '
+                                        f'\ntask={task} / dataset={dataset_name} / model={model} / '
                                         f'feature={feature} / pnr={pnr} / pfr={pfr} / eps={eps} / run={run}'
                                         + Style.RESET_ALL
                                     )
 
                                     data = privatize(transformed_data, pnr=pnr, pfr=pfr, eps=eps, method=feature)
-                                    t = task(data=data, model_name=model, epsilon=eps, orig_features=dataset.x)
-                                    result = t.run(
-                                        max_epochs=1 if model == 'node2vec' else args.epochs,
-                                        min_epochs=0 if model == 'node2vec' else 10,
+                                    t = task_class[task](
+                                        data=data,
+                                        model_name=model,
+                                        epsilon=eps,
                                     )
+                                    result = t.run()
 
-                                    if task is not ErrorEstimation:
+                                    if task != 'errorest':
                                         print(result)
 
                                     results.append((f'{model}+{feature}', pnr, pfr, eps, run, result))
@@ -132,7 +134,7 @@ def experiment(args):
 
                     path = args.output
                     if path[-1] == '/': path = path[:-1]
-                    df_result.to_pickle(f'{path}/{task.task_name}_{dataset_name}_{model}_{feature}.pkl')
+                    df_result.to_pickle(f'{path}/{task}_{dataset_name}_{model}_{feature}.pkl')
 
 
 if __name__ == '__main__':
@@ -148,7 +150,7 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--models', nargs='*', choices=model_choices, default=model_choices)
     parser.add_argument('-f', '--features', nargs='*', choices=feature_choices, default=feature_choices)
     parser.add_argument('-r', '--repeats', type=int, default=10)
-    parser.add_argument('-e', '--epochs', type=int, default=500)
+    # parser.add_argument('-e', '--epochs', type=int, default=500)
     parser.add_argument('-o', '--output', type=str, default='results')
     parser.add_argument('--pnr', nargs='*', type=float, default=private_node_ratios, dest='private_node_ratios')
     parser.add_argument('--pfr', nargs='*', type=float, default=private_feature_ratios, dest='private_feature_ratios')
