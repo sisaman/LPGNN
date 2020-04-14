@@ -1,5 +1,4 @@
 import warnings
-
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 import torch
@@ -12,7 +11,7 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from torch_geometric.nn import Node2Vec, VGAE
-from datasets import load_dataset, GraphLoader
+from datasets import load_dataset, GraphLoader, privatize
 from gnn import GCN, GraphEncoder
 import logging
 logging.disable(logging.INFO)
@@ -217,9 +216,7 @@ class VGAELinkPredictor(LightningModule):
         return GraphLoader(self.data)
 
     def configure_optimizers(self):
-        optimizer = Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        scheduler = ReduceLROnPlateau(optimizer)
-        return [optimizer], [scheduler]
+        return Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
     def model_loss(self, data, pos_edge_index):
         z = self(data)
@@ -255,23 +252,24 @@ class VGAELinkPredictor(LightningModule):
 def main():
     torch.manual_seed(12345678)
     dataset = load_dataset(
-        dataset_name='amazon-computers',
-        split_edges=True
+        dataset_name='flickr',
+        # split_edges=True
     ).to('cuda')
 
-    # eps = 1
-    # dataset = privatize(dataset, pnr=1, pfr=1, eps=eps, method='bit')
-    # dataset = NormalizeFeatures()(dataset)
-    # print(dataset.x.sum(dim=1))
+    eps = 1
+    dataset = privatize(dataset, pnr=1, pfr=1, eps=eps, method='lap')
 
     for i in range(10):
-        # model = GCNClassifier(dataset, lr=.01, weight_decay=0.001, epsilon=eps)
-        model = VGAELinkPredictor(dataset, lr=0.01, weight_decay=0.01)
-        early_stop_callback = EarlyStopping(monitor='val_loss', min_delta=0, patience=10)
+        print('RUN', i)
+        model = GCNClassifier(dataset, lr=.01, weight_decay=0.001, dropout=0.0, epsilon=eps)
+        # model = VGAELinkPredictor(dataset, lr=0.01, weight_decay=0.001)
+        early_stop_callback = EarlyStopping(monitor='val_loss', min_delta=0, patience=20)
         # noinspection PyTypeChecker
-        trainer = Trainer(gpus=1, max_epochs=1000, checkpoint_callback=False,
+        trainer = Trainer(gpus=1, max_epochs=500, checkpoint_callback=False,
                           early_stop_callback=early_stop_callback,
-                          weights_summary=None, min_epochs=10,
+                          # early_stop_callback=False,
+                          weights_summary=None,
+                          min_epochs=10,
                           logger=ResultLogger()
                           )
         trainer.fit(model)
