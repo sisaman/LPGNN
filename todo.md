@@ -13,5 +13,6 @@
 - ~~Experiment on the percentage of nodes with private features~~
 - ~~Replace GCN by VGAE for link prediction~~
 - ~~Fine-tuning models to get best results~~
+- ~~Implement Laplace mechanism as DP baseline~~
 - Adapt other differentially private mechanisms for mean/summation estimation
 - Generalize beyond GCNs
