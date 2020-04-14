@@ -86,8 +86,8 @@ gcn_params = {
     'amazon-photo': {
         'nodeclass': {
             'hidden_dim': 16,
-            'lr': 0.01,
-            'weight_decay': 0.001,
+            'lr': 0.001,
+            'weight_decay': 0.0001,
             'dropout': 0
         },
         'linkpred': {
@@ -99,8 +99,8 @@ gcn_params = {
     'amazon-computers': {
         'nodeclass': {
             'hidden_dim': 16,
-            'lr': 0.01,
-            'weight_decay': 0.001,
+            'lr': 0.001,
+            'weight_decay': 0.0001,
             'dropout': 0
         },
         'linkpred': {
