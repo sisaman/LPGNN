@@ -1,7 +1,7 @@
 import math
 import torch
 import torch.nn.functional as F
-from torch.nn import Linear
+from torch.nn import Linear, BatchNorm1d
 from torch_geometric.nn import MessagePassing, GCNConv
 from torch_geometric.utils import add_remaining_self_loops, degree
 
@@ -66,11 +66,13 @@ class GraphEncoder(torch.nn.Module):
         super().__init__()
         self.conv1 = GConvDP(epsilon, alpha, delta, cached=cached)
         self.lin1 = Linear(input_dim, 2 * output_dim)
+        self.bn = BatchNorm1d(2 * output_dim)
         self.conv_mu = GCNConv(2 * output_dim, output_dim, cached=cached)
         self.conv_logvar = GCNConv(2 * output_dim, output_dim, cached=cached)
 
     def forward(self, x, edge_index, priv_mask):
         x = self.conv1(x, edge_index, priv_mask)
         x = self.lin1(x)
-        x = torch.relu(x)
+        x = self.bn(x)
+        x = F.relu(x)
         return self.conv_mu(x, edge_index), self.conv_logvar(x, edge_index)
