@@ -139,7 +139,8 @@ def experiment(args):
 
 if __name__ == '__main__':
     task_choices = ['nodeclass', 'linkpred', 'errorest', 'visualize']
-    dataset_choices = ['cora', 'citeseer', 'pubmed', 'flickr', 'amazon-photo', 'amazon-computers']
+    dataset_choices = ['cora', 'citeseer', 'pubmed', 'flickr', 'amazon-photo', 'amazon-computers', 'twitch',
+                       'enzymes', 'proteins', 'frankenstein', 'bitcoin']
     model_choices = ['gcn', 'node2vec']
     feature_choices = ['raw', 'bit', 'deg', 'lap']
     private_node_ratios = [.2, .4, .6, .8, 1]
