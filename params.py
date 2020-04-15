@@ -1,7 +1,14 @@
 default_early_stop_params = {
-    'monitor': 'val_loss',
-    'patience': 20,
-    'min_delta': 0.0,
+    'nodeclass': {
+        'monitor': 'val_loss',
+        'patience': 20,
+        'min_delta': 0.0,
+    },
+    'linkpred': {
+        'monitor': 'val_loss',
+        'patience': 10,
+        'min_delta': 0.0,
+    }
 }
 
 default_trainer_params = {
@@ -11,7 +18,8 @@ default_trainer_params = {
     },
     'linkpred': {
         'max_epochs': 500,
-        'min_epochs': 100
+        'min_epochs': 100,
+        'check_val_every_n_epoch': 10
     }
 }
 
@@ -79,7 +87,7 @@ gcn_params = {
         },
         'linkpred': {
             'output_dim': 16,
-            'lr': 0.01,
+            'lr': 0.001,
             'weight_decay': 0.001
         }
     },
@@ -108,6 +116,45 @@ gcn_params = {
             'lr': 0.01,
             'weight_decay': 0.001
         }
+    },
+    'twitch': {
+        'nodeclass': {
+            'hidden_dim': 16,
+            'lr': 0.001,
+            'weight_decay': 0.0001,
+            'dropout': 0
+        },
+        'linkpred': {
+            'output_dim': 16,
+            'lr': 0.01,
+            'weight_decay': 0.001
+        }
+    },
+    'proteins': {
+        'nodeclass': {
+            'hidden_dim': 16,
+            'lr': 0.01,
+            'weight_decay': 0.001,
+            'dropout': 0.15
+        },
+        'linkpred': {
+            'output_dim': 16,
+            'lr': 0.01,
+            'weight_decay': 0
+        }
+    },
+    'bitcoin': {
+        'nodeclass': {
+            'hidden_dim': 16,
+            'lr': 0.01,
+            'weight_decay': 0,
+            'dropout': 0
+        },
+        'linkpred': {
+            'output_dim': 16,
+            'lr': 0.01,
+            'weight_decay': 0.0001
+        }
     }
 }
 
@@ -127,4 +174,4 @@ def get_params(section, task, dataset, model):
         if model == 'node2vec':
             return {}
         else:
-            return default_early_stop_params
+            return default_early_stop_params[task]
