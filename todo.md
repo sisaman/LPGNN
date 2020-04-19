@@ -14,5 +14,7 @@
 - ~~Replace GCN by VGAE for link prediction~~
 - ~~Fine-tuning models to get best results~~
 - ~~Implement Laplace mechanism as DP baseline~~
+- Bring back legacy one-bit 
+- Fine tune gcn+bit and gcn+lap for eps=1
 - Adapt other differentially private mechanisms for mean/summation estimation
 - Generalize beyond GCNs
