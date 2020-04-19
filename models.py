@@ -250,27 +250,29 @@ class VGAELinkPredictor(LightningModule):
 
 
 def main():
-    torch.manual_seed(12345678)
+    torch.manual_seed(12345)
+
     dataset = load_dataset(
-        dataset_name='flickr',
-        # split_edges=True
+        dataset_name='bitcoin',
+        split_edges=True
     ).to('cuda')
 
-    eps = 1
-    dataset = privatize(dataset, pnr=1, pfr=1, eps=eps, method='lap')
+    eps = 9
+    dataset = privatize(dataset, pnr=1, pfr=1, eps=eps, method='bit')
 
     for i in range(10):
         print('RUN', i)
-        model = GCNClassifier(dataset, lr=.01, weight_decay=0.001, dropout=0.0, epsilon=eps)
-        # model = VGAELinkPredictor(dataset, lr=0.01, weight_decay=0.001)
-        early_stop_callback = EarlyStopping(monitor='val_loss', min_delta=0, patience=20)
+        # model = GCNClassifier(dataset, lr=.01, weight_decay=0.0001, dropout=0.5, epsilon=eps)
+        model = VGAELinkPredictor(dataset, lr=0.001, weight_decay=0.0001)
+
         # noinspection PyTypeChecker
         trainer = Trainer(gpus=1, max_epochs=500, checkpoint_callback=False,
-                          early_stop_callback=early_stop_callback,
+                          early_stop_callback=EarlyStopping(monitor='val_loss', min_delta=0, patience=10),
                           # early_stop_callback=False,
                           weights_summary=None,
-                          min_epochs=10,
-                          logger=ResultLogger()
+                          min_epochs=100,
+                          logger=ResultLogger(),
+                          check_val_every_n_epoch=10
                           )
         trainer.fit(model)
         trainer.test()
