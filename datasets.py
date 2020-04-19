@@ -569,9 +569,8 @@ def load_dataset(dataset_name, split_edges=False):
 
 
 def laplace_mechanism(data, eps):
-    loc = torch.zeros_like(data.x)
     scale = torch.ones_like(data.x) * (data.delta / eps)
-    x_priv = Laplace(loc, scale).sample()
+    x_priv = Laplace(data.x, scale).sample()
     data.x = data.priv_mask * x_priv + ~data.priv_mask * data.x
     return data
 
