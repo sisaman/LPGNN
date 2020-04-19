@@ -88,8 +88,8 @@ class LearningTask(Task):
 class ErrorEstimation(Task):
     task_name = 'errorest'
 
-    def __init__(self, data, orig_features, model_name, epsilon):
-        super().__init__(data, model_name, epsilon)
+    def __init__(self, data, orig_features, epsilon):
+        super().__init__(data, 'gcn', epsilon)
         self.model = GConvDP(epsilon=self.epsilon, alpha=data.alpha, delta=data.delta, cached=False)
         self.gc = self.model(orig_features, data.edge_index, False)
 
