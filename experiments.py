@@ -1,6 +1,5 @@
+import os
 import warnings
-from functools import partial
-
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 
@@ -15,11 +14,11 @@ from tasks import LearningTask, ErrorEstimation, Visualization
 from argparse import ArgumentParser
 torch.manual_seed(12345)
 
-priv_feature_set = {'bit', 'lap'}
-
-
-def is_private(feature):
-    return feature in priv_feature_set
+private_node_ratios = [.2, .4, .6, .8, 1]
+private_feature_ratios = [.2, .4, .6, .8, 1]
+epsilons_methods = [0.1, 1, 3, 5, 7, 9]
+epsilons_priv_ratio = [1, 3, 5]
+epsilons_err_estimation = [.1, .2, .5, 1, 2, 5]
 
 
 @torch.no_grad()
@@ -49,92 +48,102 @@ def visualize(dataset):
         df.to_pickle(f'results/visualize_{data.name}_{eps}.pkl')
 
 
-# noinspection PyShadowingNames
-def experiment(args):
+def get_pnr_pfr_lists(feature, pnr_list, pfr_list):
+    if feature == 'bit':
+        return {(pnr, 1) for pnr in pnr_list} | {(1, pfr) for pfr in pfr_list}
+    elif feature == 'lap':
+        return [(1, 1)]
+    else:
+        return [(0, 0)]
 
-    epsilons_methods = [0.1, 1, 3, 5, 7, 9]
-    epsilons_priv_ratio = [1, 3, 5]
-    epsilons_err_estimation = [.1, .2, .5, 1, 2, 5]
 
+def get_eps_list(feature, pnr, pfr):
+    if feature == 'bit':
+        if pnr == 1 and pfr == 1:
+            return epsilons_methods
+        else:
+            return epsilons_priv_ratio
+    elif feature == 'lap':
+        return epsilons_methods
+    else:
+        return [1]
+
+
+def save_results(task_name, dataset_name, model_name, feature, results, output):
+    df_result = pd.DataFrame(
+        data=results,
+        columns=['method', 'pnr', 'pfr', 'eps', 'run', 'perf']
+    )
+
+    path = os.path.join(output, f'{task_name}_{dataset_name}_{model_name}_{feature}.pkl')
+    df_result.to_pickle(path)
+
+
+def error_estimation(args):
+    for dataset_name in args.datasets:
+        dataset = load_dataset(dataset_name).to('cuda')
+        for feature in {'bit', 'lap'} & set(args.features):
+            results = []
+            for pnr, pfr in get_pnr_pfr_lists(feature, args.pnr_list, args.pfr_list):
+                for eps in epsilons_err_estimation:
+                    for run in range(args.repeats):
+                        print(
+                            Fore.BLUE +
+                            f'\ntask=errorest / dataset={dataset_name} / model=gcn / '
+                            f'feature={feature} / pnr={pnr} / pfr={pfr} / eps={eps} / run={run}'
+                            + Style.RESET_ALL
+                        )
+
+                        data = privatize(dataset, pnr=pnr, pfr=pfr, eps=eps, method=feature)
+                        t = ErrorEstimation(data=data, orig_features=dataset.x, epsilon=eps)
+                        result = t.run()
+                        results.append((f'gcn+{feature}', pnr, pfr, eps, run, result))
+
+            save_results('errorest', dataset_name, 'gcn', feature, results, args.output)
+
+
+def prediction(task, args):
+    for dataset_name in args.datasets:
+        dataset = load_dataset(dataset_name, split_edges=(task == 'linkpred'))
+        dataset = dataset.to('cuda')
+
+        for model in args.models:
+            if model == 'node2vec': feature_list = ['void']
+            else: feature_list = args.features
+
+            for feature in feature_list:
+                results = []
+                transformed_data = transform_features(dataset, feature)
+                pr_list = get_pnr_pfr_lists(feature, args.pnr_list, args.pfr_list)
+
+                for pnr, pfr in pr_list:
+                    for eps in get_eps_list(feature, pnr, pfr):
+                        for run in range(args.repeats):
+
+                            print(
+                                Fore.BLUE +
+                                f'\ntask={task} / dataset={dataset_name} / model={model} / '
+                                f'feature={feature} / pnr={pnr} / pfr={pfr} / eps={eps} / run={run}'
+                                + Style.RESET_ALL
+                            )
+
+                            data = privatize(transformed_data, pnr=pnr, pfr=pfr, eps=eps, method=feature)
+                            t = LearningTask(task_name=task, data=data, model_name=model, epsilon=eps)
+                            result = t.run()
+                            print(result)
+                            results.append((f'{model}+{feature}', pnr, pfr, eps, run, result))
+
+                save_results(task, dataset_name, model, feature, results, args.output)
+
+
+def main(args):
     for task in args.tasks:
-
-        for dataset_name in args.datasets:
-            dataset = load_dataset(dataset_name, split_edges=(task in ['linkpred', 'visualize']))
-            dataset = dataset.to('cuda')
-
-            if task == 'visualize':
-                visualize(dataset)
-                continue
-
-            if task == 'errorest': model_list = ['gcn']
-            else: model_list = args.models
-
-            for model in model_list:
-
-                if task == 'errorest': feature_list = priv_feature_set.intersection(args.features)
-                elif model == 'node2vec': feature_list = ['void']
-                else: feature_list = args.features
-
-                for feature in feature_list:
-                    results = []
-
-                    transformed_data = transform_features(dataset, feature)
-
-                    if is_private(feature): pnr_list = args.private_node_ratios
-                    else: pnr_list = [0]  # when using other features / models
-
-                    for pnr in pnr_list:
-
-                        if not is_private(feature): pfr_list = [0]  # when no privacy
-                        elif pnr == 1: pfr_list = args.private_feature_ratios  # vary pfr only when pnr = 1
-                        else: pfr_list = [1]  # vary pnr only when pfr = 1
-
-                        for pfr in pfr_list:
-
-                            if task == 'errorest': eps_list = epsilons_err_estimation
-                            elif not is_private(feature): eps_list = [1]
-                            elif pnr == pfr == 1: eps_list = epsilons_methods
-                            else: eps_list = epsilons_priv_ratio
-
-                            for eps in eps_list:
-
-                                task_class = {
-                                    'nodeclass': partial(LearningTask, task_name='nodeclass'),
-                                    'linkpred': partial(LearningTask, task_name='linkpred'),
-                                    'errorest': partial(ErrorEstimation, orig_features=dataset.x),
-                                    'visualize': Visualization
-                                }
-
-                                for run in range(args.repeats):
-
-                                    print(
-                                        Fore.BLUE +
-                                        f'\ntask={task} / dataset={dataset_name} / model={model} / '
-                                        f'feature={feature} / pnr={pnr} / pfr={pfr} / eps={eps} / run={run}'
-                                        + Style.RESET_ALL
-                                    )
-
-                                    data = privatize(transformed_data, pnr=pnr, pfr=pfr, eps=eps, method=feature)
-                                    t = task_class[task](
-                                        data=data,
-                                        model_name=model,
-                                        epsilon=eps,
-                                    )
-                                    result = t.run()
-
-                                    if task != 'errorest':
-                                        print(result)
-
-                                    results.append((f'{model}+{feature}', pnr, pfr, eps, run, result))
-
-                    df_result = pd.DataFrame(
-                        data=results,
-                        columns=['method', 'pnr', 'pfr', 'eps', 'run', 'perf']
-                    )
-
-                    path = args.output
-                    if path[-1] == '/': path = path[:-1]
-                    df_result.to_pickle(f'{path}/{task}_{dataset_name}_{model}_{feature}.pkl')
+        if task in ['nodeclass', 'linkpred']:
+            prediction(task, args)
+        elif task == 'errorest':
+            error_estimation(args)
+        elif task == 'visualize':
+            raise NotImplementedError
 
 
 if __name__ == '__main__':
@@ -143,19 +152,16 @@ if __name__ == '__main__':
                        'enzymes', 'proteins', 'frankenstein', 'bitcoin']
     model_choices = ['gcn', 'node2vec']
     feature_choices = ['raw', 'bit', 'deg', 'lap']
-    private_node_ratios = [.2, .4, .6, .8, 1]
-    private_feature_ratios = [.2, .4, .6, .8, 1]
     parser = ArgumentParser()
     parser.add_argument('-t', '--tasks', nargs='*', choices=task_choices, default=task_choices)
     parser.add_argument('-d', '--datasets', nargs='*', choices=dataset_choices, default=dataset_choices)
     parser.add_argument('-m', '--models', nargs='*', choices=model_choices, default=model_choices)
     parser.add_argument('-f', '--features', nargs='*', choices=feature_choices, default=feature_choices)
     parser.add_argument('-r', '--repeats', type=int, default=10)
-    # parser.add_argument('-e', '--epochs', type=int, default=500)
     parser.add_argument('-o', '--output', type=str, default='results')
-    parser.add_argument('--pnr', nargs='*', type=float, default=private_node_ratios, dest='private_node_ratios')
-    parser.add_argument('--pfr', nargs='*', type=float, default=private_feature_ratios, dest='private_feature_ratios')
+    parser.add_argument('--pnr', nargs='*', type=float, default=private_node_ratios, dest='pnr_list')
+    parser.add_argument('--pfr', nargs='*', type=float, default=private_feature_ratios, dest='pfr_list')
 
-    args = parser.parse_args()
-    print(args)
-    experiment(args)
+    arguments = parser.parse_args()
+    print(arguments)
+    main(arguments)
