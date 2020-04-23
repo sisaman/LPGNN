@@ -6,7 +6,6 @@ from torch_geometric.nn import MessagePassing, GCNConv
 from torch_geometric.utils import add_remaining_self_loops, degree
 
 
-# noinspection PyMethodOverriding
 class GConvDP(MessagePassing):
     @staticmethod
     def norm(edge_index, num_nodes, dtype):
@@ -31,14 +30,11 @@ class GConvDP(MessagePassing):
             self.cached_gc = self.propagate(edge_index, x=x, norm=norm, p=priv_mask)
         return self.cached_gc
 
+    # noinspection PyMethodOverriding
     def message(self, x_j, p_j, norm):
         exp = math.exp(self.eps)
         msg = norm * (p_j * ((((exp + 1) * x_j - 1) * self.delta) / (exp - 1) + self.alpha) + (~p_j) * x_j)
         return msg
-
-    def update(self, aggr_out):
-        # aggr_out has shape [N, out_channels]
-        return aggr_out
 
 
 class GCN(torch.nn.Module):
