@@ -524,7 +524,6 @@ datasets = {
     'github': partial(MUSAE, root='datasets/MUSAE', name='github'),
     'twitch': partial(MUSAE, root='datasets/MUSAE', name='twitch'),
     'enzymes': partial(TUDataset, root='datasets/TUDataset', name='ENZYMES', use_node_attr=True, cleaned=True),
-    'frankenstein': partial(TUDataset, root='datasets/TUDataset', name='FRANKENSTEIN', use_node_attr=True, cleaned=True),
     'proteins': partial(TUDataset, root='datasets/TUDataset', name='PROTEINS_full', use_node_attr=True, cleaned=False),
     'bitcoin': partial(Elliptic, root='datasets/Elliptic')
 }
