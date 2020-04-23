@@ -1,13 +1,10 @@
 import os
 import sys
 import warnings
-from functools import partial
-
-from torch_geometric.transforms import NormalizeFeatures
-
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 
+from functools import partial
 from abc import abstractmethod
 from contextlib import contextmanager
 
@@ -16,7 +13,7 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import EarlyStopping
 from torch_geometric.utils import degree
 
-from datasets import load_dataset, privatize
+from datasets import load_dataset
 
 try: from tsnecuda import TSNE
 except ImportError: from sklearn.manifold import TSNE
