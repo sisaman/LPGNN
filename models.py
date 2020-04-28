@@ -4,7 +4,8 @@ warnings.simplefilter(action='ignore', category=RuntimeWarning)
 import torch
 from pytorch_lightning import Trainer, LightningModule
 from pytorch_lightning.callbacks import EarlyStopping
-from pytorch_lightning.loggers import LightningLoggerBase, rank_zero_only
+from pytorch_lightning.loggers import LightningLoggerBase
+from pytorch_lightning.utilities import rank_zero_only
 from sklearn.metrics import roc_auc_score
 from torch.nn.functional import cross_entropy
 from torch.optim import Adam
