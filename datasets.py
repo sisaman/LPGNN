@@ -76,7 +76,7 @@ def train_test_split_edges(data, val_ratio=0.05, test_ratio=0.1, rng=None):
     neg_edge_index = negative_sampling(
         edge_index=torch.stack([row, col], dim=0),
         num_nodes=data.num_nodes,
-        num_neg_samples=n_v+n_t
+        num_neg_samples=n_v + n_t
     )
 
     data.val_neg_edge_index = neg_edge_index[:, :n_v]
@@ -319,6 +319,7 @@ class MUSAE(InMemoryDataset):
         for part in ['edges', 'features', 'target']:
             download_url(f'{self.url}/{self.name}/{part}.csv', self.raw_dir)
 
+    # noinspection DuplicatedCode
     def process(self):
         data_list = self.read_musae()
 
@@ -403,6 +404,7 @@ class Elliptic(InMemoryDataset):
         extract_zip(file, self.raw_dir)
         os.unlink(file)
 
+    # noinspection DuplicatedCode
     def process(self):
         data_list = self.read_elliptic()
 
@@ -480,8 +482,8 @@ def train_test_split_nodes(data, val_ratio=.25, test_ratio=.25, rng=None):
     n_test = int(test_ratio * data.num_nodes)
     perm = torch.randperm(data.num_nodes, generator=rng)
     val_nodes = perm[:n_val]
-    test_nodes = perm[n_val:n_val+n_test]
-    train_nodes = perm[n_val+n_test:]
+    test_nodes = perm[n_val:n_val + n_test]
+    train_nodes = perm[n_val + n_test:]
     val_mask = torch.zeros(data.num_nodes, dtype=torch.bool)
     val_mask[val_nodes] = True
     test_mask = torch.zeros(data.num_nodes, dtype=torch.bool)
@@ -584,6 +586,35 @@ def one_bit_mechanism(data, eps):
     return data
 
 
+def union_sample(range1, range2):
+    a, b = range1
+    c, d = range2
+    length = (b-a) + (d-c)
+    x = torch.rand_like(b) * length
+    threshold = (b - a)
+    mask = x < threshold
+    return x + (mask * a) + (~mask) * (c - threshold)
+
+
+def piecewise_mechanism(data, eps):
+    # normalize x between -1,1
+    t = (data.x - data.alpha) / data.delta
+    t[:, (data.delta == 0)] = 0
+    t = 2 * t - 1
+
+    C = (math.exp(eps / 2) + 1) / (math.exp(eps / 2) - 1)
+    L = t * (C + 1) / 2 - (C - 1) / 2
+    R = L + C - 1
+    x = torch.rand_like(t)
+    threshold = math.exp(eps / 2) / (math.exp(eps / 2) + 1)
+    mask = x < threshold
+    y = mask * (torch.rand_like(t)*(R-L) + L) + (~mask) * (union_sample((-C, L), (R, C)))
+    x_priv = data.delta * (y + C) / (2 * C) + data.alpha
+    data.x = data.priv_mask * x_priv + ~data.priv_mask * data.x
+    return data
+
+
+# noinspection PyTypeChecker
 def privatize(data, pnr, pfr, eps, method='bit'):
     if pnr > 0 and pfr > 0:
         data = Data(**dict(data()))  # copy data to avoid changing the original
@@ -601,12 +632,16 @@ def privatize(data, pnr, pfr, eps, method='bit'):
         # data.delta[data.delta == 0] = 1e-7  # avoid division by zero
 
         if method == 'bit':
-            # noinspection PyTypeChecker
             data = one_bit_mechanism(data, eps)
         elif method == 'lap':
-            # noinspection PyTypeChecker
             data = laplace_mechanism(data, eps)
             data.priv_mask = False
+        elif method == 'pws':
+            data = piecewise_mechanism(data, eps)
+            data.priv_mask = False
+        else:
+            raise NotImplementedError
+
     return data
 
 
