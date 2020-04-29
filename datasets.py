@@ -609,6 +609,8 @@ def piecewise_mechanism(data, eps):
     threshold = math.exp(eps / 2) / (math.exp(eps / 2) + 1)
     mask = x < threshold
     y = mask * (torch.rand_like(t)*(R-L) + L) + (~mask) * (union_sample((-C, L), (R, C)))
+
+    # normalize back in the range [alpha, beta]
     x_priv = data.delta * (y + C) / (2 * C) + data.alpha
     data.x = data.priv_mask * x_priv + ~data.priv_mask * data.x
     return data
