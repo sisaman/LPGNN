@@ -12,7 +12,7 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from torch_geometric.nn import Node2Vec, VGAE
-from datasets import load_dataset, GraphLoader, privatize
+from datasets import load_dataset, GraphLoader
 from gnn import GCN, GraphEncoder
 import logging
 logging.disable(logging.INFO)
@@ -259,7 +259,7 @@ def main():
     ).to('cuda')
 
     eps = 9
-    dataset = privatize(dataset, pnr=1, pfr=1, eps=eps, method='bit')
+    # dataset = privatize(dataset, pnr=1, pfr=1, eps=eps, method='bit')
 
     for i in range(10):
         print('RUN', i)

@@ -9,17 +9,17 @@ from torch_geometric.transforms import LocalDegreeProfile
 import pandas as pd
 import torch
 from colorama import Fore, Style
-from datasets import load_dataset, privatize, get_availabel_datasets
+from datasets import load_dataset, get_availabel_datasets
+from mechanisms import privatize, available_mechanisms
 from tasks import LearningTask, ErrorEstimation, Visualization
 from argparse import ArgumentParser
+
 torch.manual_seed(12345)
 
 private_node_ratios = [.2, .4, .6, .8, 1]
 private_feature_ratios = [.2, .4, .6, .8, 1]
-epsilons_methods = [1, 3, 5, 7, 9]
+epsilons = [1, 3, 5, 7, 9]
 epsilons_priv_ratio = [1, 3, 5]
-epsilons_err_estimation = [.2, .4, .6, .8, 1]
-priv_mechansims = {'bit', 'lap', 'pws'}
 
 
 @torch.no_grad()
@@ -52,7 +52,7 @@ def visualize(dataset):
 def get_pnr_pfr_lists(feature, pnr_list, pfr_list):
     if feature == 'bit':
         return {(pnr, 1) for pnr in pnr_list} | {(1, pfr) for pfr in pfr_list}
-    elif feature in priv_mechansims:
+    elif feature in available_mechanisms:
         return [(1, 1)]
     else:
         return [(0, 0)]
@@ -61,11 +61,11 @@ def get_pnr_pfr_lists(feature, pnr_list, pfr_list):
 def get_eps_list(feature, pnr, pfr):
     if feature == 'bit':
         if pnr == 1 and pfr == 1:
-            return epsilons_methods
+            return epsilons
         else:
             return epsilons_priv_ratio
-    elif feature in priv_mechansims:
-        return epsilons_methods
+    elif feature in available_mechanisms:
+        return epsilons
     else:
         return [1]
 
@@ -83,10 +83,10 @@ def save_results(task_name, dataset_name, model_name, feature, results, output):
 def error_estimation(args):
     for dataset_name in args.datasets:
         dataset = load_dataset(dataset_name).to('cuda')
-        for feature in priv_mechansims & set(args.features):
+        for feature in available_mechanisms & set(args.features):
             results = []
             for pnr, pfr in get_pnr_pfr_lists(feature, args.pnr_list, args.pfr_list):
-                for eps in epsilons_err_estimation:
+                for eps in epsilons:
                     for run in range(args.repeats):
                         print(
                             Fore.BLUE +
@@ -151,7 +151,7 @@ if __name__ == '__main__':
     task_choices = ['nodeclass', 'linkpred', 'errorest', 'visualize']
     dataset_choices = get_availabel_datasets()
     model_choices = ['gcn', 'node2vec']
-    feature_choices = ['raw', 'bit', 'deg', 'lap', 'pws']
+    feature_choices = ['raw'] + list(available_mechanisms)
     parser = ArgumentParser()
     parser.add_argument('-t', '--tasks', nargs='*', choices=task_choices, default=task_choices)
     parser.add_argument('-d', '--datasets', nargs='*', choices=dataset_choices, default=dataset_choices)
@@ -161,7 +161,10 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output', type=str, default='results')
     parser.add_argument('--pnr', nargs='*', type=float, default=private_node_ratios, dest='pnr_list')
     parser.add_argument('--pfr', nargs='*', type=float, default=private_feature_ratios, dest='pfr_list')
+    parser.add_argument('--eps', nargs='*', type=float, default=epsilons, dest='epsilons')
 
     arguments = parser.parse_args()
     print(arguments)
+    epsilons = arguments.epsilons
+
     main(arguments)
