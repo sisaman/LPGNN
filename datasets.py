@@ -9,7 +9,6 @@ import pandas as pd
 import scipy.sparse as sp
 import torch
 from google_drive_downloader import GoogleDriveDownloader as gdd
-from torch.distributions import Laplace
 from torch_geometric.data import Data, InMemoryDataset, download_url, extract_zip
 from torch_geometric.datasets import Planetoid, Amazon, Coauthor, TUDataset
 from torch_geometric.utils import to_undirected, negative_sampling, contains_isolated_nodes, remove_isolated_nodes
@@ -565,84 +564,6 @@ def load_dataset(dataset_name, split_edges=False):
         data.edge_index = data.train_pos_edge_index
     elif not hasattr(data, 'train_mask'):
         data = train_test_split_nodes(data, val_ratio=.25, test_ratio=.25, rng=rng)
-
-    return data
-
-
-def laplace_mechanism(data, eps):
-    scale = torch.ones_like(data.x) * (data.delta / eps)
-    x_priv = Laplace(data.x, scale).sample()
-    data.x = data.priv_mask * x_priv + ~data.priv_mask * data.x
-    return data
-
-
-def one_bit_mechanism(data, eps):
-    exp = math.exp(eps)
-    p = (data.x - data.alpha) / data.delta
-    p[:, (data.delta == 0)] = 0
-    p = p * (exp - 1) / (exp + 1) + 1 / (exp + 1)
-    x_priv = torch.bernoulli(p)
-    data.x = data.priv_mask * x_priv + ~data.priv_mask * data.x
-    return data
-
-
-def union_sample(range1, range2):
-    a, b = range1
-    c, d = range2
-    length = (b-a) + (d-c)
-    x = torch.rand_like(b) * length
-    threshold = (b - a)
-    mask = x < threshold
-    return x + (mask * a) + (~mask) * (c - threshold)
-
-
-def piecewise_mechanism(data, eps):
-    # normalize x between -1,1
-    t = (data.x - data.alpha) / data.delta
-    t[:, (data.delta == 0)] = 0
-    t = 2 * t - 1
-
-    C = (math.exp(eps / 2) + 1) / (math.exp(eps / 2) - 1)
-    L = t * (C + 1) / 2 - (C - 1) / 2
-    R = L + C - 1
-    x = torch.rand_like(t)
-    threshold = math.exp(eps / 2) / (math.exp(eps / 2) + 1)
-    mask = x < threshold
-    y = mask * (torch.rand_like(t)*(R-L) + L) + (~mask) * (union_sample((-C, L), (R, C)))
-
-    # normalize back in the range [alpha, beta]
-    x_priv = data.delta * (y + C) / (2 * C) + data.alpha
-    data.x = data.priv_mask * x_priv + ~data.priv_mask * data.x
-    return data
-
-
-# noinspection PyTypeChecker
-def privatize(data, pnr, pfr, eps, method='bit'):
-    if pnr > 0 and pfr > 0:
-        data = Data(**dict(data()))  # copy data to avoid changing the original
-        mask = torch.zeros_like(data.x, dtype=torch.bool)
-        n_rows = int(pnr * mask.size(0))
-        n_cols = int(pfr * mask.size(1))
-        priv_rows = torch.randperm(mask.size(0))[:n_rows]
-        priv_cols = torch.randperm(mask.size(1))[:n_cols]
-        mask[priv_rows.unsqueeze(1), priv_cols] = True
-        data.priv_mask = mask
-        alpha = data.x.min(dim=0)[0]
-        beta = data.x.max(dim=0)[0]
-        data.alpha = alpha
-        data.delta = beta - alpha
-        # data.delta[data.delta == 0] = 1e-7  # avoid division by zero
-
-        if method == 'bit':
-            data = one_bit_mechanism(data, eps)
-        elif method == 'lap':
-            data = laplace_mechanism(data, eps)
-            data.priv_mask = False
-        elif method == 'pws':
-            data = piecewise_mechanism(data, eps)
-            data.priv_mask = False
-        else:
-            raise NotImplementedError
 
     return data
 
