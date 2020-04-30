@@ -1,10 +1,10 @@
-import os
 import warnings
+
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 
-from torch_geometric.data import Data
-from torch_geometric.transforms import LocalDegreeProfile
+import os
+from argparse import ArgumentParser
 
 import pandas as pd
 import torch
@@ -12,7 +12,6 @@ from colorama import Fore, Style
 from datasets import load_dataset, get_availabel_datasets
 from mechanisms import privatize, available_mechanisms
 from tasks import LearningTask, ErrorEstimation, Visualization
-from argparse import ArgumentParser
 
 torch.manual_seed(12345)
 
@@ -20,17 +19,6 @@ private_node_ratios = [.2, .4, .6, .8, 1]
 private_feature_ratios = [.2, .4, .6, .8, 1]
 epsilons = [1, 3, 5, 7, 9]
 epsilons_priv_ratio = [1, 3, 5]
-
-
-@torch.no_grad()
-def transform_features(data, feature):
-    if feature == 'deg':
-        data = Data(**dict(data()))  # copy data to avoid changing the original
-        num_nodes = data.num_nodes
-        data.x = None
-        data.num_nodes = num_nodes
-        data = LocalDegreeProfile()(data)
-    return data
 
 
 def visualize(dataset):
@@ -42,7 +30,7 @@ def visualize(dataset):
             + Style.RESET_ALL
         )
         data = privatize(dataset, pnr=1, pfr=1, eps=eps)
-        task = Visualization(data=data, epsilon=eps)
+        task = Visualization(data=data)
         result = task.run()
         df = pd.DataFrame(data=result['data'], columns=['x', 'y'])
         df['label'] = result['label']
@@ -96,7 +84,7 @@ def error_estimation(args):
                         )
 
                         data = privatize(dataset, pnr=pnr, pfr=pfr, eps=eps, method=feature)
-                        t = ErrorEstimation(data=data, orig_features=dataset.x, epsilon=eps)
+                        t = ErrorEstimation(data=data, orig_features=dataset.x)
                         result = t.run()
                         results.append((f'gcn+{feature}', pnr, pfr, eps, run, result))
 
@@ -109,18 +97,18 @@ def prediction(task, args):
         dataset = dataset.to('cuda')
 
         for model in args.models:
-            if model == 'node2vec': feature_list = ['void']
-            else: feature_list = args.features
+            if model == 'node2vec':
+                feature_list = ['void']
+            else:
+                feature_list = args.features
 
             for feature in feature_list:
                 results = []
-                transformed_data = transform_features(dataset, feature)
                 pr_list = get_pnr_pfr_lists(feature, args.pnr_list, args.pfr_list)
 
                 for pnr, pfr in pr_list:
                     for eps in get_eps_list(feature, pnr, pfr):
                         for run in range(args.repeats):
-
                             print(
                                 Fore.BLUE +
                                 f'\ntask={task} / dataset={dataset_name} / model={model} / '
@@ -128,8 +116,8 @@ def prediction(task, args):
                                 + Style.RESET_ALL
                             )
 
-                            data = privatize(transformed_data, pnr=pnr, pfr=pfr, eps=eps, method=feature)
-                            t = LearningTask(task_name=task, data=data, model_name=model, epsilon=eps)
+                            data = privatize(dataset, pnr=pnr, pfr=pfr, eps=eps, method=feature)
+                            t = LearningTask(task_name=task, data=data, model_name=model)
                             result = t.run()
                             print(result)
                             results.append((f'{model}+{feature}', pnr, pfr, eps, run, result))
