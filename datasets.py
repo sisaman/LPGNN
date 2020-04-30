@@ -553,8 +553,6 @@ def load_dataset(dataset_name, split_edges=False):
 
     data.name = dataset_name
     data.num_classes = dataset.num_classes
-    data.alpha = data.delta = 0
-    data.priv_mask = False
     seed = sum([ord(c) for c in dataset_name])
     rng = torch.Generator().manual_seed(seed)
 
@@ -564,6 +562,12 @@ def load_dataset(dataset_name, split_edges=False):
         data.edge_index = data.train_pos_edge_index
     elif not hasattr(data, 'train_mask'):
         data = train_test_split_nodes(data, val_ratio=.25, test_ratio=.25, rng=rng)
+
+    alpha = data.x.min(dim=0)[0]
+    beta = data.x.max(dim=0)[0]
+    delta = beta - alpha
+    data.x = (data.x - alpha) / delta
+    data.x[:, (delta == 0)] = 0
 
     return data
 
