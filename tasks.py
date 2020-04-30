@@ -1,12 +1,8 @@
 import os
 import sys
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
-warnings.simplefilter(action='ignore', category=RuntimeWarning)
-
-from functools import partial
 from abc import abstractmethod
 from contextlib import contextmanager
+from functools import partial
 
 import torch
 from pytorch_lightning import Trainer
@@ -15,10 +11,12 @@ from torch_geometric.utils import degree
 
 from datasets import load_dataset
 
-try: from tsnecuda import TSNE
-except ImportError: from sklearn.manifold import TSNE
+try:
+    from tsnecuda import TSNE
+except ImportError:
+    from sklearn.manifold import TSNE
 
-from gnn import GConvDP
+from gnn import GConv
 from models import GCNClassifier, Node2VecClassifier, Node2VecLinkPredictor, VGAELinkPredictor, ResultLogger
 from params import get_params
 
@@ -26,9 +24,8 @@ from params import get_params
 class Task:
     task_name = None
 
-    def __init__(self, data, model_name, epsilon=1):
+    def __init__(self, data, model_name):
         self.model_name = model_name
-        self.epsilon = epsilon
         self.data = data
 
     @abstractmethod
@@ -36,16 +33,16 @@ class Task:
 
 
 class LearningTask(Task):
-    def __init__(self, task_name, data, model_name, epsilon=1):
-        super().__init__(data, model_name, epsilon)
+    def __init__(self, task_name, data, model_name):
+        super().__init__(data, model_name)
         self.task_name = task_name
-        self.model = self.get_model(epsilon)
+        self.model = self.get_model()
 
-    def get_model(self, epsilon):
+    def get_model(self):
         Model = {
-            ('nodeclass', 'gcn'): partial(GCNClassifier, epsilon=epsilon),
+            ('nodeclass', 'gcn'): partial(GCNClassifier),
             ('nodeclass', 'node2vec'): Node2VecClassifier,
-            ('linkpred', 'gcn'): partial(VGAELinkPredictor, epsilon=epsilon),
+            ('linkpred', 'gcn'): partial(VGAELinkPredictor),
             ('linkpred', 'node2vec'): Node2VecLinkPredictor,
         }
         return Model[self.task_name, self.model_name](
@@ -85,14 +82,14 @@ class LearningTask(Task):
 class ErrorEstimation(Task):
     task_name = 'errorest'
 
-    def __init__(self, data, orig_features, epsilon):
-        super().__init__(data, 'gcn', epsilon)
-        self.model = GConvDP(epsilon=self.epsilon, alpha=data.alpha, delta=data.delta, cached=False)
-        self.gc = self.model(orig_features, data.edge_index, False)
+    def __init__(self, data, orig_features):
+        super().__init__(data, 'gcn')
+        self.model = GConv(cached=False)
+        self.gc = self.model(orig_features, data.edge_index)
 
     @torch.no_grad()
     def run(self, **kwargs):
-        gc_hat = self.model(self.data.x, self.data.edge_index, self.data.priv_mask)
+        gc_hat = self.model(self.data.x, self.data.edge_index)
         diff = (self.gc - gc_hat) / self.data.delta
         diff[:, (self.data.delta == 0)] = 0  # eliminate division by zero
         error = torch.norm(diff, p=1, dim=1) / diff.shape[1]
@@ -106,8 +103,8 @@ class ErrorEstimation(Task):
 
 
 class Visualization(LearningTask):
-    def __init__(self, data, epsilon=1):
-        super().__init__(task_name='linkpred', data=data, model_name='gcn', epsilon=epsilon)
+    def __init__(self, data):
+        super().__init__(task_name='linkpred', data=data, model_name='gcn')
 
     def run(self):
         super().run()
@@ -119,7 +116,7 @@ class Visualization(LearningTask):
 
 def main():
     dataset = load_dataset('cora', split_edges=True).to('cuda')
-    task = LearningTask(task_name='linkpred', data=dataset, model_name='node2vec', epsilon=1)
+    task = LearningTask(task_name='linkpred', data=dataset, model_name='node2vec')
     print(task.run())
 
 
