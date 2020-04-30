@@ -1,6 +1,5 @@
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
-warnings.simplefilter(action='ignore', category=RuntimeWarning)
+import logging
+
 import torch
 from pytorch_lightning import Trainer, LightningModule
 from pytorch_lightning.callbacks import EarlyStopping
@@ -12,9 +11,10 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from torch_geometric.nn import Node2Vec, VGAE
+
 from datasets import load_dataset, GraphLoader
 from gnn import GCN, GraphEncoder
-import logging
+
 logging.disable(logging.INFO)
 
 
@@ -122,7 +122,7 @@ class Node2VecLinkPredictor(LitNode2Vec):
 
 
 class GCNClassifier(LightningModule):
-    def __init__(self, data, hidden_dim=16, epsilon=1.0, dropout=0.5, lr=0.01, weight_decay=5e-4):
+    def __init__(self, data, hidden_dim=16, dropout=0.5, lr=0.01, weight_decay=5e-4):
         super().__init__()
         self.data = data
         self.lr = lr
@@ -131,14 +131,11 @@ class GCNClassifier(LightningModule):
             input_dim=data.num_node_features,
             output_dim=data.num_classes,
             hidden_dim=hidden_dim,
-            dropout=dropout,
-            epsilon=epsilon,
-            alpha=data.alpha,
-            delta=data.delta
+            dropout=dropout
         )
 
     def forward(self, data):
-        return self.gcn(data.x, data.edge_index, data.priv_mask)
+        return self.gcn(data.x, data.edge_index)
 
     def configure_optimizers(self):
         optimizer = Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
@@ -187,7 +184,7 @@ class GCNClassifier(LightningModule):
 
 
 class VGAELinkPredictor(LightningModule):
-    def __init__(self, data, output_dim=16, epsilon=1.0, lr=0.01, weight_decay=0.0):
+    def __init__(self, data, output_dim=16, lr=0.01, weight_decay=0.0):
         super().__init__()
         self.data = data
         self.lr = lr
@@ -195,16 +192,13 @@ class VGAELinkPredictor(LightningModule):
 
         encoder = GraphEncoder(
             input_dim=data.num_node_features,
-            output_dim=output_dim,
-            epsilon=epsilon,
-            alpha=data.alpha,
-            delta=data.delta
+            output_dim=output_dim
         )
 
         self.model = VGAE(encoder=encoder)
 
     def forward(self, data):
-        x = self.model.encode(data.x, data.train_pos_edge_index, data.priv_mask)
+        x = self.model.encode(data.x, data.train_pos_edge_index)
         return x
 
     def train_dataloader(self):
@@ -258,7 +252,6 @@ def main():
         split_edges=True
     ).to('cuda')
 
-    eps = 9
     # dataset = privatize(dataset, pnr=1, pfr=1, eps=eps, method='bit')
 
     for i in range(10):
