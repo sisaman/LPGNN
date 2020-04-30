@@ -19,7 +19,9 @@ def one_bit(data, eps):
     p = (data.x - data.alpha) / data.delta
     p[:, (data.delta == 0)] = 0
     p = p * (exp - 1) / (exp + 1) + 1 / (exp + 1)
-    x_priv = torch.bernoulli(p)
+    b = torch.bernoulli(p)
+    # noinspection PyTypeChecker
+    x_priv = ((b * (exp + 1) - 1) * data.delta) / (exp - 1) + data.alpha
     data.x = data.priv_mask * x_priv + ~data.priv_mask * data.x
     return data
 
@@ -47,12 +49,12 @@ def piecewise(data, eps):
     mask_right = threshold_right < x
 
     # random sampling
-    y = mask_left * (torch.rand_like(t)*(L+C)-C)
-    y += mask_middle * (torch.rand_like(t)*(R-L)+L)
-    y += mask_right * (torch.rand_like(t)*(C-R)+R)
+    t = mask_left * (torch.rand_like(t)*(L+C)-C)
+    t += mask_middle * (torch.rand_like(t)*(R-L)+L)
+    t += mask_right * (torch.rand_like(t)*(C-R)+R)
 
-    # normalize back in the range [alpha, beta]
-    x_priv = data.delta * (y + C) / (2 * C) + data.alpha
+    # unbiased data
+    x_priv = data.delta * (t + 1) / 2 + data.alpha
     data.x = data.priv_mask * x_priv + ~data.priv_mask * data.x
     return data
 
@@ -63,12 +65,16 @@ def duchi(data, eps):
     t[:, (data.delta == 0)] = 0
     t = 2 * t - 1
 
-    # apply mechanims
+    # duchi mechanims
     p = t * (math.exp(eps) - 1) / (2 * math.exp(eps) + 2) + 0.5
     p = torch.bernoulli(p) * 2 - 1  # either -1 or 1
-    x_priv = p * (math.exp(eps) + 1) / (math.exp(eps) - 1)
+    y = p * (math.exp(eps) + 1) / (math.exp(eps) - 1)
+
+    # renormalize back in the range [alpha, beta]
+    x_priv = data.delta * (y + 1) / 2 + data.alpha
     data.x = data.priv_mask * x_priv + ~data.priv_mask * data.x
     return data
+
 
 # noinspection PyTypeChecker
 def privatize(data, pnr, pfr, eps, method='bit'):
@@ -91,14 +97,12 @@ def privatize(data, pnr, pfr, eps, method='bit'):
             data = one_bit(data, eps)
         elif method == 'lap':
             data = laplace(data, eps)
-            data.priv_mask = False
         elif method == 'pws':
             data = piecewise(data, eps)
-            data.priv_mask = False
         elif method == 'duc':
             data = duchi(data, eps)
-            data.priv_mask = False
         else:
             raise NotImplementedError
 
+    data.priv_mask = None
     return data
