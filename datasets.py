@@ -563,6 +563,7 @@ def load_dataset(dataset_name, split_edges=False):
     elif not hasattr(data, 'train_mask'):
         data = train_test_split_nodes(data, val_ratio=.25, test_ratio=.25, rng=rng)
 
+    # normalize features between zero and one
     alpha = data.x.min(dim=0)[0]
     beta = data.x.max(dim=0)[0]
     delta = beta - alpha
