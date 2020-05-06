@@ -15,7 +15,8 @@
 - ~~Fine-tuning models to get best results~~
 - ~~Implement Laplace mechanism as DP baseline~~
 - ~~Bring back legacy one-bit~~
-- Measure the gain over gcn+raw in varying pfr and pnr 
+- Measure the gain over gcn+raw in varying pfr and pnr
+- Combination of mechanisms based on variance 
 - Fine tune gcn+bit and gcn+lap for eps=1
 - Adapt other differentially private mechanisms for mean/summation estimation
 - Generalize beyond GCNs
