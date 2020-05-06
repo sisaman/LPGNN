@@ -14,6 +14,7 @@ from torch_geometric.nn import Node2Vec, VGAE
 
 from datasets import load_dataset, GraphLoader
 from gnn import GCN, GraphEncoder
+from mechanisms import privatize
 
 logging.disable(logging.INFO)
 
@@ -247,27 +248,33 @@ class VGAELinkPredictor(LightningModule):
 def main():
     torch.manual_seed(12345)
 
-    dataset = load_dataset(
-        dataset_name='bitcoin',
-        split_edges=True
+    data = load_dataset(
+        dataset_name='cora',
+        # split_edges=True
     ).to('cuda')
 
-    # dataset = privatize(dataset, pnr=1, pfr=1, eps=eps, method='bit')
+    print('pws')
+    data = privatize(data, pnr=1, pfr=1, eps=9, method='pws')
+    # data.x = data.x[:, torch.randperm(data.x.size(1))[:data.x.size(1)//10]]
 
-    for i in range(10):
+    for i in range(1):
         print('RUN', i)
-        # model = GCNClassifier(dataset, lr=.01, weight_decay=0.0001, dropout=0.5, epsilon=eps)
-        model = VGAELinkPredictor(dataset, lr=0.001, weight_decay=0.0001)
+        model = GCNClassifier(data, lr=.01, weight_decay=0.01, dropout=0.5,)
+        # model = VGAELinkPredictor(dataset, lr=0.001, weight_decay=0.0001)
 
         # noinspection PyTypeChecker
         trainer = Trainer(gpus=1, max_epochs=500, checkpoint_callback=False,
-                          early_stop_callback=EarlyStopping(monitor='val_loss', min_delta=0, patience=10),
+                          early_stop_callback=EarlyStopping(monitor='val_loss', min_delta=0, patience=20),
                           # early_stop_callback=False,
                           weights_summary=None,
-                          min_epochs=100,
+                          # min_epochs=100,
                           logger=ResultLogger(),
-                          check_val_every_n_epoch=10
+                          # check_val_every_n_epoch=10
                           )
+        # lr_finder = trainer.lr_find(model)
+        # print(lr_finder.suggestion())
+        # fig = lr_finder.plot(suggest=True)
+        # fig.show()
         trainer.fit(model)
         trainer.test()
 
