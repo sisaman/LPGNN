@@ -4,7 +4,9 @@ import torch
 from torch.distributions import Laplace
 from torch_geometric.data import Data
 
-available_mechanisms = {'bit', 'lap', 'pws', 'duc'}
+from datasets import load_dataset
+
+available_mechanisms = {'bit', 'lap', 'pws'}
 
 
 def laplace(data, eps):
@@ -40,7 +42,7 @@ def piecewise(data, eps):
 
     # thresholds for random sampling
     threshold_left = P * (L + C) / math.exp(eps)
-    threshold_right = threshold_left + P * (L - R)
+    threshold_right = threshold_left + P * (R - L)
 
     # masks for piecewise random sampling
     x = torch.rand_like(t)
@@ -55,23 +57,6 @@ def piecewise(data, eps):
 
     # unbiased data
     x_priv = data.delta * (t + 1) / 2 + data.alpha
-    data.x = data.priv_mask * x_priv + ~data.priv_mask * data.x
-    return data
-
-
-def duchi(data, eps):
-    # normalize x between -1,1
-    t = (data.x - data.alpha) / data.delta
-    t[:, (data.delta == 0)] = 0
-    t = 2 * t - 1
-
-    # duchi mechanims
-    p = t * (math.exp(eps) - 1) / (2 * math.exp(eps) + 2) + 0.5
-    p = torch.bernoulli(p) * 2 - 1  # either -1 or 1
-    y = p * (math.exp(eps) + 1) / (math.exp(eps) - 1)
-
-    # renormalize back in the range [alpha, beta]
-    x_priv = data.delta * (y + 1) / 2 + data.alpha
     data.x = data.priv_mask * x_priv + ~data.priv_mask * data.x
     return data
 
@@ -99,10 +84,13 @@ def privatize(data, pnr, pfr, eps, method='bit'):
             data = laplace(data, eps)
         elif method == 'pws':
             data = piecewise(data, eps)
-        elif method == 'duc':
-            data = duchi(data, eps)
         else:
             raise NotImplementedError
 
     data.priv_mask = None
     return data
+
+
+if __name__ == '__main__':
+    ds = privatize(load_dataset('cora'), pnr=1, pfr=1, eps=1, method='pws')
+    print(ds.x.min(), ds.x.max())
