@@ -1,31 +1,27 @@
-import math
-
 import torch
+import numpy as np
 from torch.distributions import Laplace
 from torch_geometric.data import Data
 
 from datasets import load_dataset
 
-available_mechanisms = {'bit', 'lap', 'pws'}
+available_mechanisms = {'bit', 'lap', 'pws', 'hyb'}
 
 
 def laplace(data, eps):
     scale = torch.ones_like(data.x) * (data.delta / eps)
     x_priv = Laplace(data.x, scale).sample()
-    data.x = data.priv_mask * x_priv + ~data.priv_mask * data.x
-    return data
+    return x_priv
 
 
 def one_bit(data, eps):
-    exp = math.exp(eps)
+    exp = np.exp(eps)
     p = (data.x - data.alpha) / data.delta
     p[:, (data.delta == 0)] = 0
     p = p * (exp - 1) / (exp + 1) + 1 / (exp + 1)
     b = torch.bernoulli(p)
-    # noinspection PyTypeChecker
     x_priv = ((b * (exp + 1) - 1) * data.delta) / (exp - 1) + data.alpha
-    data.x = data.priv_mask * x_priv + ~data.priv_mask * data.x
-    return data
+    return x_priv
 
 
 def piecewise(data, eps):
@@ -35,13 +31,13 @@ def piecewise(data, eps):
     t = 2 * t - 1
 
     # piecewise mechanism's variables
-    P = (math.exp(eps) - math.exp(eps / 2)) / (2 * math.exp(eps / 2) + 2)
-    C = (math.exp(eps / 2) + 1) / (math.exp(eps / 2) - 1)
+    P = (np.exp(eps) - np.exp(eps / 2)) / (2 * np.exp(eps / 2) + 2)
+    C = (np.exp(eps / 2) + 1) / (np.exp(eps / 2) - 1)
     L = t * (C + 1) / 2 - (C - 1) / 2
     R = L + C - 1
 
     # thresholds for random sampling
-    threshold_left = P * (L + C) / math.exp(eps)
+    threshold_left = P * (L + C) / np.exp(eps)
     threshold_right = threshold_left + P * (R - L)
 
     # masks for piecewise random sampling
@@ -51,14 +47,23 @@ def piecewise(data, eps):
     mask_right = threshold_right < x
 
     # random sampling
-    t = mask_left * (torch.rand_like(t)*(L+C)-C)
-    t += mask_middle * (torch.rand_like(t)*(R-L)+L)
-    t += mask_right * (torch.rand_like(t)*(C-R)+R)
+    t = mask_left * (torch.rand_like(t) * (L + C) - C)
+    t += mask_middle * (torch.rand_like(t) * (R - L) + L)
+    t += mask_right * (torch.rand_like(t) * (C - R) + R)
 
     # unbiased data
     x_priv = data.delta * (t + 1) / 2 + data.alpha
-    data.x = data.priv_mask * x_priv + ~data.priv_mask * data.x
-    return data
+    return x_priv
+
+
+def hybrid(data, eps):
+    eps_star = np.log(
+        (-5 + 2 * (6353 - 405 * np.sqrt(241)) ** (1 / 3) + 2 * (6353 + 405 * np.sqrt(241)) ** (1 / 3)) / 27
+    )
+    alpha = torch.zeros_like(data.x) + (eps > eps_star) * (1 - np.exp(-eps / 2))
+    mask = torch.bernoulli(alpha).bool()
+    x_priv = mask * piecewise(data, eps) + (~mask) * one_bit(data, eps)
+    return x_priv
 
 
 # noinspection PyTypeChecker
@@ -79,14 +84,18 @@ def privatize(data, pnr, pfr, eps, method='bit'):
         # data.delta[data.delta == 0] = 1e-7  # avoid division by zero
 
         if method == 'bit':
-            data = one_bit(data, eps)
+            x_priv = one_bit(data, eps)
         elif method == 'lap':
-            data = laplace(data, eps)
+            x_priv = laplace(data, eps)
         elif method == 'pws':
-            data = piecewise(data, eps)
+            x_priv = piecewise(data, eps)
+        elif method == 'hyb':
+            x_priv = hybrid(data, eps)
         else:
             raise NotImplementedError
 
+    # noinspection PyUnboundLocalVariable
+    data.x = data.priv_mask * x_priv + ~data.priv_mask * data.x
     data.priv_mask = None
     return data
 
