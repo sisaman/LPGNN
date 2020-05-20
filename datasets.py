@@ -9,9 +9,9 @@ import pandas as pd
 import scipy.sparse as sp
 import torch
 from google_drive_downloader import GoogleDriveDownloader as gdd
-from torch_geometric.data import Data, InMemoryDataset, download_url, extract_zip
-from torch_geometric.datasets import Planetoid, Amazon, Coauthor, TUDataset
-from torch_geometric.utils import to_undirected, negative_sampling, contains_isolated_nodes, remove_isolated_nodes
+from torch_geometric.data import Data, InMemoryDataset, download_url, extract_zip, DataLoader
+from torch_geometric.datasets import Planetoid, Amazon, Coauthor
+from torch_geometric.utils import to_undirected, negative_sampling
 
 
 # noinspection DuplicatedCode
@@ -462,8 +462,9 @@ class Elliptic(InMemoryDataset):
         return f'Elliptic-Bitcoin({len(self)})'
 
 
-class GraphLoader:
+class GraphLoader(DataLoader):
     def __init__(self, data):
+        super().__init__(data)
         self.data = data
         self.data.to = self.to
 
@@ -529,33 +530,19 @@ datasets = {
     'facebook': partial(MUSAE, root='datasets/MUSAE', name='facebook'),
     'github': partial(MUSAE, root='datasets/MUSAE', name='github'),
     'twitch': partial(MUSAE, root='datasets/MUSAE', name='twitch'),
-    'enzymes': partial(TUDataset, root='datasets/TUDataset', name='ENZYMES', use_node_attr=True, cleaned=True),
-    'proteins': partial(TUDataset, root='datasets/TUDataset', name='PROTEINS_full', use_node_attr=True, cleaned=False),
     'bitcoin': partial(Elliptic, root='datasets/Elliptic')
 }
 
 
-def get_availabel_datasets():
+def get_available_datasets():
     return list(datasets.keys())
 
 
 def load_dataset(dataset_name, split_edges=False):
     dataset = datasets[dataset_name]()
-    if len(dataset) == 1:
-        data = dataset[0]
-    else:
-        data = stack_dataset(dataset)
+    assert len(dataset) == 1
 
-    if contains_isolated_nodes(data.edge_index, data.num_nodes):
-        edge_index, _, iso_mask = remove_isolated_nodes(data.edge_index, num_nodes=data.num_nodes)
-        data.edge_index = edge_index
-        data.x = data.x[iso_mask]
-        data.y = data.y[iso_mask]
-        if hasattr(data, 'train_mask'):
-            data.train_mask = data.train_mask[iso_mask]
-            data.val_mask = data.val_mask[iso_mask]
-            data.test_mask = data.test_mask[iso_mask]
-
+    data = dataset[0]
     data.name = dataset_name
     data.num_classes = dataset.num_classes
     seed = sum([ord(c) for c in dataset_name])
