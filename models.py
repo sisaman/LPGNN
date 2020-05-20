@@ -1,7 +1,7 @@
 import logging
 
 import torch
-from pytorch_lightning import Trainer, LightningModule
+from pytorch_lightning import Trainer, LightningModule, seed_everything
 from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.loggers import LightningLoggerBase
 from pytorch_lightning.utilities import rank_zero_only
@@ -177,7 +177,7 @@ class GraphSAGEClassifier(GCNClassifier):
 
 
 def main():
-    torch.manual_seed(12345)
+    seed_everything(12345)
 
     data = load_dataset(
         dataset_name='cora',
@@ -185,24 +185,26 @@ def main():
     ).to('cuda')
 
     # print('pws')
-    data = privatize(data, pnr=1, pfr=1, eps=3, method='bit')
+    data = privatize(data, pnr=0, pfr=0, eps=3, method='bit')
     # data.x = data.x[:, torch.randperm(data.x.size(1))[:data.x.size(1)//10]]
 
     for i in range(1):
         print('RUN', i)
-        # model = GCNClassifier(data, lr=.01, weight_decay=0.01, dropout=0.5,)
-        model = GraphSAGEClassifier(data, lr=.01, weight_decay=0.01, dropout=0.5)
+        model = GCNClassifier(data, lr=.01, weight_decay=0.01, dropout=0.5, )
+        # model = GraphSAGEClassifier(data, lr=.01, weight_decay=0.01, dropout=0.5)
         # model = VGAELinkPredictor(dataset, lr=0.001, weight_decay=0.0001)
 
         # noinspection PyTypeChecker
-        trainer = Trainer(gpus=1, max_epochs=500, checkpoint_callback=False,
-                          early_stop_callback=EarlyStopping(monitor='val_loss', min_delta=0, patience=20),
-                          # early_stop_callback=False,
-                          weights_summary=None,
-                          # min_epochs=100,
-                          logger=ResultLogger(),
-                          # check_val_every_n_epoch=10
-                          )
+        trainer = Trainer(
+            gpus=1, max_epochs=500, checkpoint_callback=False,
+            early_stop_callback=EarlyStopping(monitor='val_loss', min_delta=0, patience=20),
+            # early_stop_callback=False,
+            weights_summary=None,
+            # min_epochs=100,
+            logger=ResultLogger(),
+            # check_val_every_n_epoch=10
+        )
+
         # lr_finder = trainer.lr_find(model)
         # print(lr_finder.suggestion())
         # fig = lr_finder.plot(suggest=True)
