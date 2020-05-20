@@ -59,7 +59,7 @@ class LearningTask(Task):
         ))
         # noinspection PyTypeChecker
         trainer = Trainer(
-            gpus=1, checkpoint_callback=False, logger=logger, weights_summary=None,
+            gpus=1, checkpoint_callback=False, logger=logger, weights_summary=None, deterministic=True,
             early_stop_callback=early_stop_callback, **get_params(
                 section='trainer', task=self.task_name, dataset=self.data.name, model=self.model_name
             )

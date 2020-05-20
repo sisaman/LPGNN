@@ -7,13 +7,13 @@ import os
 from argparse import ArgumentParser
 
 import pandas as pd
-import torch
 from colorama import Fore, Style
 from datasets import load_dataset, get_availabel_datasets
 from mechanisms import privatize, available_mechanisms
 from tasks import LearningTask, ErrorEstimation, Visualization
+from pytorch_lightning import seed_everything
 
-torch.manual_seed(12345)
+seed_everything(12345)
 
 private_node_ratios = [.2, .4, .6, .8, 1]
 private_feature_ratios = [.2, .4, .6, .8, 1]
