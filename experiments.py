@@ -8,7 +8,7 @@ from argparse import ArgumentParser
 
 import pandas as pd
 from colorama import Fore, Style
-from datasets import load_dataset, get_availabel_datasets
+from datasets import load_dataset, get_available_datasets
 from mechanisms import privatize, available_mechanisms
 from tasks import LearningTask, ErrorEstimation
 from pytorch_lightning import seed_everything
@@ -116,7 +116,7 @@ def main(args):
 
 if __name__ == '__main__':
     task_choices = ['node', 'link', 'error']
-    dataset_choices = get_availabel_datasets()
+    dataset_choices = get_available_datasets()
     model_choices = ['gcn']
     feature_choices = ['raw'] + list(available_mechanisms)
     parser = ArgumentParser()
