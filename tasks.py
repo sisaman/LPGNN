@@ -46,16 +46,22 @@ class LearningTask(Task):
         return Model[self.task_name, self.model_name](
             data=self.data,
             **get_params(
-                section='model', task=self.task_name, dataset=self.data.name, model_name=self.model_name
+                section='model',
+                task=self.task_name,
+                dataset=self.data.name,
+                model_name=self.model_name
             )
         )
 
     def run(self):
         logger = ResultLogger()
         early_stop_callback = EarlyStopping(**get_params(
-            section='early-stop', task=self.task_name, dataset=self.data.name, model_name=self.model_name
+            section='early-stop',
+            task=self.task_name,
+            dataset=self.data.name,
+            model_name=self.model_name
         ))
-        # noinspection PyTypeChecker
+
         trainer = Trainer(
             gpus=1,
             checkpoint_callback=False,
@@ -64,7 +70,10 @@ class LearningTask(Task):
             deterministic=True,
             early_stop_callback=early_stop_callback,
             **get_params(
-                section='trainer', task=self.task_name, dataset=self.data.name, model_name=self.model_name
+                section='trainer',
+                task=self.task_name,
+                dataset=self.data.name,
+                model_name=self.model_name
             )
         )
         trainer.fit(self.model)
