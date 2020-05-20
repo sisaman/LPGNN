@@ -94,9 +94,9 @@ def privatize(data, pnr, pfr, eps, method='bit'):
         else:
             raise NotImplementedError
 
-    # noinspection PyUnboundLocalVariable
-    data.x = data.priv_mask * x_priv + ~data.priv_mask * data.x
-    data.priv_mask = None
+        # noinspection PyUnboundLocalVariable
+        data.x = data.priv_mask * x_priv + ~data.priv_mask * data.x
+        data.priv_mask = None
     return data
 
 
