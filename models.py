@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from torch_geometric.nn import Node2Vec, VGAE
 
 from datasets import load_dataset, GraphLoader
-from gnn import GCN, GraphEncoder
+from gnn import GCN, GraphEncoder, GraphSAGE
 from mechanisms import privatize
 
 logging.disable(logging.INFO)
@@ -245,6 +245,17 @@ class VGAELinkPredictor(LightningModule):
         return {'test_auc': auc, 'test_ap': ap, 'log': log, 'progress_bar': log}
 
 
+class GraphSAGEClassifier(GCNClassifier):
+    def __init__(self, data, hidden_dim=16, dropout=0.5, lr=0.01, weight_decay=5e-4):
+        super().__init__(data, hidden_dim, dropout, lr, weight_decay)
+        self.gcn = GraphSAGE(
+            input_dim=data.num_node_features,
+            output_dim=data.num_classes,
+            hidden_dim=hidden_dim,
+            dropout=dropout
+        )
+
+
 def main():
     torch.manual_seed(12345)
 
@@ -253,13 +264,14 @@ def main():
         # split_edges=True
     ).to('cuda')
 
-    print('pws')
-    data = privatize(data, pnr=1, pfr=1, eps=9, method='pws')
+    # print('pws')
+    data = privatize(data, pnr=1, pfr=1, eps=3, method='bit')
     # data.x = data.x[:, torch.randperm(data.x.size(1))[:data.x.size(1)//10]]
 
     for i in range(1):
         print('RUN', i)
-        model = GCNClassifier(data, lr=.01, weight_decay=0.01, dropout=0.5,)
+        # model = GCNClassifier(data, lr=.01, weight_decay=0.01, dropout=0.5,)
+        model = GraphSAGEClassifier(data, lr=.01, weight_decay=0.01, dropout=0.5)
         # model = VGAELinkPredictor(dataset, lr=0.001, weight_decay=0.0001)
 
         # noinspection PyTypeChecker

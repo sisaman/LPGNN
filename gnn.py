@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from torch.nn import Linear, BatchNorm1d
-from torch_geometric.nn import MessagePassing, GCNConv
+from torch_geometric.nn import MessagePassing, GCNConv, SAGEConv
 from torch_geometric.utils import add_remaining_self_loops, degree
 
 
@@ -34,12 +34,25 @@ class GCN(torch.nn.Module):
         self.lin1 = Linear(input_dim, hidden_dim)
         self.conv2 = GCNConv(hidden_dim, output_dim, cached=cached)
         self.dropout = dropout
-        self.cached = cached
-        self.cached_gc = None
 
     def forward(self, x, edge_index):
         x = self.conv1(x, edge_index)
         x = self.lin1(x)
+        x = torch.relu(x)
+        x = F.dropout(x, p=self.dropout, training=self.training)
+        x = self.conv2(x, edge_index)
+        return x
+
+
+class GraphSAGE(torch.nn.Module):
+    def __init__(self, input_dim, output_dim, hidden_dim, dropout=0.5):
+        super().__init__()
+        self.conv1 = SAGEConv(input_dim, hidden_dim, normalize=False, concat=False)
+        self.conv2 = SAGEConv(hidden_dim, output_dim, normalize=False, concat=False)
+        self.dropout = dropout
+
+    def forward(self, x, edge_index):
+        x = self.conv1(x, edge_index)
         x = torch.relu(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
         x = self.conv2(x, edge_index)
