@@ -5,12 +5,10 @@ from pytorch_lightning import Trainer, LightningModule
 from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.loggers import LightningLoggerBase
 from pytorch_lightning.utilities import rank_zero_only
-from sklearn.metrics import roc_auc_score
 from torch.nn.functional import cross_entropy
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from torch.utils.data import DataLoader
-from torch_geometric.nn import Node2Vec, VGAE
+from torch_geometric.nn import VGAE
 
 from datasets import load_dataset, GraphLoader
 from gnn import GCN, GraphEncoder, GraphSAGE
@@ -44,91 +42,13 @@ class ResultLogger(LightningLoggerBase):
     def version(self): return 0.1
 
 
-class LitNode2Vec(LightningModule):
-    def __init__(self, data, embedding_dim, walk_length, context_size, walks_per_node, batch_size,
-                 lr=0.01, weight_decay=0):
-        super().__init__()
-        self.data = data
-        self.model = Node2Vec(self.data.num_nodes, embedding_dim, walk_length, context_size, walks_per_node)
-        self.batch_size = batch_size
-        self.lr = lr
-        self.weight_decay = weight_decay
-
-    def forward(self, subset):
-        return self.model(subset)
-
-    def configure_optimizers(self):
-        return Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-
-    def training_step(self, subset, idx):
-        loss = self.model.loss(self.data.edge_index, subset)
-        return {'loss': loss}
-
-    def train_dataloader(self):
-        # noinspection PyTypeChecker
-        return DataLoader(torch.arange(self.data.num_nodes), batch_size=self.batch_size, shuffle=True)
-
-
-class Node2VecClassifier(LitNode2Vec):
-    def test_dataloader(self):
-        return GraphLoader(self.data)
-
-    def test_step(self, data, idx):
-        nodes = torch.arange(self.data.num_nodes).type_as(self.data.edge_index)
-        z = self.model(nodes)
-        acc = self.model.test(
-            z[self.data.train_mask], self.data.y[self.data.train_mask],
-            z[data.test_mask], self.data.y[data.test_mask], max_iter=150
-        ).item()
-        return {'val_acc': acc}
-
-    def test_epoch_end(self, outputs):
-        acc = torch.tensor([x['val_acc'] for x in outputs]).mean().item()
-        logs = {'test_acc': acc}
-        self.logger.set_result(acc)
-        return {'test_acc': acc, 'log': logs, 'progress_bar': logs}
-
-
-class Node2VecLinkPredictor(LitNode2Vec):
-    @staticmethod
-    def get_link_labels(pos_edge_index, neg_edge_index):
-        link_labels = torch.zeros(pos_edge_index.size(1) +
-                                  neg_edge_index.size(1), device=pos_edge_index.device).float()
-        link_labels[:pos_edge_index.size(1)] = 1.
-        return link_labels
-
-    def get_link_logits(self, pos_edge_index, neg_edge_index):
-        total_edge_index = torch.cat([pos_edge_index, neg_edge_index], dim=-1)
-        x_j = self(total_edge_index[0])
-        x_i = self(total_edge_index[1])
-        return (x_i * x_j).sum(dim=1)
-
-    def test_dataloader(self):
-        return GraphLoader(self.data)
-
-    def test_step(self, data, index):
-        pos_edge_index, neg_edge_index = data.test_pos_edge_index, data.test_neg_edge_index
-        link_logits = self.get_link_logits(pos_edge_index, neg_edge_index)
-        link_labels = self.get_link_labels(pos_edge_index, neg_edge_index)
-        return {'labels': link_labels, 'logits': link_logits}
-
-    def test_epoch_end(self, outputs):
-        link_labels = torch.stack([x['labels'] for x in outputs])
-        link_logits = torch.stack([x['logits'] for x in outputs])
-        link_probs = torch.sigmoid(link_logits)
-        auc = roc_auc_score(link_labels.cpu().numpy().ravel(), link_probs.cpu().numpy().ravel())
-        logs = {'test_auc': auc}
-        self.logger.set_result(auc)
-        return {'test_auc': auc, 'log': logs, 'progress_bar': logs}
-
-
 class GCNClassifier(LightningModule):
     def __init__(self, data, hidden_dim=16, dropout=0.5, lr=0.01, weight_decay=5e-4):
         super().__init__()
         self.data = data
         self.lr = lr
         self.weight_decay = weight_decay
-        self.gcn = GCN(
+        self.gnn = GCN(
             input_dim=data.num_node_features,
             output_dim=data.num_classes,
             hidden_dim=hidden_dim,
@@ -136,7 +56,7 @@ class GCNClassifier(LightningModule):
         )
 
     def forward(self, data):
-        return self.gcn(data.x, data.edge_index)
+        return self.gnn(data.x, data.edge_index)
 
     def configure_optimizers(self):
         optimizer = Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)

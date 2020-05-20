@@ -17,15 +17,14 @@ except ImportError:
     from sklearn.manifold import TSNE
 
 from gnn import GConv
-from models import GCNClassifier, Node2VecClassifier, Node2VecLinkPredictor, VGAELinkPredictor, ResultLogger
+from models import GCNClassifier, VGAELinkPredictor, ResultLogger
 from params import get_params
 
 
 class Task:
     task_name = None
 
-    def __init__(self, data, model_name):
-        self.model_name = model_name
+    def __init__(self, data):
         self.data = data
 
     @abstractmethod
@@ -33,35 +32,33 @@ class Task:
 
 
 class LearningTask(Task):
-    def __init__(self, task_name, data, model_name):
-        super().__init__(data, model_name)
+    def __init__(self, task_name, data):
+        super().__init__(data)
         self.task_name = task_name
         self.model = self.get_model()
 
     def get_model(self):
         Model = {
-            ('nodeclass', 'gcn'): partial(GCNClassifier),
-            ('nodeclass', 'node2vec'): Node2VecClassifier,
-            ('linkpred', 'gcn'): partial(VGAELinkPredictor),
-            ('linkpred', 'node2vec'): Node2VecLinkPredictor,
+            'nodeclass': partial(GCNClassifier),
+            'linkpred': partial(VGAELinkPredictor),
         }
-        return Model[self.task_name, self.model_name](
+        return Model[self.task_name](
             data=self.data,
             **get_params(
-                section='model', task=self.task_name, dataset=self.data.name, model=self.model_name
+                section='model', task=self.task_name, dataset=self.data.name
             )
         )
 
     def run(self):
         logger = ResultLogger()
-        early_stop_callback = None if self.model_name == 'node2vec' else EarlyStopping(**get_params(
-            section='early-stop', task=self.task_name, dataset=self.data.name, model=self.model_name
+        early_stop_callback = EarlyStopping(**get_params(
+            section='early-stop', task=self.task_name, dataset=self.data.name
         ))
         # noinspection PyTypeChecker
         trainer = Trainer(
             gpus=1, checkpoint_callback=False, logger=logger, weights_summary=None, deterministic=True,
             early_stop_callback=early_stop_callback, **get_params(
-                section='trainer', task=self.task_name, dataset=self.data.name, model=self.model_name
+                section='trainer', task=self.task_name, dataset=self.data.name
             )
         )
         trainer.fit(self.model)
@@ -83,7 +80,7 @@ class ErrorEstimation(Task):
     task_name = 'errorest'
 
     def __init__(self, data, orig_features):
-        super().__init__(data, 'gcn')
+        super().__init__(data)
         self.model = GConv(cached=False)
         self.gc = self.model(orig_features, data.edge_index)
 
@@ -102,21 +99,9 @@ class ErrorEstimation(Task):
         return degree(row, data.num_nodes)
 
 
-class Visualization(LearningTask):
-    def __init__(self, data):
-        super().__init__(task_name='linkpred', data=data, model_name='gcn')
-
-    def run(self):
-        super().run()
-        z = self.model(self.data)
-        embedding = TSNE(n_components=2).fit_transform(z.cpu().detach().numpy())
-        label = self.data.y.cpu().numpy()
-        return {'data': embedding, 'label': label}
-
-
 def main():
     dataset = load_dataset('cora', split_edges=True).to('cuda')
-    task = LearningTask(task_name='linkpred', data=dataset, model_name='node2vec')
+    task = LearningTask(task_name='linkpred', data=dataset)
     print(task.run())
 
 

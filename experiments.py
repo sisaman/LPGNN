@@ -10,7 +10,7 @@ import pandas as pd
 from colorama import Fore, Style
 from datasets import load_dataset, get_availabel_datasets
 from mechanisms import privatize, available_mechanisms
-from tasks import LearningTask, ErrorEstimation, Visualization
+from tasks import LearningTask, ErrorEstimation
 from pytorch_lightning import seed_everything
 
 seed_everything(12345)
@@ -19,22 +19,6 @@ private_node_ratios = [.2, .4, .6, .8, 1]
 private_feature_ratios = [.2, .4, .6, .8, 1]
 epsilons = [1, 3, 5, 7, 9]
 epsilons_priv_ratio = [1, 3, 5]
-
-
-def visualize(dataset):
-    eps_list = [0.1, 1, 5, 10]
-    for eps in eps_list:
-        print(
-            Fore.BLUE +
-            f'\ntask=visualize / dataset={dataset.name} / eps={eps}'
-            + Style.RESET_ALL
-        )
-        data = privatize(dataset, pnr=1, pfr=1, eps=eps)
-        task = Visualization(data=data)
-        result = task.run()
-        df = pd.DataFrame(data=result['data'], columns=['x', 'y'])
-        df['label'] = result['label']
-        df.to_pickle(f'results/visualize_{data.name}_{eps}.pkl')
 
 
 def get_pnr_pfr_lists(feature, pnr_list, pfr_list):
@@ -58,13 +42,13 @@ def get_eps_list(feature, pnr, pfr):
         return [1]
 
 
-def save_results(task_name, dataset_name, model_name, feature, results, output):
+def save_results(task_name, dataset_name, feature, results, output):
     df_result = pd.DataFrame(
         data=results,
         columns=['method', 'pnr', 'pfr', 'eps', 'run', 'perf']
     )
 
-    path = os.path.join(output, f'{task_name}_{dataset_name}_{model_name}_{feature}.pkl')
+    path = os.path.join(output, f'{task_name}_{dataset_name}_gcn_{feature}.pkl')
     df_result.to_pickle(path)
 
 
@@ -88,7 +72,7 @@ def error_estimation(args):
                         result = t.run()
                         results.append((f'gcn+{feature}', pnr, pfr, eps, run, result))
 
-            save_results('errorest', dataset_name, 'gcn', feature, results, args.output)
+            save_results('errorest', dataset_name, feature, results, args.output)
 
 
 def prediction(task, args):
@@ -96,33 +80,27 @@ def prediction(task, args):
         dataset = load_dataset(dataset_name, split_edges=(task == 'linkpred'))
         dataset = dataset.to('cuda')
 
-        for model in args.models:
-            if model == 'node2vec':
-                feature_list = ['void']
-            else:
-                feature_list = args.features
+        for feature in args.features:
+            results = []
+            pr_list = get_pnr_pfr_lists(feature, args.pnr_list, args.pfr_list)
 
-            for feature in feature_list:
-                results = []
-                pr_list = get_pnr_pfr_lists(feature, args.pnr_list, args.pfr_list)
+            for pnr, pfr in pr_list:
+                for eps in get_eps_list(feature, pnr, pfr):
+                    for run in range(args.repeats):
+                        print(
+                            Fore.BLUE +
+                            f'\ntask={task} / dataset={dataset_name} / model=gcn / '
+                            f'feature={feature} / pnr={pnr} / pfr={pfr} / eps={eps} / run={run}'
+                            + Style.RESET_ALL
+                        )
 
-                for pnr, pfr in pr_list:
-                    for eps in get_eps_list(feature, pnr, pfr):
-                        for run in range(args.repeats):
-                            print(
-                                Fore.BLUE +
-                                f'\ntask={task} / dataset={dataset_name} / model={model} / '
-                                f'feature={feature} / pnr={pnr} / pfr={pfr} / eps={eps} / run={run}'
-                                + Style.RESET_ALL
-                            )
+                        data = privatize(dataset, pnr=pnr, pfr=pfr, eps=eps, method=feature)
+                        t = LearningTask(task_name=task, data=data)
+                        result = t.run()
+                        print(result)
+                        results.append((f'gcn+{feature}', pnr, pfr, eps, run, result))
 
-                            data = privatize(dataset, pnr=pnr, pfr=pfr, eps=eps, method=feature)
-                            t = LearningTask(task_name=task, data=data, model_name=model)
-                            result = t.run()
-                            print(result)
-                            results.append((f'{model}+{feature}', pnr, pfr, eps, run, result))
-
-                save_results(task, dataset_name, model, feature, results, args.output)
+            save_results(task, dataset_name, feature, results, args.output)
 
 
 def main(args):
@@ -138,12 +116,10 @@ def main(args):
 if __name__ == '__main__':
     task_choices = ['nodeclass', 'linkpred', 'errorest', 'visualize']
     dataset_choices = get_availabel_datasets()
-    model_choices = ['gcn', 'node2vec']
     feature_choices = ['raw'] + list(available_mechanisms)
     parser = ArgumentParser()
     parser.add_argument('-t', '--tasks', nargs='*', choices=task_choices, default=task_choices)
     parser.add_argument('-d', '--datasets', nargs='*', choices=dataset_choices, default=dataset_choices)
-    parser.add_argument('-m', '--models', nargs='*', choices=model_choices, default=model_choices)
     parser.add_argument('-f', '--features', nargs='*', choices=feature_choices, default=feature_choices)
     parser.add_argument('-r', '--repeats', type=int, default=10)
     parser.add_argument('-o', '--output', type=str, default='results')

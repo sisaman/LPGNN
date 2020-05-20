@@ -23,21 +23,6 @@ default_trainer_params = {
     }
 }
 
-node2vec_params = {
-    'model': {
-        'embedding_dim': 128,
-        'walk_length': 80,
-        'context_size': 10,
-        'walks_per_node': 10,
-        'batch_size': 1,
-        'lr': 0.01,
-        'weight_decay': 0
-    },
-    'trainer': {
-        'max_epochs': 1,
-    }
-}
-
 gcn_params = {
     'cora': {
         'nodeclass': {
@@ -159,19 +144,10 @@ gcn_params = {
 }
 
 
-def get_params(section, task, dataset, model):
+def get_params(section, task, dataset):
     if section == 'trainer':
-        if model == 'node2vec':
-            return node2vec_params['trainer']
-        else:
-            return default_trainer_params[task]
+        return default_trainer_params[task]
     elif section == 'model':
-        if model == 'node2vec':
-            return node2vec_params['model']
-        else:
-            return gcn_params[dataset][task]
+        return gcn_params[dataset][task]
     elif section == 'early-stop':
-        if model == 'node2vec':
-            return {}
-        else:
-            return default_early_stop_params[task]
+        return default_early_stop_params[task]
