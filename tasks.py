@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from functools import partial
 
 import torch
-from pytorch_lightning import Trainer
+from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import EarlyStopping
 from torch_geometric.utils import degree
 
@@ -24,7 +24,8 @@ from params import get_params
 class Task:
     task_name = None
 
-    def __init__(self, data):
+    def __init__(self, data, model_name):
+        self.model_name = model_name
         self.data = data
 
     @abstractmethod
@@ -32,33 +33,38 @@ class Task:
 
 
 class LearningTask(Task):
-    def __init__(self, task_name, data):
-        super().__init__(data)
+    def __init__(self, task_name, data, model_name):
+        super().__init__(data, model_name)
         self.task_name = task_name
         self.model = self.get_model()
 
     def get_model(self):
         Model = {
-            'nodeclass': partial(GCNClassifier),
-            'linkpred': partial(VGAELinkPredictor),
+            ('nodeclass', 'gcn'): partial(GCNClassifier),
+            ('linkpred', 'gcn'): partial(VGAELinkPredictor),
         }
-        return Model[self.task_name](
+        return Model[self.task_name, self.model_name](
             data=self.data,
             **get_params(
-                section='model', task=self.task_name, dataset=self.data.name
+                section='model', task=self.task_name, dataset=self.data.name, model_name=self.model_name
             )
         )
 
     def run(self):
         logger = ResultLogger()
         early_stop_callback = EarlyStopping(**get_params(
-            section='early-stop', task=self.task_name, dataset=self.data.name
+            section='early-stop', task=self.task_name, dataset=self.data.name, model_name=self.model_name
         ))
         # noinspection PyTypeChecker
         trainer = Trainer(
-            gpus=1, checkpoint_callback=False, logger=logger, weights_summary=None, deterministic=True,
-            early_stop_callback=early_stop_callback, **get_params(
-                section='trainer', task=self.task_name, dataset=self.data.name
+            gpus=1,
+            checkpoint_callback=False,
+            logger=logger,
+            weights_summary=None,
+            deterministic=True,
+            early_stop_callback=early_stop_callback,
+            **get_params(
+                section='trainer', task=self.task_name, dataset=self.data.name, model_name=self.model_name
             )
         )
         trainer.fit(self.model)
@@ -80,7 +86,7 @@ class ErrorEstimation(Task):
     task_name = 'errorest'
 
     def __init__(self, data, orig_features):
-        super().__init__(data)
+        super().__init__(data, 'gcn')
         self.model = GConv(cached=False)
         self.gc = self.model(orig_features, data.edge_index)
 
@@ -100,8 +106,9 @@ class ErrorEstimation(Task):
 
 
 def main():
+    seed_everything()
     dataset = load_dataset('cora', split_edges=True).to('cuda')
-    task = LearningTask(task_name='linkpred', data=dataset)
+    task = LearningTask(task_name='linkpred', data=dataset, model_name='gcn')
     print(task.run())
 
 

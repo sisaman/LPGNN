@@ -144,10 +144,12 @@ gcn_params = {
 }
 
 
-def get_params(section, task, dataset):
+def get_params(section, task, dataset, model_name):
     if section == 'trainer':
         return default_trainer_params[task]
     elif section == 'model':
-        return gcn_params[dataset][task]
+        if model_name == 'gcn':
+            return gcn_params[dataset][task]
     elif section == 'early-stop':
-        return default_early_stop_params[task]
+        if model_name == 'gcn':
+            return default_early_stop_params[task]
