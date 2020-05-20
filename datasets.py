@@ -462,9 +462,8 @@ class Elliptic(InMemoryDataset):
         return f'Elliptic-Bitcoin({len(self)})'
 
 
-class GraphLoader(DataLoader):
+class GraphLoader:
     def __init__(self, data):
-        super().__init__(data)
         self.data = data
         self.data.to = self.to
 
