@@ -62,7 +62,7 @@ def error_estimation(args):
                     for run in range(args.repeats):
                         print(
                             Fore.BLUE +
-                            f'\ntask=errorest / dataset={dataset_name} / model=gcn / '
+                            f'\ntask=error / dataset={dataset_name} / model=gcn / '
                             f'feature={feature} / pnr={pnr} / pfr={pfr} / eps={eps} / run={run}'
                             + Style.RESET_ALL
                         )
@@ -72,12 +72,12 @@ def error_estimation(args):
                         result = t.run()
                         results.append((f'gcn+{feature}', pnr, pfr, eps, run, result))
 
-            save_results('errorest', dataset_name, 'gcn', feature, results, args.output)
+            save_results('error', dataset_name, 'gcn', feature, results, args.output)
 
 
 def prediction(task, args):
     for dataset_name in args.datasets:
-        dataset = load_dataset(dataset_name, split_edges=(task == 'linkpred'))
+        dataset = load_dataset(dataset_name, split_edges=(task == 'link'))
         dataset = dataset.to('cuda')
 
         for model in args.models:
@@ -106,16 +106,16 @@ def prediction(task, args):
 
 def main(args):
     for task in args.tasks:
-        if task in ['nodeclass', 'linkpred']:
+        if task in ['node', 'link']:
             prediction(task, args)
-        elif task == 'errorest':
+        elif task == 'error':
             error_estimation(args)
         elif task == 'visualize':
             raise NotImplementedError
 
 
 if __name__ == '__main__':
-    task_choices = ['nodeclass', 'linkpred', 'errorest', 'visualize']
+    task_choices = ['node', 'link', 'error']
     dataset_choices = get_availabel_datasets()
     model_choices = ['gcn']
     feature_choices = ['raw'] + list(available_mechanisms)

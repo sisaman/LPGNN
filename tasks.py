@@ -40,8 +40,8 @@ class LearningTask(Task):
 
     def get_model(self):
         Model = {
-            ('nodeclass', 'gcn'): partial(GCNClassifier),
-            ('linkpred', 'gcn'): partial(VGAELinkPredictor),
+            ('node', 'gcn'): partial(GCNClassifier),
+            ('link', 'gcn'): partial(VGAELinkPredictor),
         }
         return Model[self.task_name, self.model_name](
             data=self.data,
@@ -83,7 +83,7 @@ class LearningTask(Task):
 
 
 class ErrorEstimation(Task):
-    task_name = 'errorest'
+    task_name = 'error'
 
     def __init__(self, data, orig_features):
         super().__init__(data, 'gcn')
@@ -108,7 +108,7 @@ class ErrorEstimation(Task):
 def main():
     seed_everything()
     dataset = load_dataset('cora', split_edges=True).to('cuda')
-    task = LearningTask(task_name='linkpred', data=dataset, model_name='gcn')
+    task = LearningTask(task_name='link', data=dataset, model_name='gcn')
     print(task.run())
 
 

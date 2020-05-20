@@ -1,10 +1,10 @@
 default_early_stop_params = {
-    'nodeclass': {
+    'node': {
         'monitor': 'val_loss',
         'patience': 20,
         'min_delta': 0.0,
     },
-    'linkpred': {
+    'link': {
         'monitor': 'val_loss',
         'patience': 10,
         'min_delta': 0.0,
@@ -12,11 +12,11 @@ default_early_stop_params = {
 }
 
 default_trainer_params = {
-    'nodeclass': {
+    'node': {
         'max_epochs': 500,
         'min_epochs': 10
     },
-    'linkpred': {
+    'link': {
         'max_epochs': 500,
         'min_epochs': 100,
         'check_val_every_n_epoch': 10
@@ -25,117 +25,117 @@ default_trainer_params = {
 
 gcn_params = {
     'cora': {
-        'nodeclass': {
+        'node': {
             'hidden_dim': 16,
             'lr': 0.01,
             'weight_decay': 0.01,
             'dropout': 0.5
         },
-        'linkpred': {
+        'link': {
             'output_dim': 16,
             'lr': 0.01,
             'weight_decay': 0.01
         }
     },
     'citeseer': {
-        'nodeclass': {
+        'node': {
             'hidden_dim': 16,
             'lr': 0.01,
             'weight_decay': 0.1,
             'dropout': 0.5
         },
-        'linkpred': {
+        'link': {
             'output_dim': 16,
             'lr': 0.01,
             'weight_decay': 0.01
         }
     },
     'pubmed': {
-        'nodeclass': {
+        'node': {
             'hidden_dim': 16,
             'lr': 0.01,
             'weight_decay': 0.001,
             'dropout': 0.5
         },
-        'linkpred': {
+        'link': {
             'output_dim': 16,
             'lr': 0.01,
             'weight_decay': 0.01
         }
     },
     'flickr': {
-        'nodeclass': {
+        'node': {
             'hidden_dim': 16,
             'lr': 0.001,
             'weight_decay': 0.0001,
             'dropout': 0
         },
-        'linkpred': {
+        'link': {
             'output_dim': 16,
             'lr': 0.001,
             'weight_decay': 0.001
         }
     },
     'amazon-photo': {
-        'nodeclass': {
+        'node': {
             'hidden_dim': 16,
             'lr': 0.001,
             'weight_decay': 0.0001,
             'dropout': 0
         },
-        'linkpred': {
+        'link': {
             'output_dim': 16,
             'lr': 0.01,
             'weight_decay': 0
         }
     },
     'amazon-computers': {
-        'nodeclass': {
+        'node': {
             'hidden_dim': 16,
             'lr': 0.001,
             'weight_decay': 0.0001,
             'dropout': 0
         },
-        'linkpred': {
+        'link': {
             'output_dim': 16,
             'lr': 0.01,
             'weight_decay': 0.001
         }
     },
     'twitch': {
-        'nodeclass': {
+        'node': {
             'hidden_dim': 16,
             'lr': 0.001,
             'weight_decay': 0.0001,
             'dropout': 0
         },
-        'linkpred': {
+        'link': {
             'output_dim': 16,
             'lr': 0.01,
             'weight_decay': 0.001
         }
     },
     'proteins': {
-        'nodeclass': {
+        'node': {
             'hidden_dim': 16,
             'lr': 0.01,
             'weight_decay': 0.001,
             'dropout': 0.15
         },
-        'linkpred': {
+        'link': {
             'output_dim': 16,
             'lr': 0.01,
             'weight_decay': 0
         }
     },
     'bitcoin': {
-        'nodeclass': {
+        'node': {
             'hidden_dim': 16,
             'lr': 0.01,
             'weight_decay': 0,
             'dropout': 0
         },
-        'linkpred': {
+        'link': {
             'output_dim': 16,
             'lr': 0.01,
             'weight_decay': 0.0001
