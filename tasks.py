@@ -22,7 +22,9 @@ from params import get_params
 
 
 class Task:
-    task_name = None
+    NodeClassification = 'node'
+    LinkPrediction = 'link'
+    ErrorEstimation = 'error'
 
     def __init__(self, data, model_name):
         self.model_name = model_name
@@ -31,12 +33,21 @@ class Task:
     @abstractmethod
     def run(self): pass
 
+    @staticmethod
+    def task_list():
+        return [Task.NodeClassification, Task.LinkPrediction, Task.ErrorEstimation]
+
 
 class LearningTask(Task):
     def __init__(self, task_name, data, model_name):
+        assert task_name in LearningTask.task_list()
         super().__init__(data, model_name)
         self.task_name = task_name
         self.model = self.get_model()
+
+    @staticmethod
+    def task_list():
+        return [Task.NodeClassification, Task.LinkPrediction]
 
     def get_model(self):
         Model = {
@@ -92,8 +103,6 @@ class LearningTask(Task):
 
 
 class ErrorEstimation(Task):
-    task_name = 'error'
-
     def __init__(self, data, orig_features):
         super().__init__(data, 'gcn')
         self.model = GConv(cached=False)

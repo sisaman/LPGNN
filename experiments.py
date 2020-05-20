@@ -10,7 +10,7 @@ import pandas as pd
 from colorama import Fore, Style
 from datasets import load_dataset, get_available_datasets
 from mechanisms import privatize, available_mechanisms
-from tasks import LearningTask, ErrorEstimation
+from tasks import LearningTask, ErrorEstimation, Task
 from pytorch_lightning import seed_everything
 
 seed_everything(12345)
@@ -106,16 +106,14 @@ def prediction(task, args):
 
 def main(args):
     for task in args.tasks:
-        if task in ['node', 'link']:
+        if task in LearningTask.task_list():
             prediction(task, args)
-        elif task == 'error':
+        elif task == Task.ErrorEstimation:
             error_estimation(args)
-        elif task == 'visualize':
-            raise NotImplementedError
 
 
 if __name__ == '__main__':
-    task_choices = ['node', 'link', 'error']
+    task_choices = Task.task_list()
     dataset_choices = get_available_datasets()
     model_choices = ['gcn']
     feature_choices = ['raw'] + list(available_mechanisms)
