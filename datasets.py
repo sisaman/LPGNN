@@ -9,7 +9,7 @@ import pandas as pd
 import scipy.sparse as sp
 import torch
 from google_drive_downloader import GoogleDriveDownloader as gdd
-from torch_geometric.data import Data, InMemoryDataset, download_url, extract_zip, DataLoader
+from torch_geometric.data import Data, InMemoryDataset, download_url, extract_zip
 from torch_geometric.datasets import Planetoid, Amazon, Coauthor
 from torch_geometric.utils import to_undirected, negative_sampling
 
