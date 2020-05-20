@@ -465,6 +465,7 @@ class Elliptic(InMemoryDataset):
 class GraphLoader:
     def __init__(self, data):
         self.data = data
+        self.data.to = self.to
 
     def __len__(self):
         return 1
@@ -474,6 +475,10 @@ class GraphLoader:
             return self.data
         else:
             raise IndexError
+
+    # TO BE REMOVED WHEN THE NEXT VERSION OF PYG IS RELEASED
+    def to(self, device, *keys, **kwargs):
+        return self.data.apply(lambda x: x.to(device, **kwargs), *keys)
 
 
 def train_test_split_nodes(data, val_ratio=.25, test_ratio=.25, rng=None):
