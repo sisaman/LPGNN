@@ -561,6 +561,9 @@ def load_dataset(dataset_name, split_edges=False):
     data.x = (data.x - alpha) / delta
     data.x[:, (delta == 0)] = 0
 
+    # shuffle x columns
+    data.x = data.x[:, torch.randperm(data.num_features)]
+
     return data
 
 
