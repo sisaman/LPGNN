@@ -3,8 +3,6 @@ import logging
 import torch
 from pytorch_lightning import Trainer, LightningModule, seed_everything
 from pytorch_lightning.callbacks import EarlyStopping
-from pytorch_lightning.loggers import LightningLoggerBase
-from pytorch_lightning.utilities import rank_zero_only
 from torch.nn.functional import cross_entropy
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -15,31 +13,6 @@ from gnn import GCN, GraphEncoder, GraphSAGE
 from mechanisms import privatize
 
 logging.disable(logging.INFO)
-
-
-class ResultLogger(LightningLoggerBase):
-    def __init__(self):
-        super().__init__()
-        self.result = None
-
-    @property
-    def experiment(self):
-        return self
-
-    @rank_zero_only
-    def log_metrics(self, metrics, step=None): pass
-
-    def set_result(self, result):
-        self.result = result
-
-    @rank_zero_only
-    def log_hyperparams(self, parameters): pass
-
-    @property
-    def name(self): return 'ResultLogger'
-
-    @property
-    def version(self): return 0.1
 
 
 class GCNClassifier(LightningModule):
@@ -75,8 +48,7 @@ class GCNClassifier(LightningModule):
     def training_step(self, data, index):
         out = self(data)
         loss = cross_entropy(out[data.train_mask], data.y[data.train_mask])
-        logs = {'loss': loss}
-        return {'loss': loss, 'log': logs}
+        return {'loss': loss}
 
     def validation_step(self, data, index):
         out = self(data)
@@ -86,7 +58,7 @@ class GCNClassifier(LightningModule):
     def validation_epoch_end(self, outputs):
         avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean().item()
         logs = {'val_loss': avg_loss}
-        return {'val_loss': avg_loss, 'log': logs, 'progress_bar': logs}
+        return {'val_loss': avg_loss, 'progress_bar': logs}
 
     def test_step(self, data, index):
         out = self(data)
@@ -99,9 +71,8 @@ class GCNClassifier(LightningModule):
         total_corrects = sum([x['corrects'] for x in outputs])
         total_nodes = sum([x['num_nodes'] for x in outputs])
         acc = total_corrects / total_nodes
-        log = {'test_acc': acc}
-        self.logger.set_result(acc)
-        return {'test_acc': acc, 'log': log, 'progress_bar': log}
+        log = {'test_result': acc, 'test_metric': 'Micro-F1'}
+        return {'test_acc': acc, 'log': log}
 
 
 class VGAELinkPredictor(LightningModule):
@@ -150,7 +121,7 @@ class VGAELinkPredictor(LightningModule):
     def validation_epoch_end(self, outputs):
         avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean().item()
         log = {'val_loss': avg_loss}
-        return {'val_loss': avg_loss, 'log': log, 'progress_bar': log}
+        return {'val_loss': avg_loss, 'progress_bar': log}
 
     def test_step(self, data, index):
         z = self(data)
@@ -159,10 +130,8 @@ class VGAELinkPredictor(LightningModule):
 
     def test_epoch_end(self, outputs):
         auc = torch.tensor([x['auc'] for x in outputs]).mean().item()
-        ap = torch.tensor([x['ap'] for x in outputs]).mean().item()
-        log = {'test_auc': auc, 'test_ap': ap}
-        self.logger.set_result(auc)
-        return {'test_auc': auc, 'test_ap': ap, 'log': log, 'progress_bar': log}
+        log = {'test_result': auc, 'test_metric': 'AUC'}
+        return {'test_auc': auc, 'log': log}
 
 
 class GraphSAGEClassifier(GCNClassifier):
@@ -184,13 +153,11 @@ def main():
         # split_edges=True
     ).to('cuda')
 
-    # print('pws')
-    data = privatize(data, pnr=0, pfr=0, eps=3, method='bit')
-    # data.x = data.x[:, torch.randperm(data.x.size(1))[:data.x.size(1)//10]]
+    # data = privatize(data, pnr=1, pfr=0.2, fr=0.6, eps=1, method='bit')
 
     for i in range(1):
         print('RUN', i)
-        model = GCNClassifier(data, lr=.01, weight_decay=0.01, dropout=0.5, )
+        model = GCNClassifier(data, lr=.01, weight_decay=0., dropout=0.5, )
         # model = GraphSAGEClassifier(data, lr=.01, weight_decay=0.01, dropout=0.5)
         # model = VGAELinkPredictor(dataset, lr=0.001, weight_decay=0.0001)
 
@@ -201,7 +168,7 @@ def main():
             # early_stop_callback=False,
             weights_summary=None,
             # min_epochs=100,
-            logger=ResultLogger(),
+            logger=False,
             # check_val_every_n_epoch=10
         )
 
