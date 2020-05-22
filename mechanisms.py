@@ -3,31 +3,29 @@ import numpy as np
 from torch.distributions import Laplace
 from torch_geometric.data import Data
 
-from datasets import load_dataset
-
 available_mechanisms = {'bit', 'lap', 'pws', 'hyb'}
 
 
-def laplace(data, eps):
-    scale = torch.ones_like(data.x) * (data.delta / eps)
+def laplace(data, delta, eps):
+    scale = torch.ones_like(data.x) * (delta / eps)
     x_priv = Laplace(data.x, scale).sample()
     return x_priv
 
 
-def one_bit(data, eps):
+def one_bit(data, alpha, delta, eps):
     exp = np.exp(eps)
-    p = (data.x - data.alpha) / data.delta
-    p[:, (data.delta == 0)] = 0
+    p = (data.x - alpha) / delta
+    p[:, (delta == 0)] = 0
     p = p * (exp - 1) / (exp + 1) + 1 / (exp + 1)
     b = torch.bernoulli(p)
-    x_priv = ((b * (exp + 1) - 1) * data.delta) / (exp - 1) + data.alpha
+    x_priv = ((b * (exp + 1) - 1) * delta) / (exp - 1) + alpha
     return x_priv
 
 
-def piecewise(data, eps):
+def piecewise(data, alpha, delta, eps):
     # normalize x between -1,1
-    t = (data.x - data.alpha) / data.delta
-    t[:, (data.delta == 0)] = 0
+    t = (data.x - alpha) / delta
+    t[:, (delta == 0)] = 0
     t = 2 * t - 1
 
     # piecewise mechanism's variables
@@ -52,54 +50,51 @@ def piecewise(data, eps):
     t += mask_right * (torch.rand_like(t) * (C - R) + R)
 
     # unbiased data
-    x_priv = data.delta * (t + 1) / 2 + data.alpha
+    x_priv = delta * (t + 1) / 2 + alpha
     return x_priv
 
 
-def hybrid(data, eps):
+def hybrid(data, alpha, delta, eps):
     eps_star = np.log(
         (-5 + 2 * (6353 - 405 * np.sqrt(241)) ** (1 / 3) + 2 * (6353 + 405 * np.sqrt(241)) ** (1 / 3)) / 27
     )
-    alpha = torch.zeros_like(data.x) + (eps > eps_star) * (1 - np.exp(-eps / 2))
-    mask = torch.bernoulli(alpha).bool()
-    x_priv = mask * piecewise(data, eps) + (~mask) * one_bit(data, eps)
+    a = torch.zeros_like(data.x) + (eps > eps_star) * (1 - np.exp(-eps / 2))
+    mask = torch.bernoulli(a).bool()
+    x_priv = mask * piecewise(data, alpha, delta, eps) + (~mask) * one_bit(data, alpha, delta, eps)
     return x_priv
 
 
-# noinspection PyTypeChecker
-def privatize(data, pnr, pfr, eps, method='bit'):
-    if pnr > 0 and pfr > 0:
-        data = Data(**dict(data()))  # copy data to avoid changing the original
-        mask = torch.zeros_like(data.x, dtype=torch.bool)
-        n_rows = int(pnr * mask.size(0))
-        n_cols = int(pfr * mask.size(1))
-        priv_rows = torch.randperm(mask.size(0))[:n_rows]
-        priv_cols = torch.randperm(mask.size(1))[:n_cols]
-        mask[priv_rows.unsqueeze(1), priv_cols] = True
-        data.priv_mask = mask
-        alpha = data.x.min(dim=0)[0]
-        beta = data.x.max(dim=0)[0]
-        data.alpha = alpha
-        data.delta = beta - alpha
-        # data.delta[data.delta == 0] = 1e-7  # avoid division by zero
+def privatize(data, method, rfr=1, pfr=0, eps=1):
+    # copy data to avoid changing the original
+    data = Data(**dict(data()))
 
-        if method == 'bit':
-            x_priv = one_bit(data, eps)
-        elif method == 'lap':
-            x_priv = laplace(data, eps)
-        elif method == 'pws':
-            x_priv = piecewise(data, eps)
-        elif method == 'hyb':
-            x_priv = hybrid(data, eps)
-        else:
-            raise NotImplementedError
+    # calculate private and raw feature counts based on ratios
+    pfr = min(1 - rfr, pfr)  # (rfr + pfr) must be less than or equal to 1
+    n_features = int((rfr + pfr) * data.num_features)
+    n_raw_features = int(rfr * data.num_features)
 
-        # noinspection PyUnboundLocalVariable
-        data.x = data.priv_mask * x_priv + ~data.priv_mask * data.x
-        data.priv_mask = None
+    # select available features
+    data.x = data.x[:, :n_features]
+
+    # mark private features and nodes
+    priv_mask = torch.zeros_like(data.x, dtype=torch.bool)
+    priv_mask[:, n_raw_features:] = True
+
+    # set alpha and delta
+    alpha = data.x.min(dim=0)[0]
+    beta = data.x.max(dim=0)[0]
+    delta = beta - alpha
+
+    if method == 'lap':
+        x_priv = laplace(data, delta, eps)
+    elif method == 'bit':
+        x_priv = one_bit(data, alpha, delta, eps)
+    elif method == 'pws':
+        x_priv = piecewise(data, alpha, delta, eps)
+    elif method == 'hyb':
+        x_priv = hybrid(data, alpha, delta, eps)
+    else:
+        raise NotImplementedError
+
+    data.x = priv_mask * x_priv + ~priv_mask * data.x
     return data
-
-
-if __name__ == '__main__':
-    ds = privatize(load_dataset('cora'), pnr=1, pfr=1, eps=1, method='pws')
-    print(ds.x.min(), ds.x.max())
