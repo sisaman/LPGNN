@@ -1,33 +1,48 @@
-import argparse
-from typing import Union, Dict, Optional, Any
-from pytorch_lightning.loggers import LightningLoggerBase, MLFlowLogger
+from pytorch_lightning.loggers import MLFlowLogger
+from pytorch_lightning import _logger as log
 
 
-class CustomMLFlowLogger(LightningLoggerBase):
+class CustomMLFlowLogger(MLFlowLogger):
     def __init__(self, experiment_name):
-        super().__init__()
-        self.logger = MLFlowLogger(experiment_name=experiment_name)
+        super().__init__(experiment_name=experiment_name)
+        self._expt_id = None
 
-    def log_metrics(self, metrics: Dict[str, float], step: Optional[int] = None):
+    def log_metrics(self, metrics, step=None):
         for key in metrics:
             if key.startswith('test_'):
-                self.logger.log_metrics(metrics, step)
+                super().log_metrics(metrics, step)
                 break
 
-    def log_hyperparams(self, params: argparse.Namespace):
-        self.logger.log_hyperparams(params)
+    def log_params(self, params):
+        for key, value in params.items():
+            self.experiment.log_param(self.run_id, key, value)
 
-    def finalize(self, status: str):
-        self.logger.finalize(status)
+    def create_run(self):
+        run = self._mlflow_client.create_run(experiment_id=self.experiment_id, tags=self.tags)
+        self._run_id = run.info.run_id
+        return self._run_id
+
+    def delete_runs(self, params):
+        filter_string = ' AND '.join([f"param.{key}='{val}'" for key, val in params.items()])
+        query_results = self.experiment.search_runs(experiment_ids=self.experiment_id, filter_string=filter_string)
+        for result in query_results:
+            self.experiment.delete_run(result.info.run_id)
 
     @property
-    def name(self) -> str:
-        return self.logger.name
+    def experiment_id(self):
+        if self._expt_id is None:
+            expt = self.experiment.get_experiment_by_name(self.experiment_name)
+
+            if expt:
+                self._expt_id = expt.experiment_id
+            else:
+                log.warning(f'Experiment with name {self.experiment_name} not found. Creating it.')
+                self._expt_id = self._mlflow_client.create_experiment(name=self.experiment_name)
+
+        return self._expt_id
 
     @property
-    def version(self) -> Union[int, str]:
-        return self.logger.version
-
-    @property
-    def experiment(self) -> Any:
-        return self.logger.experiment
+    def run_id(self):
+        if self._run_id is None:
+            self._run_id = self.create_run()
+        return self._run_id
