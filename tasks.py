@@ -17,7 +17,7 @@ except ImportError:
     from sklearn.manifold import TSNE
 
 from gnn import GConv
-from models import GCNClassifier, VGAELinkPredictor, ResultLogger
+from models import GCNClassifier, VGAELinkPredictor
 from params import get_params
 
 
@@ -31,7 +31,7 @@ class Task:
         self.data = data
 
     @abstractmethod
-    def run(self): pass
+    def run(self, logger): pass
 
     @staticmethod
     def task_list():
@@ -64,8 +64,10 @@ class LearningTask(Task):
             )
         )
 
-    def run(self):
-        logger = ResultLogger()
+    def run(self, logger):
+        # logger = ResultLogger()
+        # logger = CustomMLFlowLogger(experiment_name='dpgcn')
+        # logger = MLFlowLogger(experiment_name='dpgcn')
         early_stop_callback = EarlyStopping(**get_params(
             section='early-stop',
             task=self.task_name,
@@ -77,8 +79,11 @@ class LearningTask(Task):
             gpus=1,
             checkpoint_callback=False,
             logger=logger,
+            row_log_interval=500,
+            log_save_interval=500,
             weights_summary=None,
             deterministic=True,
+            progress_bar_refresh_rate=5,
             early_stop_callback=early_stop_callback,
             **get_params(
                 section='trainer',
@@ -88,8 +93,9 @@ class LearningTask(Task):
             )
         )
         trainer.fit(self.model)
-        with self.silence_stdout(): trainer.test()
-        return logger.result
+        # with self.silence_stdout(): trainer.test()
+        # return logger.result
+        trainer.test()
 
     @contextmanager
     def silence_stdout(self):
@@ -109,10 +115,10 @@ class ErrorEstimation(Task):
         self.gc = self.model(orig_features, data.edge_index)
 
     @torch.no_grad()
-    def run(self, **kwargs):
+    def run(self, logger):
         gc_hat = self.model(self.data.x, self.data.edge_index)
-        diff = (self.gc - gc_hat) / self.data.delta
-        diff[:, (self.data.delta == 0)] = 0  # eliminate division by zero
+        diff = (self.gc - gc_hat)  # / self.data.delta
+        # diff[:, (self.data.delta == 0)] = 0  # eliminate division by zero
         error = torch.norm(diff, p=1, dim=1) / diff.shape[1]
         deg = self.get_degree(self.data)
         return list(zip(error.cpu().numpy(), deg.cpu().numpy()))
@@ -127,7 +133,7 @@ def main():
     seed_everything()
     dataset = load_dataset('cora', split_edges=True).to('cuda')
     task = LearningTask(task_name='link', data=dataset, model_name='gcn')
-    print(task.run())
+    print(task.run(False))
 
 
 if __name__ == '__main__':
