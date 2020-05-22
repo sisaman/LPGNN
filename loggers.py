@@ -8,22 +8,19 @@ class CustomMLFlowLogger(MLFlowLogger):
         self._expt_id = None
 
     def log_metrics(self, metrics, step=None):
-        for key in metrics:
-            if key.startswith('test_'):
-                super().log_metrics(metrics, step)
-                break
+        if 'test_result' in metrics:
+            super().log_metrics(metrics, step)
 
     def log_params(self, params):
         for key, value in params.items():
             self.experiment.log_param(self.run_id, key, value)
 
-    def create_run(self):
-        run = self._mlflow_client.create_run(experiment_id=self.experiment_id, tags=self.tags)
+    def create_run(self, tags=None):
+        run = self._mlflow_client.create_run(experiment_id=self.experiment_id, tags=tags)
         self._run_id = run.info.run_id
         return self._run_id
 
-    def delete_runs(self, params):
-        filter_string = ' AND '.join([f"param.{key}='{val}'" for key, val in params.items()])
+    def delete_runs(self, filter_string):
         query_results = self.experiment.search_runs(experiment_ids=self.experiment_id, filter_string=filter_string)
         for result in query_results:
             self.experiment.delete_run(result.info.run_id)
