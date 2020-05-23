@@ -1,7 +1,4 @@
-import os
-import sys
 from abc import abstractmethod
-from contextlib import contextmanager
 from functools import partial
 
 import torch
@@ -10,13 +7,8 @@ from pytorch_lightning.callbacks import EarlyStopping
 from torch_geometric.utils import degree
 
 from datasets import load_dataset
-
-try:
-    from tsnecuda import TSNE
-except ImportError:
-    from sklearn.manifold import TSNE
-
 from gnn import GConv
+from mechanisms import privatize
 from models import GCNClassifier, VGAELinkPredictor
 from params import get_params
 
@@ -65,9 +57,6 @@ class LearningTask(Task):
         )
 
     def run(self, logger):
-        # logger = ResultLogger()
-        # logger = CustomMLFlowLogger(experiment_name='dpgcn')
-        # logger = MLFlowLogger(experiment_name='dpgcn')
         early_stop_callback = EarlyStopping(**get_params(
             section='early-stop',
             task=self.task_name,
@@ -79,8 +68,8 @@ class LearningTask(Task):
             gpus=1,
             checkpoint_callback=False,
             logger=logger,
-            row_log_interval=500,
-            log_save_interval=500,
+            row_log_interval=1000,
+            log_save_interval=1000,
             weights_summary=None,
             deterministic=True,
             progress_bar_refresh_rate=5,
@@ -93,19 +82,7 @@ class LearningTask(Task):
             )
         )
         trainer.fit(self.model)
-        # with self.silence_stdout(): trainer.test()
-        # return logger.result
         trainer.test()
-
-    @contextmanager
-    def silence_stdout(self):
-        new_target = open(os.devnull, "w")
-        old_target = sys.stdout
-        sys.stdout = new_target
-        try:
-            yield new_target
-        finally:
-            sys.stdout = old_target
 
 
 class ErrorEstimation(Task):
@@ -130,10 +107,11 @@ class ErrorEstimation(Task):
 
 
 def main():
-    seed_everything()
-    dataset = load_dataset('cora', split_edges=True).to('cuda')
-    task = LearningTask(task_name='link', data=dataset, model_name='gcn')
-    print(task.run(False))
+    seed_everything(12345)
+    dataset = load_dataset('flickr').to('cuda')
+    dataset = privatize(dataset, 'bit', rfr=0.2, pfr=0, eps=9)
+    task = LearningTask(task_name='node', data=dataset, model_name='gcn')
+    task.run(False)
 
 
 if __name__ == '__main__':
