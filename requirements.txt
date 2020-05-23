@@ -1,5 +1,5 @@
 torch
-mlflow
 pandas
 scipy
 colorama
+numpy
