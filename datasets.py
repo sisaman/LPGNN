@@ -12,6 +12,7 @@ from google_drive_downloader import GoogleDriveDownloader as gdd
 from torch_geometric.data import Data, InMemoryDataset, download_url, extract_zip
 from torch_geometric.datasets import Planetoid, Amazon, Coauthor
 from torch_geometric.utils import to_undirected, negative_sampling
+from ogb.nodeproppred import PygNodePropPredDataset
 
 
 def train_test_split_edges(data, val_ratio=0.05, test_ratio=0.1, rng=None):
@@ -287,6 +288,30 @@ class Elliptic(InMemoryDataset):
         return f'Elliptic-Bitcoin({len(self)})'
 
 
+class OGBDataset(PygNodePropPredDataset):
+    def get(self, index):
+        data = super(OGBDataset, self).get(index)
+        data.y = data.y.squeeze(dim=1)
+        split_idx = self.get_idx_split()
+        train_idx, val_idx, test_idx = split_idx["train"], split_idx["valid"], split_idx["test"]
+        train_mask = torch.zeros(self.data.num_nodes, dtype=torch.bool)
+        val_mask = torch.zeros(self.data.num_nodes, dtype=torch.bool)
+        test_mask = torch.zeros(self.data.num_nodes, dtype=torch.bool)
+        train_mask[train_idx] = True
+        val_mask[val_idx] = True
+        test_mask[test_idx] = True
+        data.train_mask = train_mask
+        data.val_mask = val_mask
+        data.test_mask = test_mask
+        return data
+
+    def download(self):
+        super(OGBDataset, self).download()
+
+    def process(self):
+        super(OGBDataset, self).process()
+
+
 class GraphLoader:
     def __init__(self, data):
         self.data = data
@@ -354,7 +379,8 @@ datasets = {
     'facebook': partial(MUSAE, root='datasets/MUSAE', name='facebook'),
     'github': partial(MUSAE, root='datasets/MUSAE', name='github'),
     'twitch': partial(MUSAE, root='datasets/MUSAE', name='twitch'),
-    'bitcoin': partial(Elliptic, root='datasets/Elliptic')
+    'bitcoin': partial(Elliptic, root='datasets/Elliptic'),
+    'arxiv': partial(OGBDataset, root='datasets/OGB', name='ogbn-arxiv'),
 }
 
 
@@ -362,7 +388,7 @@ def get_available_datasets():
     return list(datasets.keys())
 
 
-def load_dataset(dataset_name, split_edges=False):
+def load_dataset(dataset_name, split_edges=False, normalize=True, shuffle_features=True):
     dataset = datasets[dataset_name]()
     assert len(dataset) == 1
 
@@ -379,18 +405,18 @@ def load_dataset(dataset_name, split_edges=False):
     elif not hasattr(data, 'train_mask'):
         data = train_test_split_nodes(data, val_ratio=.25, test_ratio=.25, rng=rng)
 
-    # normalize features between zero and one
-    alpha = data.x.min(dim=0)[0]
-    beta = data.x.max(dim=0)[0]
-    delta = beta - alpha
-    data.x = (data.x - alpha) / delta
-    data.x[:, (delta == 0)] = 0
+    if normalize:
+        alpha = data.x.min(dim=0)[0]
+        beta = data.x.max(dim=0)[0]
+        delta = beta - alpha
+        data.x = (data.x - alpha) / delta
+        data.x[:, (delta == 0)] = 0
 
-    # shuffle x columns
-    data.x = data.x[:, torch.randperm(data.num_features)]
+    if shuffle_features:
+        data.x = data.x[:, torch.randperm(data.num_features)]
 
     return data
 
 
 if __name__ == '__main__':
-    load_dataset('bitcoin', False)
+    load_dataset('arxiv')
