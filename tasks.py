@@ -3,7 +3,7 @@ from functools import partial
 
 import torch
 from pytorch_lightning import Trainer, seed_everything
-from pytorch_lightning.callbacks import EarlyStopping
+from pytorch_lightning.callbacks import EarlyStopping, ProgressBar
 from torch_geometric.utils import degree
 
 from datasets import load_dataset
@@ -11,6 +11,18 @@ from gnn import GConv
 from mechanisms import privatize
 from models import GCNClassifier, VGAELinkPredictor
 from params import get_params
+
+
+class LitProgressBar(ProgressBar):
+    def init_test_tqdm(self):
+        bar = super().init_test_tqdm()
+        bar.disable = True
+        return bar
+
+    def init_validation_tqdm(self):
+        bar = super().init_validation_tqdm()
+        bar.disable = True
+        return bar
 
 
 class Task:
@@ -66,6 +78,7 @@ class LearningTask(Task):
 
         trainer = Trainer(
             gpus=1,
+            callbacks=[LitProgressBar()],
             checkpoint_callback=False,
             logger=logger,
             row_log_interval=1000,
@@ -98,7 +111,7 @@ class ErrorEstimation(Task):
         # diff[:, (self.data.delta == 0)] = 0  # eliminate division by zero
         error = torch.norm(diff, p=1, dim=1) / diff.shape[1]
         deg = self.get_degree(self.data)
-        return list(zip(error.cpu().numpy(), deg.cpu().numpy()))
+        logger.log_metrics({'test_result': list(zip(error.cpu().numpy(), deg.cpu().numpy()))})
 
     @staticmethod
     def get_degree(data):
@@ -108,10 +121,11 @@ class ErrorEstimation(Task):
 
 def main():
     seed_everything(12345)
-    dataset = load_dataset('flickr').to('cuda')
-    dataset = privatize(dataset, 'bit', rfr=0.2, pfr=0, eps=9)
-    task = LearningTask(task_name='node', data=dataset, model_name='gcn')
-    task.run(False)
+    dataset = load_dataset('pubmed').to('cuda')
+    dataset = privatize(dataset, 'bit', rfr=0.5, pfr=0.1, eps=3)
+    for i in range(1):
+        task = LearningTask(task_name='node', data=dataset, model_name='gcn')
+        task.run(False)
 
 
 if __name__ == '__main__':
