@@ -149,23 +149,23 @@ def main():
     seed_everything(12345)
 
     data = load_dataset(
-        dataset_name='flickr',
+        dataset_name='pubmed',
         # split_edges=True
     ).to('cuda')
 
-    data = privatize(data, rfr=0.2, pfr=0, eps=3, method='bit')
+    data = privatize(data, rfr=0.2, pfr=0., eps=3, method='bit')
 
     for i in range(1):
         print('RUN', i)
-        model = GCNClassifier(data, lr=.001, weight_decay=0.0001, dropout=0)
+        model = GCNClassifier(data, lr=.01, weight_decay=0.001, dropout=0.5)
         # model = GraphSAGEClassifier(data, lr=.01, weight_decay=0.01, dropout=0.5)
-        # model = VGAELinkPredictor(dataset, lr=0.001, weight_decay=0.0001)
+        # model = VGAELinkPredictor(data, lr=0.01, weight_decay=0.001)
 
         # noinspection PyTypeChecker
         trainer = Trainer(
             gpus=1, max_epochs=500, checkpoint_callback=False,
-            early_stop_callback=EarlyStopping(monitor='val_loss', min_delta=0, patience=20),
-            # early_stop_callback=False,
+            # early_stop_callback=EarlyStopping(monitor='val_loss', min_delta=0, patience=20),
+            early_stop_callback=False,
             weights_summary=None,
             # min_epochs=100,
             logger=False,
