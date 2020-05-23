@@ -71,7 +71,7 @@ class GCNClassifier(LightningModule):
         total_corrects = sum([x['corrects'] for x in outputs])
         total_nodes = sum([x['num_nodes'] for x in outputs])
         acc = total_corrects / total_nodes
-        log = {'test_result': acc, 'test_metric': 'Micro-F1'}
+        log = {'test_result': acc}
         return {'test_acc': acc, 'log': log}
 
 
@@ -130,7 +130,7 @@ class VGAELinkPredictor(LightningModule):
 
     def test_epoch_end(self, outputs):
         auc = torch.tensor([x['auc'] for x in outputs]).mean().item()
-        log = {'test_result': auc, 'test_metric': 'AUC'}
+        log = {'test_result': auc}
         return {'test_auc': auc, 'log': log}
 
 
@@ -149,15 +149,15 @@ def main():
     seed_everything(12345)
 
     data = load_dataset(
-        dataset_name='cora',
+        dataset_name='flickr',
         # split_edges=True
     ).to('cuda')
 
-    # data = privatize(data, pnr=1, pfr=0.2, fr=0.6, eps=1, method='bit')
+    data = privatize(data, rfr=0.2, pfr=0, eps=3, method='bit')
 
     for i in range(1):
         print('RUN', i)
-        model = GCNClassifier(data, lr=.01, weight_decay=0., dropout=0.5, )
+        model = GCNClassifier(data, lr=.001, weight_decay=0.0001, dropout=0)
         # model = GraphSAGEClassifier(data, lr=.01, weight_decay=0.01, dropout=0.5)
         # model = VGAELinkPredictor(dataset, lr=0.001, weight_decay=0.0001)
 
