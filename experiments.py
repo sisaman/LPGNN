@@ -27,7 +27,7 @@ def error_estimation():
         for model in args.models:
             for feature in available_mechanisms & set(args.features):
                 experiment_name = f'error_{dataset_name}_{model}_{feature}'
-                with PandasLogger(save_dir='results', experiment_name=experiment_name) as logger:
+                with PandasLogger(save_dir='results', experiment_name=experiment_name, save_mode='truncate') as logger:
                     for eps in args.eps_list if args.eps_list else eps_list_long:
                         for run in range(args.repeats):
                             params = {
