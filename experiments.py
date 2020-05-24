@@ -18,7 +18,8 @@ def generate_config(experiment, feature):
     if experiment == 'pfr':
         eps_list = [0] if feature == 'raw' else eps_list if eps_list else eps_list_short
 
-    return [(pfr, eps) for pfr, eps in zip(pfr_list, eps_list)]
+    configs = [(pfr, eps) for pfr in pfr_list for eps in eps_list]
+    return configs
 
 
 def error_estimation():
@@ -107,7 +108,7 @@ if __name__ == '__main__':
     # parse arguments
     parser = ArgumentParser()
     parser.add_argument('-t', '--tasks', nargs='*', choices=task_choices, default=task_choices)
-    parser.add_argument('-e', '--experiment', nargs='*', choices=experiment_choices, default=experiment_choices)
+    parser.add_argument('-e', '--experiments', nargs='*', choices=experiment_choices, default=experiment_choices)
     parser.add_argument('-d', '--datasets', nargs='*', choices=dataset_choices, default=dataset_choices)
     parser.add_argument('-m', '--models', nargs='*', choices=model_choices, default=model_choices)
     parser.add_argument('-f', '--features', nargs='*', choices=feature_choices, default=feature_choices)
