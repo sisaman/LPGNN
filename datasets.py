@@ -371,16 +371,19 @@ datasets = {
     'cora': partial(Planetoid, root='datasets/Planetoid', name='cora'),
     'citeseer': partial(Planetoid, root='datasets/Planetoid', name='citeseer'),
     'pubmed': partial(Planetoid, root='datasets/Planetoid', name='pubmed'),
-    'coauthor-cs': partial(Coauthor, root='datasets/Coauthor/cs', name='cs'),
-    'coauthor-ph': partial(Coauthor, root='datasets/Coauthor/ph', name='physics'),
+    'twitch': partial(MUSAE, root='datasets/MUSAE', name='twitch'),
     'flickr': partial(Flickr, root='datasets/Flickr'),
+    'bitcoin': partial(Elliptic, root='datasets/Elliptic'),
     'amazon-photo': partial(Amazon, root='datasets/Amazon/photo', name='photo'),
     'amazon-computers': partial(Amazon, root='datasets/Amazon/computers', name='computers'),
+}
+
+datasets_extra = {
     'facebook': partial(MUSAE, root='datasets/MUSAE', name='facebook'),
     'github': partial(MUSAE, root='datasets/MUSAE', name='github'),
-    'twitch': partial(MUSAE, root='datasets/MUSAE', name='twitch'),
-    'bitcoin': partial(Elliptic, root='datasets/Elliptic'),
     'arxiv': partial(OGBDataset, root='datasets/OGB', name='ogbn-arxiv'),
+    'coauthor-cs': partial(Coauthor, root='datasets/Coauthor/cs', name='cs'),
+    'coauthor-ph': partial(Coauthor, root='datasets/Coauthor/ph', name='physics'),
 }
 
 
@@ -389,7 +392,8 @@ def get_available_datasets():
 
 
 def load_dataset(dataset_name, split_edges=False, normalize=True, shuffle_features=True):
-    dataset = datasets[dataset_name]()
+    datasets_all = {**datasets, **datasets_extra}
+    dataset = datasets_all[dataset_name]()
     assert len(dataset) == 1
 
     data = dataset[0]
