@@ -64,28 +64,26 @@ def hybrid(data, alpha, delta, eps):
     return x_priv
 
 
-def privatize(data, method, rfr=1, pfr=0, eps=1):
+def privatize(data, method, pfr=0, eps=1):
     # copy data to avoid changing the original
     data = Data(**dict(data()))
 
-    # calculate private and raw feature counts based on ratios
-    pfr = min(1 - rfr, pfr)  # (rfr + pfr) must be less than or equal to 1
-    n_features = int((rfr + pfr) * data.num_features)
-    n_raw_features = int(rfr * data.num_features)
-
-    # select available features
-    data.x = data.x[:, :n_features]
-
-    # mark private features and nodes
+    # indicate private features randomly
+    n_priv_features = int(pfr * data.num_features)
+    priv_features = torch.randperm(data.num_features)[:n_priv_features]
     priv_mask = torch.zeros_like(data.x, dtype=torch.bool)
-    priv_mask[:, n_raw_features:] = True
+    priv_mask[:, priv_features] = True
 
     # set alpha and delta
     alpha = data.x.min(dim=0)[0]
     beta = data.x.max(dim=0)[0]
     delta = beta - alpha
 
-    if method == 'lap':
+    if method == 'raw':
+        # just trim to non-private features
+        data.x = data.x[~priv_mask].view(data.num_nodes, -1)
+        return data
+    elif method == 'lap':
         x_priv = laplace(data, delta, eps)
     elif method == 'bit':
         x_priv = one_bit(data, alpha, delta, eps)
