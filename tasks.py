@@ -122,7 +122,7 @@ class ErrorEstimation(Task):
 def main():
     seed_everything(12345)
     dataset = load_dataset('pubmed').to('cuda')
-    dataset = privatize(dataset, 'bit', rfr=0.5, pfr=0.1, eps=3)
+    dataset = privatize(dataset, 'bit', pfr=0.1, eps=3)
     for i in range(1):
         task = LearningTask(task_name='node', data=dataset, model_name='gcn')
         task.run(False)
