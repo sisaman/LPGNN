@@ -113,7 +113,7 @@ class ErrorEstimation(Task):
         gc_hat = self.model(self.data.x, self.data.edge_index)
         diff = (self.gc - gc_hat) / self.delta
         diff[:, (self.delta == 0)] = 0  # eliminate division by zero
-        error = torch.norm(diff, p=1, dim=1) / diff.shape[1]
+        error = torch.norm(diff, p=1, dim=1) / self.data.num_features
         deg = self.get_degree(self.data)
         logger.log_metrics({'test_result': list(zip(error.cpu().numpy(), deg.cpu().numpy()))})
 
