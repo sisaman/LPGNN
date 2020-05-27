@@ -1,3 +1,6 @@
+import logging
+logging.captureWarnings(True)
+
 import time
 from loggers import PandasLogger
 from argparse import ArgumentParser
