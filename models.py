@@ -1,15 +1,15 @@
 import logging
 
 import torch
+import torch.nn.functional as F
 from pytorch_lightning import Trainer, LightningModule, seed_everything
 from pytorch_lightning.callbacks import EarlyStopping
-from torch.nn.functional import cross_entropy
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch_geometric.nn import VGAE
 
 from datasets import load_dataset, GraphLoader
-from gnn import GCN, GraphEncoder, GraphSAGE
+from gnn import GCN, GraphEncoder
 from mechanisms import privatize
 
 logging.disable(logging.INFO)
@@ -25,7 +25,7 @@ class GCNClassifier(LightningModule):
             input_dim=data.num_node_features,
             output_dim=data.num_classes,
             hidden_dim=hidden_dim,
-            dropout=dropout
+            dropout=dropout,
         )
 
     def forward(self, data):
@@ -47,12 +47,12 @@ class GCNClassifier(LightningModule):
 
     def training_step(self, data, index):
         out = self(data)
-        loss = cross_entropy(out[data.train_mask], data.y[data.train_mask])
+        loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask])
         return {'loss': loss}
 
     def validation_step(self, data, index):
         out = self(data)
-        loss = cross_entropy(out[data.val_mask], data.y[data.val_mask])
+        loss = F.nll_loss(out[data.val_mask], data.y[data.val_mask])
         return {'val_loss': loss}
 
     def validation_epoch_end(self, outputs):
@@ -134,17 +134,6 @@ class VGAELinkPredictor(LightningModule):
         return {'test_auc': auc, 'log': log}
 
 
-class GraphSAGEClassifier(GCNClassifier):
-    def __init__(self, data, hidden_dim=16, dropout=0.5, lr=0.01, weight_decay=5e-4):
-        super().__init__(data, hidden_dim, dropout, lr, weight_decay)
-        self.gcn = GraphSAGE(
-            input_dim=data.num_node_features,
-            output_dim=data.num_classes,
-            hidden_dim=hidden_dim,
-            dropout=dropout
-        )
-
-
 def main():
     seed_everything(12345)
 
@@ -153,7 +142,7 @@ def main():
         # split_edges=True
     ).to('cuda')
 
-    data = privatize(data, pfr=0.8, eps=3, method='raw')
+    data = privatize(data, pfr=0, eps=3, method='raw')
 
     for i in range(1):
         print('RUN', i)
