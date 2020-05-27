@@ -36,7 +36,6 @@ def error_estimation():
                                 'dataset': dataset_name,
                                 'model': model,
                                 'feature': feature,
-                                'rfr': 0,
                                 'pfr': 1,
                                 'eps': eps,
                                 'run': run
