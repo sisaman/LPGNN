@@ -5,9 +5,9 @@ import torch
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import EarlyStopping, ProgressBar
 from torch_geometric.utils import degree
+from torch_geometric.nn import GCNConv
 
 from datasets import load_dataset
-from gnn import GConv
 from mechanisms import privatize
 from models import GCNClassifier, VGAELinkPredictor
 from params import get_params
@@ -101,14 +101,18 @@ class LearningTask(Task):
 class ErrorEstimation(Task):
     def __init__(self, data, orig_features):
         super().__init__(data, 'gcn')
-        self.model = GConv(cached=False)
+        self.model = GCNConv(data.num_features, data.num_features, cached=True).cuda()
+        self.model.weight.data.copy_(torch.eye(data.num_features))  # no linear transformation
         self.gc = self.model(orig_features, data.edge_index)
+        alpha = orig_features.min(dim=0)[0]
+        beta = orig_features.max(dim=0)[0]
+        self.delta = beta - alpha
 
     @torch.no_grad()
     def run(self, logger):
         gc_hat = self.model(self.data.x, self.data.edge_index)
-        diff = (self.gc - gc_hat)  # / self.data.delta
-        # diff[:, (self.data.delta == 0)] = 0  # eliminate division by zero
+        diff = (self.gc - gc_hat) / self.delta
+        diff[:, (self.delta == 0)] = 0  # eliminate division by zero
         error = torch.norm(diff, p=1, dim=1) / diff.shape[1]
         deg = self.get_degree(self.data)
         logger.log_metrics({'test_result': list(zip(error.cpu().numpy(), deg.cpu().numpy()))})
