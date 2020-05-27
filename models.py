@@ -142,7 +142,7 @@ def main():
         # split_edges=True
     ).to('cuda')
 
-    data = privatize(data, pfr=0, eps=3, method='raw')
+    data = privatize(data, pfr=1, eps=100, method='pws-m')
 
     for i in range(1):
         print('RUN', i)
