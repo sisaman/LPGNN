@@ -3,7 +3,7 @@ import numpy as np
 from torch.distributions import Laplace
 from torch_geometric.data import Data
 
-available_mechanisms = {'bit', 'lap', 'pws', 'hyb'}
+available_mechanisms = {'bit', 'lap', 'pws', 'hyb', 'pws-m'}
 
 
 def laplace(data, delta, eps):
@@ -54,6 +54,19 @@ def piecewise(data, alpha, delta, eps):
     return x_priv
 
 
+def piecewise_multi(data, alpha, delta, eps):
+    n = data.num_nodes
+    d = data.num_features
+    # k = int(max(1, min(d, np.floor(eps / 2.5))))
+    k = 100
+    sample = torch.cat([torch.randperm(d)[:k] for _ in range(n)]).view(n, k).to(data.x.device)
+    mask = torch.zeros_like(data.x, dtype=torch.bool)
+    mask.scatter_(dim=1, index=sample, value=True)
+    x_priv = piecewise(data, alpha, delta, eps/k)
+    x_priv = mask * x_priv * d / k
+    return x_priv
+
+
 def hybrid(data, alpha, delta, eps):
     eps_star = np.log(
         (-5 + 2 * (6353 - 405 * np.sqrt(241)) ** (1 / 3) + 2 * (6353 + 405 * np.sqrt(241)) ** (1 / 3)) / 27
@@ -89,6 +102,8 @@ def privatize(data, method, pfr=0, eps=1):
         x_priv = one_bit(data, alpha, delta, eps)
     elif method == 'pws':
         x_priv = piecewise(data, alpha, delta, eps)
+    elif method == 'pws-m':
+        x_priv = piecewise_multi(data, alpha, delta, eps)
     elif method == 'hyb':
         x_priv = hybrid(data, alpha, delta, eps)
     else:
