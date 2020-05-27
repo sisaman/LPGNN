@@ -316,7 +316,7 @@ def get_available_datasets():
     return list(datasets.keys())
 
 
-def load_dataset(dataset_name, split_edges=False, normalize=True, shuffle_features=True):
+def load_dataset(dataset_name, split_edges=False, normalize=True):
     datasets_all = {**datasets, **datasets_extra}
     dataset = datasets_all[dataset_name]()
     assert len(dataset) == 1
@@ -340,9 +340,6 @@ def load_dataset(dataset_name, split_edges=False, normalize=True, shuffle_featur
         delta = beta - alpha
         data.x = (data.x - alpha) / delta
         data.x[:, (delta == 0)] = 0
-
-    if shuffle_features:
-        data.x = data.x[:, torch.randperm(data.num_features)]
 
     return data
 
