@@ -8,7 +8,7 @@ import pandas as pd
 import torch
 from torch_geometric.data import Data, InMemoryDataset, download_url, extract_zip
 from torch_geometric.datasets import Planetoid, Amazon, Coauthor, Flickr
-from torch_geometric.utils import to_undirected, negative_sampling
+from torch_geometric.utils import to_undirected, negative_sampling, degree
 from ogb.nodeproppred import PygNodePropPredDataset
 
 
@@ -316,7 +316,7 @@ def get_available_datasets():
     return list(datasets.keys())
 
 
-def load_dataset(dataset_name, split_edges=False, normalize=True):
+def load_dataset(dataset_name, split_edges=False, normalize=True, min_degree=None):
     datasets_all = {**datasets, **datasets_extra}
     dataset = datasets_all[dataset_name]()
     assert len(dataset) == 1
@@ -340,6 +340,14 @@ def load_dataset(dataset_name, split_edges=False, normalize=True):
         delta = beta - alpha
         data.x = (data.x - alpha) / delta
         data.x[:, (delta == 0)] = 0
+
+    if min_degree:
+        idx = data.edge_index[0]
+        deg = degree(idx, num_nodes=data.num_nodes).int()
+        if not split_edges:
+            data.train_mask = data.train_mask & (deg >= min_degree)
+            data.val_mask = data.val_mask & (deg >= min_degree)
+            data.test_mask = data.test_mask & (deg >= min_degree)
 
     return data
 
