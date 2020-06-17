@@ -1,0 +1,5 @@
+pytorch_lightning>=0.7.6
+pandas>=1.0.4
+numpy>=1.18.5
+colorama>=0.4.3
+ogb>=1.2.0
