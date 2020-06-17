@@ -22,3 +22,4 @@
 - Combination of mechanisms based on variance 
 - Fine tune gcn+bit and gcn+lap for eps=1
 - Generalize beyond GCNs
+- Private Labels
