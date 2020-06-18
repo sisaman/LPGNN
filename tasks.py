@@ -8,12 +8,12 @@ from torch_geometric.utils import degree
 from torch_geometric.nn import GCNConv
 
 from datasets import load_dataset
-from mechanisms import privatize
-from models import GCNClassifier, VGAELinkPredictor
+from privacy import privatize
+from models import NodeClassifier, LinkPredictor
 from params import get_params
 
 
-class LitProgressBar(ProgressBar):
+class TrainOnlyProgressBar(ProgressBar):
     def init_test_tqdm(self):
         bar = super().init_test_tqdm()
         bar.disable = True
@@ -55,8 +55,8 @@ class LearningTask(Task):
 
     def get_model(self):
         Model = {
-            ('node', 'gcn'): partial(GCNClassifier),
-            ('link', 'gcn'): partial(VGAELinkPredictor),
+            ('node', 'gcn'): partial(NodeClassifier),
+            ('link', 'gcn'): partial(LinkPredictor),
         }
         return Model[self.task_name, self.model_name](
             data=self.data,
@@ -78,7 +78,7 @@ class LearningTask(Task):
 
         trainer = Trainer(
             gpus=1,
-            callbacks=[LitProgressBar()],
+            callbacks=[TrainOnlyProgressBar()],
             checkpoint_callback=False,
             logger=logger,
             row_log_interval=1000,
@@ -112,7 +112,7 @@ class ErrorEstimation(Task):
     def run(self, logger):
         gc_hat = self.model(self.data.x, self.data.edge_index)
         diff = (self.gc - gc_hat) / self.delta
-        diff[:, (self.delta == 0)] = 0  # eliminate division by zero
+        diff[:, (self.delta == 0)] = 0  # avoid division by zero
         error = torch.norm(diff, p=1, dim=1) / self.data.num_features
         deg = self.get_degree(self.data)
         logger.log_metrics({'test_result': list(zip(error.cpu().numpy(), deg.cpu().numpy()))})
