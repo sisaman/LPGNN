@@ -105,7 +105,7 @@ def main():
     batch_error_estimation(
         datasets=args.datasets,
         methods=args.methods,
-        eps_list=args.eps,
+        eps_list=args.eps_list,
         repeats=args.repeats,
         device=args.device,
         output_dir=args.output_dir
