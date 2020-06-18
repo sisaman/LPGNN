@@ -213,6 +213,30 @@ class GraphLoader:  # TODO: replace with PyG DataLoader
             raise IndexError
 
 
+available_datasets = {
+    'cora': partial(Planetoid, root='datasets/Planetoid', name='cora'),
+    'citeseer': partial(Planetoid, root='datasets/Planetoid', name='citeseer'),
+    'twitch': partial(MUSAE, root='datasets/MUSAE', name='twitch'),
+    'flickr': partial(Flickr, root='datasets/Flickr'),
+    'elliptic': partial(Elliptic, root='datasets/Elliptic'),
+}
+
+extra_datasets = {
+    'pubmed': partial(Planetoid, root='datasets/Planetoid', name='pubmed'),
+    'amazon-photo': partial(Amazon, root='datasets/Amazon/photo', name='photo'),
+    'amazon-computers': partial(Amazon, root='datasets/Amazon/computers', name='computers'),
+    'facebook': partial(MUSAE, root='datasets/MUSAE', name='facebook'),
+    'github': partial(MUSAE, root='datasets/MUSAE', name='github'),
+    'arxiv': partial(OGBDataset, root='datasets/OGB', name='ogbn-arxiv'),
+    'coauthor-cs': partial(Coauthor, root='datasets/Coauthor/cs', name='cs'),
+    'coauthor-ph': partial(Coauthor, root='datasets/Coauthor/ph', name='physics'),
+}
+
+
+def get_available_datasets():
+    return list(available_datasets.keys())
+
+
 def train_test_split_nodes(data, val_ratio=.25, test_ratio=.25, rng=None):
     n_val = int(val_ratio * data.num_nodes)
     n_test = int(test_ratio * data.num_nodes)
@@ -270,33 +294,9 @@ def train_test_split_edges(data, val_ratio=0.05, test_ratio=0.1, rng=None):
     return data
 
 
-datasets = {
-    'cora': partial(Planetoid, root='datasets/Planetoid', name='cora'),
-    'citeseer': partial(Planetoid, root='datasets/Planetoid', name='citeseer'),
-    'twitch': partial(MUSAE, root='datasets/MUSAE', name='twitch'),
-    'flickr': partial(Flickr, root='datasets/Flickr'),
-    'elliptic': partial(Elliptic, root='datasets/Elliptic'),
-}
-
-datasets_extra = {
-    'pubmed': partial(Planetoid, root='datasets/Planetoid', name='pubmed'),
-    'amazon-photo': partial(Amazon, root='datasets/Amazon/photo', name='photo'),
-    'amazon-computers': partial(Amazon, root='datasets/Amazon/computers', name='computers'),
-    'facebook': partial(MUSAE, root='datasets/MUSAE', name='facebook'),
-    'github': partial(MUSAE, root='datasets/MUSAE', name='github'),
-    'arxiv': partial(OGBDataset, root='datasets/OGB', name='ogbn-arxiv'),
-    'coauthor-cs': partial(Coauthor, root='datasets/Coauthor/cs', name='cs'),
-    'coauthor-ph': partial(Coauthor, root='datasets/Coauthor/ph', name='physics'),
-}
-
-
-def get_available_datasets():
-    return list(datasets.keys())
-
-
 def load_dataset(dataset_name, split_edges=False, normalize=True, min_degree=None):
-    datasets_all = {**datasets, **datasets_extra}
-    dataset = datasets_all[dataset_name]()
+    datasets = {**available_datasets, **extra_datasets}
+    dataset = datasets[dataset_name]()
     assert len(dataset) == 1
 
     data = dataset[0]
