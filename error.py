@@ -41,8 +41,6 @@ class ErrorEstimation:
 
 
 def error_estimation(dataset, method, eps, repeats, logger, device):
-    assert method in get_available_mechanisms()
-
     if isinstance(dataset, str):
         dataset = load_dataset(dataset, device=device)
 
@@ -61,6 +59,27 @@ def error_estimation(dataset, method, eps, repeats, logger, device):
 
         data = privatize(dataset, method=method, eps=eps, pfr=1)
         ErrorEstimation(data=data, raw_features=dataset.x, device=device).run(logger)
+
+
+def batch_error_estimation(datasets, methods, eps_list, repeats, device, output_dir):
+    for dataset_name in datasets:
+        dataset = load_dataset(dataset_name).to(device)
+        for method in methods:
+            experiment_name = f'error_{dataset_name}_{method}'
+            with PandasLogger(
+                output_dir=output_dir,
+                experiment_name=experiment_name,
+                write_mode='truncate'
+            ) as logger:
+                for eps in eps_list:
+                    error_estimation(
+                        dataset=dataset,
+                        method=method,
+                        eps=eps,
+                        repeats=repeats,
+                        logger=logger,
+                        device=device
+                    )
 
 
 def main():
@@ -83,25 +102,14 @@ def main():
     args = parser.parse_args()
     print(args)
 
-    # get results
-    for dataset_name in args.datasets:
-        dataset = load_dataset(dataset_name).to(args.device)
-        for method in args.methods:
-            experiment_name = f'error_{dataset_name}_{method}'
-            with PandasLogger(
-                output_dir=args.output_dir,
-                experiment_name=experiment_name,
-                write_mode='truncate'
-            ) as logger:
-                for eps in args.eps:
-                    error_estimation(
-                        dataset=dataset,
-                        method=method,
-                        eps=eps,
-                        repeats=args.repeats,
-                        logger=logger,
-                        device=args.device
-                    )
+    batch_error_estimation(
+        datasets=args.datasets,
+        methods=args.methods,
+        eps_list=args.eps,
+        repeats=args.repeats,
+        device=args.device,
+        output_dir=args.output_dir
+    )
 
 
 if __name__ == '__main__':
