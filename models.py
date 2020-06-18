@@ -10,12 +10,12 @@ from torch_geometric.nn import VGAE
 
 from datasets import load_dataset, GraphLoader
 from gnn import GCN, GraphEncoder
-from mechanisms import privatize
+from privacy import privatize
 
 logging.disable(logging.INFO)
 
 
-class GCNClassifier(LightningModule):
+class NodeClassifier(LightningModule):
     def __init__(self, data, hidden_dim=16, dropout=0.5, lr=0.01, weight_decay=5e-4):
         super().__init__()
         self.data = data
@@ -75,7 +75,7 @@ class GCNClassifier(LightningModule):
         return {'test_acc': acc, 'log': log}
 
 
-class VGAELinkPredictor(LightningModule):
+class LinkPredictor(LightningModule):
     def __init__(self, data, output_dim=16, lr=0.01, weight_decay=0.0):
         super().__init__()
         self.data = data
@@ -146,7 +146,7 @@ def main():
 
     for i in range(1):
         print('RUN', i)
-        model = GCNClassifier(data, lr=.01, weight_decay=0.01, dropout=0.5)
+        model = NodeClassifier(data, lr=.01, weight_decay=0.01, dropout=0.5)
         # model = GraphSAGEClassifier(data, lr=.01, weight_decay=0.01, dropout=0.5)
         # model = VGAELinkPredictor(data, lr=0.01, weight_decay=0.001)
 
