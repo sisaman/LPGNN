@@ -294,7 +294,7 @@ def train_test_split_edges(data, val_ratio=0.05, test_ratio=0.1, rng=None):
     return data
 
 
-def load_dataset(dataset_name, split_edges=False, normalize=True, min_degree=None):
+def load_dataset(dataset_name, split_edges=False, normalize=True, min_degree=None, device='cuda'):
     datasets = {**available_datasets, **extra_datasets}
     dataset = datasets[dataset_name]()
     assert len(dataset) == 1
@@ -326,6 +326,9 @@ def load_dataset(dataset_name, split_edges=False, normalize=True, min_degree=Non
             data.train_mask = data.train_mask & (deg >= min_degree)
             data.val_mask = data.val_mask & (deg >= min_degree)
             data.test_mask = data.test_mask & (deg >= min_degree)
+
+    if device == 'cuda' and torch.cuda.is_available():
+        data = data.to('cuda')
 
     return data
 
