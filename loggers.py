@@ -5,12 +5,13 @@ from pytorch_lightning.loggers import LightningLoggerBase
 
 class PandasLogger(LightningLoggerBase):
 
-    def __init__(self, experiment_name, save_dir, save_mode='replace'):
-        assert save_mode in ['replace', 'truncate']
+    def __init__(self, experiment_name, output_dir, write_mode='replace'):
+        assert write_mode in ['replace', 'truncate']
         super().__init__()
         self.experiment_name = experiment_name
-        self.df_dir = os.path.join(save_dir, self.experiment_name + '.pkl')
-        self.save_mode = save_mode
+        os.makedirs(output_dir, exist_ok=True)
+        self.filename = os.path.join(output_dir, self.experiment_name + '.pkl')
+        self.save_mode = write_mode
         self.data = []
         self.metrics = {}
         self.params = None
@@ -30,7 +31,7 @@ class PandasLogger(LightningLoggerBase):
         pass
 
     def dump(self):
-        print('\n\nDUMP\n\n')
+        print('\nSaving results...', end='')
         params = self.params.keys()
         self._add_run_to_data()
         df_new = pd.DataFrame(self.data)
@@ -42,7 +43,8 @@ class PandasLogger(LightningLoggerBase):
         if self.save_mode == 'replace':
             self.df.drop_duplicates(subset=params, keep='last', inplace=True, ignore_index=True)
 
-        self.df.to_pickle(path=self.df_dir)
+        self.df.to_pickle(path=self.filename)
+        print('done!\n')
 
     def _add_run_to_data(self):
         if self.params is not None:
@@ -55,7 +57,7 @@ class PandasLogger(LightningLoggerBase):
         self.df = pd.DataFrame()
         if self.save_mode == 'replace':
             try:
-                self.df = pd.read_pickle(self.df_dir)
+                self.df = pd.read_pickle(self.filename)
             except FileNotFoundError:
                 pass
         return self.df
