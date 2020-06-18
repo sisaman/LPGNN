@@ -77,7 +77,7 @@ class LearningTask(Task):
         ))
 
         trainer = Trainer(
-            gpus=1,
+            gpus=torch.cuda.is_available(),
             callbacks=[TrainOnlyProgressBar()],
             checkpoint_callback=False,
             logger=logger,
@@ -98,29 +98,7 @@ class LearningTask(Task):
         trainer.test()
 
 
-class ErrorEstimation(Task):
-    def __init__(self, data, orig_features):
-        super().__init__(data, 'gcn')
-        self.model = GCNConv(data.num_features, data.num_features, cached=True).cuda()
-        self.model.weight.data.copy_(torch.eye(data.num_features))  # no linear transformation
-        self.gc = self.model(orig_features, data.edge_index)
-        alpha = orig_features.min(dim=0)[0]
-        beta = orig_features.max(dim=0)[0]
-        self.delta = beta - alpha
 
-    @torch.no_grad()
-    def run(self, logger):
-        gc_hat = self.model(self.data.x, self.data.edge_index)
-        diff = (self.gc - gc_hat) / self.delta
-        diff[:, (self.delta == 0)] = 0  # avoid division by zero
-        error = torch.norm(diff, p=1, dim=1) / self.data.num_features
-        deg = self.get_degree(self.data)
-        logger.log_metrics({'test_result': list(zip(error.cpu().numpy(), deg.cpu().numpy()))})
-
-    @staticmethod
-    def get_degree(data):
-        row, col = data.edge_index
-        return degree(row, data.num_nodes)
 
 
 def main():
