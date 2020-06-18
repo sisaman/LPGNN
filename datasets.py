@@ -12,44 +12,6 @@ from torch_geometric.utils import to_undirected, negative_sampling, degree
 from ogb.nodeproppred import PygNodePropPredDataset
 
 
-def train_test_split_edges(data, val_ratio=0.05, test_ratio=0.1, rng=None):
-    assert 'batch' not in data  # No batch-mode.
-
-    row, col = data.edge_index
-    data.edge_index = None
-
-    # Return upper triangular portion.
-    mask = row < col
-    row, col = row[mask], col[mask]
-
-    n_v = int(math.floor(val_ratio * row.size(0)))
-    n_t = int(math.floor(test_ratio * row.size(0)))
-
-    # Positive edges.
-    perm = torch.randperm(row.size(0), generator=rng)
-    row, col = row[perm], col[perm]
-
-    r, c = row[:n_v], col[:n_v]
-    data.val_pos_edge_index = torch.stack([r, c], dim=0)
-    r, c = row[n_v:n_v + n_t], col[n_v:n_v + n_t]
-    data.test_pos_edge_index = torch.stack([r, c], dim=0)
-
-    r, c = row[n_v + n_t:], col[n_v + n_t:]
-    data.train_pos_edge_index = torch.stack([r, c], dim=0)
-    data.train_pos_edge_index = to_undirected(data.train_pos_edge_index)
-
-    neg_edge_index = negative_sampling(
-        edge_index=torch.stack([row, col], dim=0),
-        num_nodes=data.num_nodes,
-        num_neg_samples=n_v + n_t
-    )
-
-    data.val_neg_edge_index = neg_edge_index[:, :n_v]
-    data.test_neg_edge_index = neg_edge_index[:, n_v:]
-
-    return data
-
-
 class MUSAE(InMemoryDataset):
     url = 'https://raw.githubusercontent.com/benedekrozemberczki/karateclub/master/dataset/node_level'
     available_datasets = {
@@ -237,10 +199,9 @@ class OGBDataset(PygNodePropPredDataset):
         super(OGBDataset, self).process()
 
 
-class GraphLoader:
+class GraphLoader:  # TODO: replace with PyG DataLoader
     def __init__(self, data):
         self.data = data
-        self.data.to = self.to
 
     def __len__(self):
         return 1
@@ -250,10 +211,6 @@ class GraphLoader:
             return self.data
         else:
             raise IndexError
-
-    # TO BE REMOVED WHEN THE NEXT VERSION OF PYG IS RELEASED
-    def to(self, device, *keys, **kwargs):
-        return self.data.apply(lambda x: x.to(device, **kwargs), *keys)
 
 
 def train_test_split_nodes(data, val_ratio=.25, test_ratio=.25, rng=None):
@@ -275,35 +232,56 @@ def train_test_split_nodes(data, val_ratio=.25, test_ratio=.25, rng=None):
     return data
 
 
-def stack_dataset(dataset):
-    num_nodes = 0
-    x = torch.empty(0, dtype=dataset[0].x.dtype)
-    y = torch.empty(0, dtype=dataset[0].y.dtype)
-    edge_index = torch.empty(0, dtype=dataset[0].edge_index.dtype)
+def train_test_split_edges(data, val_ratio=0.05, test_ratio=0.1, rng=None):
+    assert 'batch' not in data  # No batch-mode.
 
-    for data in dataset:
-        x = torch.cat([x, data.x], dim=0)
-        if data.y.size(0) == 1:
-            data.y = data.y.repeat(data.x.size(0))
-        y = torch.cat([y, data.y], dim=0)
-        edge_index = torch.cat([edge_index, data.edge_index + num_nodes], dim=1)
-        num_nodes += data.num_nodes
+    row, col = data.edge_index
+    data.edge_index = None
 
-    return Data(x=x, y=y, edge_index=edge_index)
+    # Return upper triangular portion.
+    mask = row < col
+    row, col = row[mask], col[mask]
+
+    n_v = int(math.floor(val_ratio * row.size(0)))
+    n_t = int(math.floor(test_ratio * row.size(0)))
+
+    # Positive edges.
+    perm = torch.randperm(row.size(0), generator=rng)
+    row, col = row[perm], col[perm]
+
+    r, c = row[:n_v], col[:n_v]
+    data.val_pos_edge_index = torch.stack([r, c], dim=0)
+    r, c = row[n_v:n_v + n_t], col[n_v:n_v + n_t]
+    data.test_pos_edge_index = torch.stack([r, c], dim=0)
+
+    r, c = row[n_v + n_t:], col[n_v + n_t:]
+    data.train_pos_edge_index = torch.stack([r, c], dim=0)
+    data.train_pos_edge_index = to_undirected(data.train_pos_edge_index)
+
+    neg_edge_index = negative_sampling(
+        edge_index=torch.stack([row, col], dim=0),
+        num_nodes=data.num_nodes,
+        num_neg_samples=n_v + n_t
+    )
+
+    data.val_neg_edge_index = neg_edge_index[:, :n_v]
+    data.test_neg_edge_index = neg_edge_index[:, n_v:]
+
+    return data
 
 
 datasets = {
     'cora': partial(Planetoid, root='datasets/Planetoid', name='cora'),
     'citeseer': partial(Planetoid, root='datasets/Planetoid', name='citeseer'),
-    'pubmed': partial(Planetoid, root='datasets/Planetoid', name='pubmed'),
     'twitch': partial(MUSAE, root='datasets/MUSAE', name='twitch'),
     'flickr': partial(Flickr, root='datasets/Flickr'),
-    'bitcoin': partial(Elliptic, root='datasets/Elliptic'),
-    'amazon-photo': partial(Amazon, root='datasets/Amazon/photo', name='photo'),
-    'amazon-computers': partial(Amazon, root='datasets/Amazon/computers', name='computers'),
+    'elliptic': partial(Elliptic, root='datasets/Elliptic'),
 }
 
 datasets_extra = {
+    'pubmed': partial(Planetoid, root='datasets/Planetoid', name='pubmed'),
+    'amazon-photo': partial(Amazon, root='datasets/Amazon/photo', name='photo'),
+    'amazon-computers': partial(Amazon, root='datasets/Amazon/computers', name='computers'),
     'facebook': partial(MUSAE, root='datasets/MUSAE', name='facebook'),
     'github': partial(MUSAE, root='datasets/MUSAE', name='github'),
     'arxiv': partial(OGBDataset, root='datasets/OGB', name='ogbn-arxiv'),
@@ -353,4 +331,4 @@ def load_dataset(dataset_name, split_edges=False, normalize=True, min_degree=Non
 
 
 if __name__ == '__main__':
-    load_dataset('arxiv')
+    load_dataset('cora')
