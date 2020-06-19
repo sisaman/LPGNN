@@ -83,25 +83,24 @@ def train_and_test(task, data, method, eps, hparams, logger, repeats):
 
 
 def batch_train_and_test(hparams):
-    for dataset_name in hparams.datasets:
-        data = load_dataset(dataset_name, split_edges=(hparams.task == 'link'), device=hparams.device)
-        for method in hparams.methods:
-            experiment_name = f'{hparams.task}_{dataset_name}_{method}'
-            with PandasLogger(
-                output_dir=hparams.output_dir,
-                experiment_name=experiment_name,
-                write_mode='replace'
-            ) as logger:
-                for eps in hparams.eps_list:
-                    train_and_test(
-                        task=hparams.task,
-                        data=data,
-                        method=method,
-                        eps=eps,
-                        hparams=hparams,
-                        repeats=hparams.repeats,
-                        logger=logger,
-                    )
+    data = load_dataset(hparams.dataset, split_edges=(hparams.task == 'link'), device=hparams.device)
+    for method in hparams.methods:
+        experiment_name = f'{hparams.task}_{hparams.dataset}_{method}'
+        with PandasLogger(
+            output_dir=hparams.output_dir,
+            experiment_name=experiment_name,
+            write_mode='replace'
+        ) as logger:
+            for eps in hparams.eps_list:
+                train_and_test(
+                    task=hparams.task,
+                    data=data,
+                    method=method,
+                    eps=eps,
+                    hparams=hparams,
+                    repeats=hparams.repeats,
+                    logger=logger,
+                )
 
 
 def main():
