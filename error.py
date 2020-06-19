@@ -7,7 +7,7 @@ from torch_geometric.nn import GCNConv
 from torch_geometric.utils import degree
 
 from datasets import load_dataset, get_available_datasets
-from loggers import PandasLogger
+from utils import PandasLogger
 from privacy import privatize, get_available_mechanisms
 
 
@@ -85,20 +85,14 @@ def batch_error_estimation(datasets, methods, eps_list, repeats, device, output_
 def main():
     seed_everything(12345)
 
-    # default and valid options
-    list_datasets = get_available_datasets()
-    list_methods = get_available_mechanisms()
-    default_output_dir = './results'
-    default_device = 'cuda'
-
     # parse arguments
     parser = ArgumentParser()
-    parser.add_argument('-d', '--datasets', nargs='*', choices=list_datasets)
-    parser.add_argument('-m', '--methods',  nargs='*', choices=list_methods)
-    parser.add_argument('-e', '--eps',      nargs='*', type=float, dest='eps_list')
+    parser.add_argument('-d', '--datasets', nargs='+', choices=get_available_datasets(), required=True)
+    parser.add_argument('-m', '--methods',  nargs='+', choices=get_available_mechanisms, required=True)
+    parser.add_argument('-e', '--eps',      nargs='+', type=float, dest='eps_list', required=True)
     parser.add_argument('-r', '--repeats',      type=int, default=1)
-    parser.add_argument('-o', '--output-dir',   type=str, default=default_output_dir)
-    parser.add_argument('--device',             type=str, default=default_device)
+    parser.add_argument('-o', '--output-dir',   type=str, default='./results')
+    parser.add_argument('--device',             type=str, default='cuda', choices=['cpu', 'cuda'])
     args = parser.parse_args()
     print(args)
 
