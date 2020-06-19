@@ -72,11 +72,7 @@ def train_and_test(task, data, method, eps, hparams, logger, repeats):
         print(Fore.BLUE + params_str + Style.RESET_ALL)
         logger.log_params(params)
 
-        if method == 'raw':
-            data_priv = data
-        else:
-            data_priv = privatize(data, method=method, eps=eps, pfr=1)
-
+        data_priv = privatize(data, method=method, eps=eps)
         t = GraphTask(logger, hparams)
         t.train(data_priv)
         t.test(data_priv)

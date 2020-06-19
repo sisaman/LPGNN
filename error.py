@@ -57,7 +57,7 @@ def error_estimation(dataset, method, eps, repeats, logger, device):
         print(Fore.BLUE + params_str + Style.RESET_ALL)
         logger.log_params(params)
 
-        data = privatize(dataset, method=method, eps=eps, pfr=1)
+        data = privatize(dataset, method=method, eps=eps)
         ErrorEstimation(data=data, raw_features=dataset.x, device=device).run(logger)
 
 
