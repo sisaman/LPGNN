@@ -88,7 +88,7 @@ def main():
     # parse arguments
     parser = ArgumentParser()
     parser.add_argument('-d', '--datasets', nargs='+', choices=get_available_datasets(), required=True)
-    parser.add_argument('-m', '--methods',  nargs='+', choices=get_available_mechanisms, required=True)
+    parser.add_argument('-m', '--methods',  nargs='+', choices=get_available_mechanisms(), required=True)
     parser.add_argument('-e', '--eps',      nargs='+', type=float, dest='eps_list', required=True)
     parser.add_argument('-r', '--repeats',      type=int, default=1)
     parser.add_argument('-o', '--output-dir',   type=str, default='./results')
