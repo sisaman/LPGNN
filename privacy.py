@@ -24,8 +24,8 @@ class Mechanism:
 class Laplace(Mechanism):
     def transform(self):
         scale = torch.ones_like(self.x) * (self.delta / self.eps)
-        x_priv = torch.distributions.Laplace(self.x, scale).sample()
-        return x_priv
+        y_star = torch.distributions.Laplace(self.x, scale).sample()
+        return y_star
 
 
 class PrivGraphConv(Mechanism):
@@ -34,9 +34,9 @@ class PrivGraphConv(Mechanism):
         p = (self.x - self.alpha) / self.delta
         p[:, (self.delta == 0)] = 0
         p = p * (exp - 1) / (exp + 1) + 1 / (exp + 1)
-        b = torch.bernoulli(p)
-        x_priv = ((b * (exp + 1) - 1) * self.delta) / (exp - 1) + self.alpha
-        return x_priv
+        y = torch.bernoulli(p)
+        y_star = ((y * (exp + 1) - 1) * self.delta) / (exp - 1) + self.alpha
+        return y_star
 
 
 class Piecewise(Mechanism):
@@ -67,9 +67,9 @@ class Piecewise(Mechanism):
         t += mask_middle * (torch.rand_like(t) * (R - L) + L)
         t += mask_right * (torch.rand_like(t) * (C - R) + R)
 
-        # unbiased data
-        x_priv = self.delta * (t + 1) / 2 + self.alpha
-        return x_priv
+        # unbias data
+        y_star = self.delta * (t + 1) / 2 + self.alpha
+        return y_star
 
 
 class PiecewiseMulti(Mechanism):
@@ -81,9 +81,9 @@ class PiecewiseMulti(Mechanism):
         sample = torch.cat([torch.randperm(d)[:k] for _ in range(n)]).view(n, k).to(self.x.device)
         mask = torch.zeros_like(self.x, dtype=torch.bool)
         mask.scatter_(dim=1, index=sample, value=True)
-        x_priv = Piecewise(x=self.x, eps=self.eps / k, alpha=self.alpha, delta=self.delta).transform()
-        x_priv = mask * x_priv * d / k
-        return x_priv
+        y_star = Piecewise(x=self.x, eps=self.eps / k, alpha=self.alpha, delta=self.delta).transform()
+        y_star = mask * y_star * d / k
+        return y_star
 
 
 class Hybrid(Mechanism):
@@ -95,8 +95,8 @@ class Hybrid(Mechanism):
         mask = torch.bernoulli(a).bool()
         pm = Piecewise(x=self.x, eps=self.eps, alpha=self.alpha, delta=self.delta)
         pgc = PrivGraphConv(x=self.x, eps=self.eps, alpha=self.alpha, delta=self.delta)
-        x_priv = mask * pm.transform() + (~mask) * pgc.transform()
-        return x_priv
+        y_star = mask * pm.transform() + (~mask) * pgc.transform()
+        return y_star
 
 
 available_mechanisms = {
@@ -115,23 +115,13 @@ def get_available_mechanisms():
     return list(available_mechanisms.keys())
 
 
-def privatize(data, method, eps=1, pfr=1):
+def privatize(data, method, eps):
+    mechanisms = {**available_mechanisms, **extra_mechanisms}
+
     # copy data to avoid changing the original
     data = Data(**dict(data()))
 
-    # indicate private features randomly
-    n_priv_features = int(pfr * data.num_features)
-    priv_features = torch.randperm(data.num_features)[:n_priv_features]
-    priv_mask = torch.zeros_like(data.x, dtype=torch.bool)
-    priv_mask[:, priv_features] = True
-
-    mechanisms = {**available_mechanisms, **extra_mechanisms}
-
-    if method == 'raw':
-        # just trim to non-private features
-        data.x = data.x[~priv_mask].view(data.num_nodes, -1)
-    else:
-        x_priv = mechanisms[method](x=data.x, eps=eps).transform()
-        data.x = priv_mask * x_priv + ~priv_mask * data.x
+    if method in mechanisms:
+        data.x = mechanisms[method](x=data.x, eps=eps).transform()
 
     return data
