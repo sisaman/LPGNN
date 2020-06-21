@@ -55,7 +55,7 @@ class GraphTask:
 
     def test(self, data):
         dataloader = GraphLoader(data)
-        self.trainer.test(test_dataloaders=dataloader)
+        self.trainer.test(test_dataloaders=dataloader, ckpt_path=None)
 
 
 def train_and_test(task, data, method, eps, hparams, logger, repeats):
@@ -78,23 +78,23 @@ def train_and_test(task, data, method, eps, hparams, logger, repeats):
         t.test(data_priv)
 
 
-def batch_train_and_test(hparams):
-    data = load_dataset(hparams.dataset, split_edges=(hparams.task == 'link'), device=hparams.device)
-    for method in hparams.methods:
-        experiment_name = f'{hparams.task}_{hparams.dataset}_{method}'
+def batch_train_and_test(args):
+    data = load_dataset(args.dataset, split_edges=(args.task == 'link'), device=args.device)
+    for method in args.methods:
+        experiment_name = f'{args.task}_{args.dataset}_{method}'
         with PandasLogger(
-            output_dir=hparams.output_dir,
+            output_dir=args.output_dir,
             experiment_name=experiment_name,
             write_mode='replace'
         ) as logger:
-            for eps in hparams.eps_list:
+            for eps in args.eps_list:
                 train_and_test(
-                    task=hparams.task,
+                    task=args.task,
                     data=data,
                     method=method,
                     eps=eps,
-                    hparams=hparams,
-                    repeats=hparams.repeats,
+                    hparams=args,
+                    repeats=args.repeats,
                     logger=logger,
                 )
 
@@ -106,7 +106,7 @@ def main():
     parser.add_argument('-t', '--task', type=str, choices=GraphTask.get_available_tasks(), required=True)
     parser.add_argument('-d', '--dataset', type=str, choices=get_available_datasets(), required=True)
     parser.add_argument('-m', '--methods', nargs='+', choices=get_available_mechanisms()+['raw'], required=True)
-    parser.add_argument('-e', '--eps', nargs='*', type=float, dest='eps_list')
+    parser.add_argument('-e', '--eps', nargs='*', type=float, dest='eps_list', default=[0])
     parser.add_argument('-r', '--repeats', type=int, default=10)
     parser.add_argument('-o', '--output-dir', type=str, default='./results')
     parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'])
@@ -114,6 +114,12 @@ def main():
     # add args based on the task
     temp_args, _ = parser.parse_known_args()
     parser = GraphTask.add_task_specific_args(task_name=temp_args.task, parent_parser=parser)
+
+    # check if eps > 0 for LDP methods
+    if len(set(temp_args.methods).intersection(get_available_mechanisms())) > 0:
+        for eps in temp_args.eps_list:
+            if eps <= 0:
+                parser.error('LDP methods require eps > 0.')
 
     args = parser.parse_args()
     print(args)
