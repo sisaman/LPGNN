@@ -9,7 +9,6 @@ import torch
 from torch_geometric.data import Data, InMemoryDataset, download_url, extract_zip
 from torch_geometric.datasets import Planetoid, Amazon, Coauthor, Flickr
 from torch_geometric.utils import to_undirected, negative_sampling, degree
-from ogb.nodeproppred import PygNodePropPredDataset
 
 
 class MUSAE(InMemoryDataset):
@@ -175,30 +174,6 @@ class Elliptic(InMemoryDataset):
         return f'Elliptic-Bitcoin({len(self)})'
 
 
-class OGBDataset(PygNodePropPredDataset):
-    def get(self, index):
-        data = super(OGBDataset, self).get(index)
-        data.y = data.y.squeeze(dim=1)
-        split_idx = self.get_idx_split()
-        train_idx, val_idx, test_idx = split_idx["train"], split_idx["valid"], split_idx["test"]
-        train_mask = torch.zeros(self.data.num_nodes, dtype=torch.bool)
-        val_mask = torch.zeros(self.data.num_nodes, dtype=torch.bool)
-        test_mask = torch.zeros(self.data.num_nodes, dtype=torch.bool)
-        train_mask[train_idx] = True
-        val_mask[val_idx] = True
-        test_mask[test_idx] = True
-        data.train_mask = train_mask
-        data.val_mask = val_mask
-        data.test_mask = test_mask
-        return data
-
-    def download(self):
-        super(OGBDataset, self).download()
-
-    def process(self):
-        super(OGBDataset, self).process()
-
-
 class GraphLoader:  # TODO: replace with PyG DataLoader
     def __init__(self, data):
         self.data = data
@@ -227,7 +202,6 @@ extra_datasets = {
     'amazon-computers': partial(Amazon, root='datasets/Amazon/computers', name='computers'),
     'facebook': partial(MUSAE, root='datasets/MUSAE', name='facebook'),
     'github': partial(MUSAE, root='datasets/MUSAE', name='github'),
-    'arxiv': partial(OGBDataset, root='datasets/OGB', name='ogbn-arxiv'),
     'coauthor-cs': partial(Coauthor, root='datasets/Coauthor/cs', name='cs'),
     'coauthor-ph': partial(Coauthor, root='datasets/Coauthor/ph', name='physics'),
 }
