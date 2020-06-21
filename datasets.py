@@ -8,7 +8,7 @@ import pandas as pd
 import torch
 from torch_geometric.data import Data, InMemoryDataset, download_url, extract_zip
 from torch_geometric.datasets import Planetoid, Amazon, Coauthor, Flickr
-from torch_geometric.utils import to_undirected, negative_sampling, degree
+from torch_geometric.utils import to_undirected, negative_sampling
 
 
 class MUSAE(InMemoryDataset):
@@ -268,7 +268,7 @@ def train_test_split_edges(data, val_ratio=0.05, test_ratio=0.1, rng=None):
     return data
 
 
-def load_dataset(dataset_name, split_edges=False, normalize=True, min_degree=None, device='cuda'):
+def load_dataset(dataset_name, split_edges=False, normalize=True, device='cuda'):
     datasets = {**available_datasets, **extra_datasets}
     dataset = datasets[dataset_name]()
     assert len(dataset) == 1
@@ -293,19 +293,7 @@ def load_dataset(dataset_name, split_edges=False, normalize=True, min_degree=Non
         data.x = (data.x - alpha) / delta
         data.x[:, (delta == 0)] = 0
 
-    if min_degree:
-        idx = data.edge_index[0]
-        deg = degree(idx, num_nodes=data.num_nodes).int()
-        if not split_edges:
-            data.train_mask = data.train_mask & (deg >= min_degree)
-            data.val_mask = data.val_mask & (deg >= min_degree)
-            data.test_mask = data.test_mask & (deg >= min_degree)
-
     if device == 'cuda' and torch.cuda.is_available():
         data = data.to('cuda')
 
     return data
-
-
-if __name__ == '__main__':
-    load_dataset('cora')
