@@ -1,6 +1,7 @@
 # When Differential Privacy Meets Graph Neural Networks
 
-This repository is the official implementation of [https://arxiv.org/abs/2006.05535](https://arxiv.org/abs/2006.05535). 
+This repository is the official implementation of the paper [When Differential Privacy Meets Graph Neural Networks](https://arxiv.org/abs/2006.05535).  
+By **Sina Sajadmanesh** and **Daniel Gatica-Perez**, Idiap Research Institute, EPFL. 
 
 > 📋Optional: include a graphic explaining your approach/main result, bibtex entry, link to demos, blog posts and tutorials
 
