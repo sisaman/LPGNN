@@ -8,8 +8,8 @@ from argparse import ArgumentParser
 import torch
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import EarlyStopping
-
-from datasets import load_dataset, GraphLoader, get_available_datasets
+from torch_geometric.data import DataLoader
+from datasets import load_dataset, get_available_datasets
 from privacy import privatize, get_available_mechanisms
 from models import NodeClassifier, LinkPredictor
 from utils import TrainOnlyProgressBar, PandasLogger
@@ -50,11 +50,11 @@ class GraphTask:
         if self.hparams.task == 'node':
             params['num_classes'] = data.num_classes
         model = self.task_models[self.hparams.task](**params, hparams=self.hparams)
-        dataloader = GraphLoader(data)
+        dataloader = DataLoader([data])
         self.trainer.fit(model, train_dataloader=dataloader, val_dataloaders=dataloader)
 
     def test(self, data):
-        dataloader = GraphLoader(data)
+        dataloader = DataLoader([data])
         self.trainer.test(test_dataloaders=dataloader, ckpt_path=None)
 
 

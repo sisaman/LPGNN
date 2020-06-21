@@ -11,6 +11,63 @@ from torch_geometric.datasets import Planetoid, Flickr
 from torch_geometric.utils import to_undirected, negative_sampling
 
 
+def train_test_split_nodes(data, val_ratio=.25, test_ratio=.25, rng=None):
+    n_val = int(val_ratio * data.num_nodes)
+    n_test = int(test_ratio * data.num_nodes)
+    perm = torch.randperm(data.num_nodes, generator=rng)
+    val_nodes = perm[:n_val]
+    test_nodes = perm[n_val:n_val + n_test]
+    train_nodes = perm[n_val + n_test:]
+    val_mask = torch.zeros(data.num_nodes, dtype=torch.bool)
+    val_mask[val_nodes] = True
+    test_mask = torch.zeros(data.num_nodes, dtype=torch.bool)
+    test_mask[test_nodes] = True
+    train_mask = torch.zeros(data.num_nodes, dtype=torch.bool)
+    train_mask[train_nodes] = True
+    data.val_mask = val_mask
+    data.test_mask = test_mask
+    data.train_mask = train_mask
+    return data
+
+
+def train_test_split_edges(data, val_ratio=0.05, test_ratio=0.1, rng=None):
+    assert 'batch' not in data  # No batch-mode.
+
+    row, col = data.edge_index
+    data.edge_index = None
+
+    # Return upper triangular portion.
+    mask = row < col
+    row, col = row[mask], col[mask]
+
+    n_v = int(math.floor(val_ratio * row.size(0)))
+    n_t = int(math.floor(test_ratio * row.size(0)))
+
+    # Positive edges.
+    perm = torch.randperm(row.size(0), generator=rng)
+    row, col = row[perm], col[perm]
+
+    r, c = row[:n_v], col[:n_v]
+    data.val_pos_edge_index = torch.stack([r, c], dim=0)
+    r, c = row[n_v:n_v + n_t], col[n_v:n_v + n_t]
+    data.test_pos_edge_index = torch.stack([r, c], dim=0)
+
+    r, c = row[n_v + n_t:], col[n_v + n_t:]
+    data.train_pos_edge_index = torch.stack([r, c], dim=0)
+    data.train_pos_edge_index = to_undirected(data.train_pos_edge_index)
+
+    neg_edge_index = negative_sampling(
+        edge_index=torch.stack([row, col], dim=0),
+        num_nodes=data.num_nodes,
+        num_neg_samples=n_v + n_t
+    )
+
+    data.val_neg_edge_index = neg_edge_index[:, :n_v]
+    data.test_neg_edge_index = neg_edge_index[:, n_v:]
+
+    return data
+
+
 class MUSAE(InMemoryDataset):
     url = 'https://raw.githubusercontent.com/benedekrozemberczki/karateclub/master/dataset/node_level'
     available_datasets = {
@@ -149,7 +206,6 @@ class Elliptic(InMemoryDataset):
         data = Data(num_nodes=num_nodes_with_class)
         seed = sum([ord(c) for c in 'bitcoin'])
         rng = torch.Generator().manual_seed(seed)
-        # noinspection PyTypeChecker
         data = train_test_split_nodes(data, rng=rng)
 
         val_mask = torch.zeros(num_nodes, dtype=torch.bool)
@@ -174,21 +230,6 @@ class Elliptic(InMemoryDataset):
         return f'Elliptic({len(self)})'
 
 
-# TODO: replace with PyG DataLoader
-class GraphLoader:
-    def __init__(self, data):
-        self.data = data
-
-    def __len__(self):
-        return 1
-
-    def __getitem__(self, idx):
-        if idx == 0:
-            return self.data
-        else:
-            raise IndexError
-
-
 available_datasets = {
     'cora': partial(Planetoid, root='datasets/Planetoid', name='cora'),
     'citeseer': partial(Planetoid, root='datasets/Planetoid', name='citeseer'),
@@ -202,79 +243,18 @@ def get_available_datasets():
     return list(available_datasets.keys())
 
 
-def train_test_split_nodes(data, val_ratio=.25, test_ratio=.25, rng=None):
-    n_val = int(val_ratio * data.num_nodes)
-    n_test = int(test_ratio * data.num_nodes)
-    perm = torch.randperm(data.num_nodes, generator=rng)
-    val_nodes = perm[:n_val]
-    test_nodes = perm[n_val:n_val + n_test]
-    train_nodes = perm[n_val + n_test:]
-    val_mask = torch.zeros(data.num_nodes, dtype=torch.bool)
-    val_mask[val_nodes] = True
-    test_mask = torch.zeros(data.num_nodes, dtype=torch.bool)
-    test_mask[test_nodes] = True
-    train_mask = torch.zeros(data.num_nodes, dtype=torch.bool)
-    train_mask[train_nodes] = True
-    data.val_mask = val_mask
-    data.test_mask = test_mask
-    data.train_mask = train_mask
-    return data
-
-
-def train_test_split_edges(data, val_ratio=0.05, test_ratio=0.1, rng=None):
-    assert 'batch' not in data  # No batch-mode.
-
-    row, col = data.edge_index
-    data.edge_index = None
-
-    # Return upper triangular portion.
-    mask = row < col
-    row, col = row[mask], col[mask]
-
-    n_v = int(math.floor(val_ratio * row.size(0)))
-    n_t = int(math.floor(test_ratio * row.size(0)))
-
-    # Positive edges.
-    perm = torch.randperm(row.size(0), generator=rng)
-    row, col = row[perm], col[perm]
-
-    r, c = row[:n_v], col[:n_v]
-    data.val_pos_edge_index = torch.stack([r, c], dim=0)
-    r, c = row[n_v:n_v + n_t], col[n_v:n_v + n_t]
-    data.test_pos_edge_index = torch.stack([r, c], dim=0)
-
-    r, c = row[n_v + n_t:], col[n_v + n_t:]
-    data.train_pos_edge_index = torch.stack([r, c], dim=0)
-    data.train_pos_edge_index = to_undirected(data.train_pos_edge_index)
-
-    neg_edge_index = negative_sampling(
-        edge_index=torch.stack([row, col], dim=0),
-        num_nodes=data.num_nodes,
-        num_neg_samples=n_v + n_t
-    )
-
-    data.val_neg_edge_index = neg_edge_index[:, :n_v]
-    data.test_neg_edge_index = neg_edge_index[:, n_v:]
-
-    return data
-
-
-def load_dataset(dataset_name, split_edges=False, normalize=True, device='cuda'):
+def load_dataset(dataset_name, split_edges=False, normalize=True, device='cpu'):
     dataset = available_datasets[dataset_name]()
-    assert len(dataset) == 1
-
     data = dataset[0]
     data.name = dataset_name
     data.num_classes = dataset.num_classes
-    seed = sum([ord(c) for c in dataset_name])
-    rng = torch.Generator().manual_seed(seed)
 
     if split_edges:
         data.train_mask = data.val_mask = data.test_mask = None
+        seed = sum([ord(c) for c in dataset_name])
+        rng = torch.Generator().manual_seed(seed)
         data = train_test_split_edges(data, val_ratio=0.05, test_ratio=0.1, rng=rng)
         data.edge_index = data.train_pos_edge_index
-    elif not hasattr(data, 'train_mask'):
-        data = train_test_split_nodes(data, val_ratio=.25, test_ratio=.25, rng=rng)
 
     if normalize:
         alpha = data.x.min(dim=0)[0]
