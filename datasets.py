@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import torch
 from torch_geometric.data import Data, InMemoryDataset, download_url, extract_zip
-from torch_geometric.datasets import Planetoid, Amazon, Coauthor, Flickr
+from torch_geometric.datasets import Planetoid, Flickr
 from torch_geometric.utils import to_undirected, negative_sampling
 
 
@@ -197,16 +197,6 @@ available_datasets = {
     'elliptic': partial(Elliptic, root='datasets/Elliptic'),
 }
 
-extra_datasets = {
-    'pubmed': partial(Planetoid, root='datasets/Planetoid', name='pubmed'),
-    'amazon-photo': partial(Amazon, root='datasets/Amazon/photo', name='photo'),
-    'amazon-computers': partial(Amazon, root='datasets/Amazon/computers', name='computers'),
-    'facebook': partial(MUSAE, root='datasets/MUSAE', name='facebook'),
-    'github': partial(MUSAE, root='datasets/MUSAE', name='github'),
-    'coauthor-cs': partial(Coauthor, root='datasets/Coauthor/cs', name='cs'),
-    'coauthor-ph': partial(Coauthor, root='datasets/Coauthor/ph', name='physics'),
-}
-
 
 def get_available_datasets():
     return list(available_datasets.keys())
@@ -270,8 +260,7 @@ def train_test_split_edges(data, val_ratio=0.05, test_ratio=0.1, rng=None):
 
 
 def load_dataset(dataset_name, split_edges=False, normalize=True, device='cuda'):
-    datasets = {**available_datasets, **extra_datasets}
-    dataset = datasets[dataset_name]()
+    dataset = available_datasets[dataset_name]()
     assert len(dataset) == 1
 
     data = dataset[0]
