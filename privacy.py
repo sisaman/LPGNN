@@ -72,42 +72,10 @@ class Piecewise(Mechanism):
         return y_star
 
 
-class PiecewiseMulti(Mechanism):
-    def transform(self):
-        n = self.x.size(0)
-        d = self.x.size(1)
-        # k = int(max(1, min(d, np.floor(eps / 2.5))))
-        k = 100
-        sample = torch.cat([torch.randperm(d)[:k] for _ in range(n)]).view(n, k).to(self.x.device)
-        mask = torch.zeros_like(self.x, dtype=torch.bool)
-        mask.scatter_(dim=1, index=sample, value=True)
-        y_star = Piecewise(x=self.x, eps=self.eps / k, alpha=self.alpha, delta=self.delta).transform()
-        y_star = mask * y_star * d / k
-        return y_star
-
-
-class Hybrid(Mechanism):
-    def transform(self):
-        eps_star = np.log(
-            (-5 + 2 * (6353 - 405 * np.sqrt(241)) ** (1 / 3) + 2 * (6353 + 405 * np.sqrt(241)) ** (1 / 3)) / 27
-        )
-        a = torch.zeros_like(self.x) + (self.eps > eps_star) * (1 - np.exp(-self.eps / 2))
-        mask = torch.bernoulli(a).bool()
-        pm = Piecewise(x=self.x, eps=self.eps, alpha=self.alpha, delta=self.delta)
-        pgc = PrivGraphConv(x=self.x, eps=self.eps, alpha=self.alpha, delta=self.delta)
-        y_star = mask * pm.transform() + (~mask) * pgc.transform()
-        return y_star
-
-
 available_mechanisms = {
     'pgc': PrivGraphConv,
     'pm': Piecewise,
     'lm': Laplace
-}
-
-extra_mechanisms = {
-    'hm': Hybrid,
-    'mpm': PiecewiseMulti
 }
 
 
@@ -116,12 +84,10 @@ def get_available_mechanisms():
 
 
 def privatize(data, method, eps):
-    mechanisms = {**available_mechanisms, **extra_mechanisms}
-
     # copy data to avoid changing the original
     data = Data(**dict(data()))
 
-    if method in mechanisms:
-        data.x = mechanisms[method](x=data.x, eps=eps).transform()
+    if method in available_mechanisms:
+        data.x = available_mechanisms[method](x=data.x, eps=eps).transform()
 
     return data
