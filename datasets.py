@@ -171,10 +171,11 @@ class Elliptic(InMemoryDataset):
         return [data]
 
     def __repr__(self):
-        return f'Elliptic-Bitcoin({len(self)})'
+        return f'Elliptic({len(self)})'
 
 
-class GraphLoader:  # TODO: replace with PyG DataLoader
+# TODO: replace with PyG DataLoader
+class GraphLoader:
     def __init__(self, data):
         self.data = data
 
