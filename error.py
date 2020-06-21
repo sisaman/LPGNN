@@ -41,9 +41,6 @@ class ErrorEstimation:
 
 
 def error_estimation(dataset, method, eps, repeats, logger, device):
-    if isinstance(dataset, str):
-        dataset = load_dataset(dataset, device=device)
-
     for run in range(repeats):
         params = {
             'task': 'error',
@@ -61,24 +58,24 @@ def error_estimation(dataset, method, eps, repeats, logger, device):
         ErrorEstimation(data=data, raw_features=dataset.x, device=device).run(logger)
 
 
-def batch_error_estimation(datasets, methods, eps_list, repeats, device, output_dir):
-    for dataset_name in datasets:
-        dataset = load_dataset(dataset_name).to(device)
-        for method in methods:
+def batch_error_estimation(args):
+    for dataset_name in args.datasets:
+        dataset = load_dataset(dataset_name, device=args.device)
+        for method in args.methods:
             experiment_name = f'error_{dataset_name}_{method}'
             with PandasLogger(
-                output_dir=output_dir,
+                output_dir=args.output_dir,
                 experiment_name=experiment_name,
                 write_mode='truncate'
             ) as logger:
-                for eps in eps_list:
+                for eps in args.eps_list:
                     error_estimation(
                         dataset=dataset,
                         method=method,
                         eps=eps,
-                        repeats=repeats,
+                        repeats=args.repeats,
                         logger=logger,
-                        device=device
+                        device=args.device
                     )
 
 
@@ -96,14 +93,7 @@ def main():
     args = parser.parse_args()
     print(args)
 
-    batch_error_estimation(
-        datasets=args.datasets,
-        methods=args.methods,
-        eps_list=args.eps_list,
-        repeats=args.repeats,
-        device=args.device,
-        output_dir=args.output_dir
-    )
+    batch_error_estimation(args)
 
 
 if __name__ == '__main__':
