@@ -5,6 +5,7 @@ logging.captureWarnings(True)
 from colorama import Fore, Style
 from argparse import ArgumentParser
 
+import time
 import torch
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import EarlyStopping
@@ -124,7 +125,10 @@ def main():
     args = parser.parse_args()
     print(args)
 
+    start = time.time()
     batch_train_and_test(args)
+    end = time.time()
+    print('Total time spent:', end - start, 'seconds.')
 
 
 if __name__ == '__main__':
