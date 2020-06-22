@@ -133,8 +133,12 @@ class MUSAE(InMemoryDataset):
                 x = pd.read_csv(file).drop_duplicates()
                 x = x.pivot(index='node_id', columns='feature_id', values='value').fillna(0)
                 x = torch.from_numpy(x.to_numpy()).float()
-
-        return [Data(x=x, edge_index=edge_index, y=y, num_nodes=num_nodes)]
+        
+        data = Data(x=x, edge_index=edge_index, y=y, num_nodes=num_nodes)
+        seed = sum([ord(c) for c in 'musae'])
+        rng = torch.Generator().manual_seed(seed)
+        data = train_test_split_nodes(data, rng=rng)
+        return [data]
 
     def __repr__(self):
         return 'MUSAE-{}({})'.format(self.name, len(self))
