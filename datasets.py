@@ -184,17 +184,17 @@ class Elliptic(InMemoryDataset):
         torch.save(self.collate(data_list), self.processed_paths[0])
 
     def read_elliptic(self):
-        file_features = osp.join(self.raw_dir, 'elliptic_txs_features.csv')
+        file_features = osp.join(self.raw_dir, 'elliptic_bitcoin_dataset', 'elliptic_txs_features.csv')
         df = pd.read_csv(file_features, index_col=0, header=None)
         x = torch.from_numpy(df.to_numpy()).float()
 
-        file_classes = osp.join(self.raw_dir, 'elliptic_txs_classes.csv')
+        file_classes = osp.join(self.raw_dir, 'elliptic_bitcoin_dataset', 'elliptic_txs_classes.csv')
         df = pd.read_csv(file_classes, index_col='txId', na_values='unknown') - 1
         y = torch.from_numpy(df.to_numpy()).view(-1).float()
         num_nodes = y.size(0)
 
         df_idx = df.reset_index().reset_index().drop(columns='class').set_index('txId')
-        file_edges = osp.join(self.raw_dir, 'elliptic_txs_edgelist.csv')
+        file_edges = osp.join(self.raw_dir, 'elliptic_bitcoin_dataset', 'elliptic_txs_edgelist.csv')
         df = pd.read_csv(file_edges).join(df_idx, on='txId1', how='inner')
         df = df.join(df_idx, on='txId2', how='inner', rsuffix='2').drop(columns=['txId1', 'txId2'])
         edge_index = torch.from_numpy(df.to_numpy()).t().contiguous()
