@@ -10,7 +10,7 @@ from torch_geometric.nn import VGAE
 
 
 class GCN(torch.nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim, dropout, inductive=False):
+    def __init__(self, input_dim, hidden_dim, output_dim, dropout, inductive=False):
         super().__init__()
         self.conv1 = GCNConv(input_dim, hidden_dim, cached=not inductive)
         self.conv2 = GCNConv(hidden_dim, output_dim, cached=not inductive)
@@ -26,17 +26,19 @@ class GCN(torch.nn.Module):
 
 
 class GraphEncoder(torch.nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, inductive=False):
+    def __init__(self, input_dim, hidden_dim, output_dim, dropout, inductive=False):
         super().__init__()
         self.conv = GCNConv(input_dim, hidden_dim, cached=not inductive)
         self.bn = BatchNorm1d(hidden_dim)
         self.conv_mu = GCNConv(hidden_dim, output_dim, cached=not inductive)
         self.conv_logvar = GCNConv(hidden_dim, output_dim, cached=not inductive)
+        self.dropout = dropout
 
     def forward(self, x, edge_index):
         x = self.conv(x, edge_index)
         x = self.bn(x)
         x = F.relu(x)
+        x = F.dropout(x, p=self.dropout, training=self.training)
         return self.conv_mu(x, edge_index), self.conv_logvar(x, edge_index)
 
 
@@ -59,8 +61,8 @@ class NodeClassifier(LightningModule):
         self.hparams = hparams
         self.model = GCN(
             input_dim=input_dim,
-            output_dim=num_classes,
             hidden_dim=hparams.hidden_dim,
+            output_dim=num_classes,
             dropout=hparams.dropout,
             inductive=False
         )
@@ -107,6 +109,7 @@ class LinkPredictor(LightningModule):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
         parser.add_argument('--encoder-hidden-dim', type=int, default=32)
         parser.add_argument('--encoder-output-dim', type=int, default=16)
+        parser.add_argument('--dropout', type=float, default=0)
         parser.add_argument('--learning-rate', type=float, default=0.01)
         parser.add_argument('--weight-decay', type=float, default=0.0)
         parser.add_argument('--min-epochs', type=int, default=100)
@@ -123,7 +126,8 @@ class LinkPredictor(LightningModule):
         encoder = GraphEncoder(
             input_dim=input_dim,
             hidden_dim=hparams.encoder_hidden_dim,
-            output_dim=hparams.encoder_output_dim
+            output_dim=hparams.encoder_output_dim,
+            dropout=hparams.dropout
         )
 
         self.model = VGAE(encoder=encoder)
