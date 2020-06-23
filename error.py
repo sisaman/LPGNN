@@ -1,13 +1,12 @@
 from argparse import ArgumentParser
 
 import torch
-from colorama import Fore, Style
 from pytorch_lightning import seed_everything
 from torch_geometric.nn import GCNConv
 from torch_geometric.utils import degree
 
 from datasets import load_dataset, get_available_datasets
-from utils import PandasLogger
+from utils import PandasLogger, TermColors
 from privacy import privatize, get_available_mechanisms
 
 
@@ -51,7 +50,7 @@ def error_estimation(dataset, method, eps, repeats, logger, device):
         }
 
         params_str = ' | '.join([f'{key}={val}' for key, val in params.items()])
-        print(Fore.BLUE + params_str + Style.RESET_ALL)
+        print(TermColors.FG.green + params_str + TermColors.reset)
         logger.log_params(params)
 
         data = privatize(dataset, method=method, eps=eps)

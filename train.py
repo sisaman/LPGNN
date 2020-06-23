@@ -1,8 +1,6 @@
 import logging
-
 logging.captureWarnings(True)
 
-from colorama import Fore, Style
 from argparse import ArgumentParser
 
 import time
@@ -13,7 +11,7 @@ from torch_geometric.data import DataLoader
 from datasets import load_dataset, get_available_datasets
 from privacy import privatize, get_available_mechanisms
 from models import NodeClassifier, LinkPredictor
-from utils import TrainOnlyProgressBar, PandasLogger
+from utils import TrainOnlyProgressBar, PandasLogger, TermColors
 
 
 class GraphTask:
@@ -70,7 +68,7 @@ def train_and_test(task, data, method, eps, hparams, logger, repeats):
         }
 
         params_str = ' | '.join([f'{key}={val}' for key, val in params.items()])
-        print(Fore.BLUE + params_str + Style.RESET_ALL)
+        print(TermColors.FG.green + params_str + TermColors.reset)
         logger.log_params(params)
 
         data_priv = privatize(data, method=method, eps=eps)
