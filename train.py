@@ -1,4 +1,5 @@
 import logging
+
 logging.captureWarnings(True)
 
 from argparse import ArgumentParser
@@ -82,9 +83,9 @@ def batch_train_and_test(args):
     for method in args.methods:
         experiment_name = f'{args.task}_{args.dataset}_{method}'
         with PandasLogger(
-            output_dir=args.output_dir,
-            experiment_name=experiment_name,
-            write_mode='replace'
+                output_dir=args.output_dir,
+                experiment_name=experiment_name,
+                write_mode='replace'
         ) as logger:
             for eps in args.eps_list:
                 train_and_test(
@@ -102,28 +103,32 @@ def main():
     seed_everything(12345)
     parser = ArgumentParser()
 
-    parser.add_argument('-t', '--task', type=str, choices=GraphTask.get_available_tasks(), required=True, 
-        help='The graph learning task. Either "node" for node classification, or "link" for link prediction.'
-    )
+    parser.add_argument('-t', '--task', type=str, choices=GraphTask.get_available_tasks(), required=True,
+                        help='The graph learning task. Either "node" for node classification, '
+                             'or "link" for link prediction.'
+                        )
     parser.add_argument('-d', '--dataset', type=str, choices=get_available_datasets(), required=True,
-        help='The dataset to train on. One of "citeseer", "cora", "elliptic", "flickr", and "twitch".'
-    )
-    parser.add_argument('-m', '--methods', nargs='+', choices=get_available_mechanisms()+['raw'], required=True, 
-        help='The list of mechanisms to perturb node features. Can choose "raw" to use original features,'
-        'or "pgc" for Private Graph Convolution, "pm" for Piecewise Mechanism, and "lm" for Laplace Mechanism, as local differentially private algorithms.'
-    )
-    parser.add_argument('-e', '--eps', nargs='*', type=float, dest='eps_list', default=[0], 
-        help='The list of epsilon values for LDP mechanisms. The values must be greater than zero. The "raw" method does not support this options.'
-    )
-    parser.add_argument('-r', '--repeats', type=int, default=10, 
-        help='The number of repeating the experiment. Defaults to 10.'
-    )
-    parser.add_argument('-o', '--output-dir', type=str, default='./results', 
-        help='The path to store the results. Defaults to "./results".'
-    )
-    parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'], 
-        help='The device used for the training. Either "cpu" or "cuda". Defaults to "cuda".'
-    )
+                        help='The dataset to train on. One of "citeseer", "cora", "elliptic", "flickr", and "twitch".'
+                        )
+    parser.add_argument('-m', '--methods', nargs='+', choices=get_available_mechanisms() + ['raw'], required=True,
+                        help='The list of mechanisms to perturb node features. '
+                             'Can choose "raw" to use original features, or "pgc" for Private Graph Convolution, '
+                             '"pm" for Piecewise Mechanism, and "lm" for Laplace Mechanism, '
+                             'as local differentially private algorithms.'
+                        )
+    parser.add_argument('-e', '--eps', nargs='*', type=float, dest='eps_list', default=[0],
+                        help='The list of epsilon values for LDP mechanisms. The values must be greater than zero. '
+                             'The "raw" method does not support this options.'
+                        )
+    parser.add_argument('-r', '--repeats', type=int, default=10,
+                        help='The number of repeating the experiment. Defaults to 10.'
+                        )
+    parser.add_argument('-o', '--output-dir', type=str, default='./results',
+                        help='The path to store the results. Defaults to "./results".'
+                        )
+    parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'],
+                        help='The device used for the training. Either "cpu" or "cuda". Defaults to "cuda".'
+                        )
 
     # add args based on the task
     temp_args, _ = parser.parse_known_args()
