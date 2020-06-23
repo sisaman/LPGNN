@@ -15,7 +15,6 @@ The following packages need to be installed:
 - [Pandas](https://pandas.pydata.org/pandas-docs/stable/getting_started/install.html) >= 1.0.5
 - [Numpy](https://numpy.org/install/) >= 1.18.5
 
-> 📋Describe how to set up the environment, e.g. pip/conda/docker commands, download datasets, etc...
 
 ## Training
 
