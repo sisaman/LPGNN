@@ -3,18 +3,17 @@
 This repository is the official implementation of the paper [When Differential Privacy Meets Graph Neural Networks](https://arxiv.org/abs/2006.05535).  
 By **Sina Sajadmanesh** and **Daniel Gatica-Perez**, Idiap Research Institute, EPFL. 
 
-> 📋Optional: include a graphic explaining your approach/main result, bibtex entry, link to demos, blog posts and tutorials
 
 ## Requirements
 
-To install requirements:
+The following packages need to be installed:  
 
-1. Install [PyTorch](https://pytorch.org/get-started/locally/)
-2. Install [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html)
-3. Install the rest of the requirements via pip:
-```setup
-pip install -r requirements.txt
-```
+- [Python](https://www.python.org/downloads/) 3.7
+- [PyTorch](https://pytorch.org/get-started/locally/) >= 1.5.0
+- [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html) >= 1.5.0
+- [PyTorch Lightning](https://github.com/PytorchLightning/pytorch-lightning) >= 0.8.1
+- [Pandas](https://pandas.pydata.org/pandas-docs/stable/getting_started/install.html) >= 1.0.5
+- [Numpy](https://numpy.org/install/) >= 1.18.5
 
 > 📋Describe how to set up the environment, e.g. pip/conda/docker commands, download datasets, etc...
 
