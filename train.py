@@ -46,10 +46,11 @@ class GraphTask:
         )
 
     def train(self, data):
-        params = {'input_dim': data.num_features}
+        params = vars(self.hparams)
+        params['input_dim'] = data.num_features
         if self.hparams.task == 'node':
             params['num_classes'] = data.num_classes
-        model = self.task_models[self.hparams.task](**params, hparams=self.hparams)
+        model = self.task_models[self.hparams.task](**params)
         dataloader = DataLoader([data])
         self.trainer.fit(model, train_dataloader=dataloader, val_dataloaders=dataloader)
 

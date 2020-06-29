@@ -48,22 +48,26 @@ class NodeClassifier(LightningModule):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
         parser.add_argument('--hidden-dim', type=int, default=16)
         parser.add_argument('--dropout', type=float, default=0.5)
-        parser.add_argument('--learning-rate', type=float, default=0.01)
-        parser.add_argument('--weight-decay', type=float, default=5e-4)
+        parser.add_argument('--learning-rate', type=float, default=0.001)
+        parser.add_argument('--weight-decay', type=float, default=0)
         parser.add_argument('--min-epochs', type=int, default=10)
         parser.add_argument('--max-epochs', type=int, default=500)
         parser.add_argument('--min-delta', type=float, default=0.0)
         parser.add_argument('--patience', type=int, default=20)
         return parser
 
-    def __init__(self, num_classes, input_dim, hparams):
+    def __init__(self, num_classes, input_dim, hidden_dim=16,
+                 dropout=0.5, learning_rate=0.001, weight_decay=0, **kwargs):
         super().__init__()
-        self.hparams = hparams
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.save_hyperparameters()
+
         self.model = GCN(
             input_dim=input_dim,
-            hidden_dim=hparams.hidden_dim,
+            hidden_dim=hidden_dim,
             output_dim=num_classes,
-            dropout=hparams.dropout,
+            dropout=dropout,
             inductive=False
         )
 
@@ -71,7 +75,7 @@ class NodeClassifier(LightningModule):
         return self.model(data.x, data.edge_index)
 
     def configure_optimizers(self):
-        return Adam(self.parameters(), lr=self.hparams.learning_rate, weight_decay=self.hparams.weight_decay)
+        return Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
 
     def training_step(self, data, index):
         out = self(data)
@@ -110,7 +114,7 @@ class LinkPredictor(LightningModule):
         parser.add_argument('--encoder-hidden-dim', type=int, default=32)
         parser.add_argument('--encoder-output-dim', type=int, default=16)
         parser.add_argument('--dropout', type=float, default=0)
-        parser.add_argument('--learning-rate', type=float, default=0.01)
+        parser.add_argument('--learning-rate', type=float, default=0.001)
         parser.add_argument('--weight-decay', type=float, default=0.0)
         parser.add_argument('--min-epochs', type=int, default=100)
         parser.add_argument('--max-epochs', type=int, default=500)
@@ -119,15 +123,18 @@ class LinkPredictor(LightningModule):
         parser.add_argument('--patience', type=int, default=10)
         return parser
 
-    def __init__(self, input_dim, hparams):
+    def __init__(self, input_dim, encoder_hidden_dim=32, encoder_output_dim=16,
+                 dropout=0, learning_rate=0.001, weight_decay=0, **kwargs):
         super().__init__()
-        self.hparams = hparams
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.save_hyperparameters()
 
         encoder = GraphEncoder(
             input_dim=input_dim,
-            hidden_dim=hparams.encoder_hidden_dim,
-            output_dim=hparams.encoder_output_dim,
-            dropout=hparams.dropout
+            hidden_dim=encoder_hidden_dim,
+            output_dim=encoder_output_dim,
+            dropout=dropout
         )
 
         self.model = VGAE(encoder=encoder)
@@ -138,7 +145,7 @@ class LinkPredictor(LightningModule):
         return x
 
     def configure_optimizers(self):
-        return Adam(self.parameters(), lr=self.hparams.learning_rate, weight_decay=self.hparams.weight_decay)
+        return Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
 
     def model_loss(self, data, pos_edge_index):
         z = self(data)
