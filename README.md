@@ -26,6 +26,19 @@ If you want to individually train and evaluate the models on any of the datasets
 ```
 python train.py [OPTIONS...]
 ```
+Required arguments:  
+```
+-t, --task        <task name>               The graph learning task. Either "node" for node classification, or "link" for link prediction.
+-d, --dataset     <dataset name>            The dataset to train on. One of "citeseer", "cora", "elliptic", "flickr", or "twitch".
+-m, --methods     <list of methods>         The list of mechanisms to perturb node features. Can be "raw" to use original features, or local differentially private algorithms, including "pgc" for Private Graph Convolution, "pm" for Piecewise Mechanism, and "lm" for Laplace Mechanism.
+-e, --eps         <list of epsilon values>  The list of epsilon values for LDP mechanisms. The values must be greater than zero. The "raw" method does not support this option.
+```
+Optional arguments:
+```
+-r, --repeats     <number of runs>          The number of times the experiment is repeated. Default is 10.
+-o, --output-dir  <path>                    The path to store the results. Default is "./results".
+    --device      <device>                  The device used for the training. Either "cpu" or "cuda". Default is "cuda".
+```
 
 ### Measuring the estimation error
 
