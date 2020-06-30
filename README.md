@@ -6,9 +6,7 @@ By **Sina Sajadmanesh** and **Daniel Gatica-Perez**, Idiap Research Institute, E
 
 ## Requirements
 
-The following packages need to be installed:  
-
-- [Python](https://www.python.org/downloads/) 3.7
+This code is implemented in Python 3.7, and requires the following packages to be installed:  
 - [PyTorch](https://pytorch.org/get-started/locally/) >= 1.5.0
 - [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html) >= 1.5.0
 - [PyTorch Lightning](https://github.com/PytorchLightning/pytorch-lightning) >= 0.8.2
@@ -19,8 +17,15 @@ The following packages need to be installed:
 ## Usage
 
 ### Replicating the paper's results
+In order to replicate our experiments and reproduce the paper's results, you must do the following steps:  
+1. Run ``experiments.sh``. All the datasets will be downloaded automatically into ``datasets`` folder, and the results will be stored in ``results`` directory.
+2. Go through ``results.ipynb`` notebook to visualize the results.
 
 ### Training and evaluating the paper's models
+If you want to individually train and evaluate the models on any of the datasets mentioned in the paper, run the following command:  
+```
+python train.py [OPTIONS...]
+```
 
 ### Measuring the estimation error
 
