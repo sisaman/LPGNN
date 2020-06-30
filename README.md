@@ -21,7 +21,7 @@ In order to replicate our experiments and reproduce the paper's results, you mus
 1. Run ``experiments.sh``. All the datasets will be downloaded automatically into ``datasets`` folder, and the results will be stored in ``results`` directory.
 2. Go through ``results.ipynb`` notebook to visualize the results.
 
-### Training and evaluating the paper's models
+### Training and evaluating individual models
 If you want to individually train and evaluate the models on any of the datasets mentioned in the paper, run the following command:  
 ```
 python train.py [OPTIONS...]
