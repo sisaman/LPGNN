@@ -28,29 +28,41 @@ python train.py [OPTIONS...]
 ```
 Required arguments:  
 ```
--t, --task          <string>            Graph learning task. Either "node" for node classification, or "link" for link prediction.
--d, --dataset       <string>            Dataset to train on. One of "citeseer", "cora", "elliptic", "flickr", or "twitch".
--m, --methods       <string sequence>   List of mechanisms to perturb node features. Can be "raw" to use original features, or local differentially private algorithms, including "pgc" for Private Graph Convolution, "pm" for Piecewise Mechanism, and "lm" for Laplace Mechanism.
--e, --eps           <float sequence>    List of epsilon values for LDP mechanisms. The values must be greater than zero. The "raw" method does not support this option.
+-t, --task      <string>            Graph learning task. Either "node" for node classification, or "link" for link prediction.
+-d, --dataset   <string>            Dataset to train on. One of "citeseer", "cora", "elliptic", "flickr", or "twitch".
+-m, --methods   <string sequence>   List of mechanisms to perturb node features. Can be "raw" to use original features, or local differentially private algorithms, including "pgc" for Private Graph Convolution, "pm" for Piecewise Mechanism, and "lm" for Laplace Mechanism.
+-e, --eps       <float sequence>    List of epsilon values for LDP mechanisms. The values must be greater than zero. The "raw" method does not support this option.
 ```
 Optional arguments:
 ```
--r, --repeats       <integer>           Number of times the experiment is repeated. Default is 10.
--o, --output-dir    <path>              Path to store the results. Default is "./results".
-    --device        <string>            Device used for the training. Either "cpu" or "cuda". Default is "cuda".
+-r, --repeats       <integer>   Number of times the experiment is repeated. Default is 10.
+-o, --output-dir    <path>      Path to store the results. Default is "./results".
+    --device        <string>    Device used for the training. Either "cpu" or "cuda". Default is "cuda".
 ```
 Optional arguments for node classification (with ``python train.py --task node``)
 ```
-    --hidden-dim    <integer>           Dimension of the hidden layer of the GCN. Default is 16.
-    --dropout       <float>             Rate of dropout between zero and one. Default is 0.5.
-    --learning-rate <float>             Initial learning rate for the Adam optimizer. Default is 0.001.
-    --weight-decay  <float>             Weight decay (L2 penalty) for the Adam optimizer. Default is 0.
-    --min-epochs    <integer>           Minimum number of training epochs. Default is 10.
-    --max-epochs    <integer>           Maximum number of training epochs. Default is 500.
-    --min-delta     <float>             Minimum change in the validation loss to qualify as an improvement in the early stopping, i.e. an absolute change of less than min-delta, will count as no improvement. Default is 0.
-    --patience      <integer>           Number of validation epochs with no improvement after which training will be stopped. Default is 20.
+    --hidden-dim    <integer>   Dimension of the hidden layer of the GCN. Default is 16.
+    --dropout       <float>     Rate of dropout between zero and one. Default is 0.5.
+    --learning-rate <float>     Initial learning rate for the Adam optimizer. Default is 0.001.
+    --weight-decay  <float>     Weight decay (L2 penalty) for the Adam optimizer. Default is 0.
+    --min-epochs    <integer>   Minimum number of training epochs. Default is 10.
+    --max-epochs    <integer>   Maximum number of training epochs. Default is 500.
+    --min-delta     <float>     Minimum change in the validation loss to qualify as an improvement in the early stopping, i.e. an absolute change of less than min-delta, will count as no improvement. Default is 0.
+    --patience      <integer>   Number of validation epochs with no improvement after which training will be stopped. Default is 20.
 ```
 Optional arguments for link prediction (with ``python train.py --task link``)
+```
+    --encoder-hidden-dim        <integer>   Dimension of the hidden layer of the VGAE encoder. Default is 32.
+    --encoder-output-dim        <integer>   Dimension of the output layer of the VGAE encoder. Default is 16.
+    --dropout                   <float>     Rate of dropout between zero and one. Default is 0.
+    --learning-rate             <float>     Initial learning rate for the Adam optimizer. Default is 0.001.
+    --weight-decay              <float>     Weight decay (L2 penalty) for the Adam optimizer. Default is 0.
+    --min-epochs                <integer>   Minimum number of training epochs. Default is 100.
+    --max-epochs                <integer>   Maximum number of training epochs. Default is 500.
+    --min-delta                 <float>     Minimum change in the validation loss to qualify as an improvement in the early stopping, i.e. an absolute change of less than min-delta, will count as no improvement. Default is 0.
+    --patience                  <integer>   Number of validation epochs with no improvement after which training will be stopped. Default is 10.
+    --check-val-every-n-epoch   <integer>   Evaluate validation loss every n train epochs. Default is 10.
+```
 
 ### Measuring the estimation error
 
