@@ -11,7 +11,7 @@ The following packages need to be installed:
 - [Python](https://www.python.org/downloads/) 3.7
 - [PyTorch](https://pytorch.org/get-started/locally/) >= 1.5.0
 - [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html) >= 1.5.0
-- [PyTorch Lightning](https://github.com/PytorchLightning/pytorch-lightning) >= 0.8.1
+- [PyTorch Lightning](https://github.com/PytorchLightning/pytorch-lightning) >= 0.8.2
 - [Pandas](https://pandas.pydata.org/pandas-docs/stable/getting_started/install.html) >= 1.0.5
 - [Numpy](https://numpy.org/install/) >= 1.18.5
 
