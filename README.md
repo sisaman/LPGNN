@@ -63,6 +63,8 @@ Optional arguments for link prediction (with ``python train.py --task link``)
 --patience                  <integer>   Number of validation epochs with no improvement after which training will be stopped. Default is 10.
 --check-val-every-n-epoch   <integer>   Evaluate validation loss every n train epochs. Default is 10.
 ```
+The test result for each method will be saved as a pickled Pandas dataframe in ``<output-dir>`` directory under the name `<task>_<dataset>_<method>.pkl`.
+
 #### Example
 The followig command trains a GCN for node classification on Cora dataset with raw features, an initial learning rate of 0.01, and a weight decay of 0.0001, and stores the test result in ``./temp`` folder:  
 ```
@@ -72,23 +74,6 @@ The command below trains different VGAE models with an encoder output dimension 
 ```
 python train.py -t link -d twitch -m pgc pm -e 1 5 9 --device cpu ---encoder-output-dim 32
 ```
-### Measuring the estimation error
-
-```train
-python train.py --input-data <path_to_data> --alpha 10 --beta 20
-```
-
-
-## Results
-
-Below is a summary of the performance of our differentially private GNN with different values of epsilon:
-
-
-| Model name         | Top 1 Accuracy  | Top 5 Accuracy |
-| ------------------ |---------------- | -------------- |
-| My awesome model   |     85%         |      95%       |
-
-
 
 ## Citation
 
