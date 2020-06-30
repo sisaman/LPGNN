@@ -63,7 +63,15 @@ Optional arguments for link prediction (with ``python train.py --task link``)
 --patience                  <integer>   Number of validation epochs with no improvement after which training will be stopped. Default is 10.
 --check-val-every-n-epoch   <integer>   Evaluate validation loss every n train epochs. Default is 10.
 ```
-
+#### Example
+The followig command trains a GCN for node classification on Cora dataset with raw features, an initial learning rate of 0.01, and a weight decay of 0.0001, and stores the test result in ``./temp`` folder:  
+```
+python train.py -t node -d cora -m raw -o temp --learning-rate 0.01 --weight-decay 0.0001
+```
+The command below trains different VGAE models with an encoder output dimension of 32 for link prediction on Twitch dataset for each PGC and PM feature perturbation methods and for each epsilon value of 1, 5, and 9 using the device "cpu":  
+```
+python train.py -t link -d twitch -m pgc pm -e 1 5 9 --device cpu ---encoder-output-dim 32
+```
 ### Measuring the estimation error
 
 ```train
