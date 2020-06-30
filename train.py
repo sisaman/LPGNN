@@ -122,19 +122,19 @@ def main():
                              'The "raw" method does not support this options.'
                         )
     parser.add_argument('-r', '--repeats', type=int, default=10,
-                        help='The number of repeating the experiment. Defaults to 10.'
+                        help='The number of repeating the experiment. Default is 10.'
                         )
     parser.add_argument('-o', '--output-dir', type=str, default='./results',
-                        help='The path to store the results. Defaults to "./results".'
+                        help='The path to store the results. Default is "./results".'
                         )
     parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'],
-                        help='The device used for the training. Either "cpu" or "cuda". Defaults to "cuda".'
+                        help='The device used for the training. Either "cpu" or "cuda". Default is "cuda".'
                         )
 
     # add args based on the task
     temp_args, _ = parser.parse_known_args()
     parser = GraphTask.add_task_specific_args(task_name=temp_args.task, parent_parser=parser)
-
+        
     # check if eps > 0 for LDP methods
     if len(set(temp_args.methods).intersection(get_available_mechanisms())) > 0:
         for eps in temp_args.eps_list:
