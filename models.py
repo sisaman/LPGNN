@@ -3,7 +3,6 @@ from argparse import ArgumentParser
 import torch
 import torch.nn.functional as F
 from pytorch_lightning import LightningModule
-from torch.nn import BatchNorm1d
 from torch.optim import Adam
 from torch_geometric.nn import GCNConv
 from torch_geometric.nn import VGAE
@@ -18,7 +17,7 @@ class GCN(torch.nn.Module):
 
     def forward(self, x, edge_index):
         x = self.conv1(x, edge_index)
-        x = torch.relu(x)
+        x = torch.selu(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
         x = self.conv2(x, edge_index)
         x = F.log_softmax(x, dim=1)
@@ -29,15 +28,14 @@ class GraphEncoder(torch.nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, dropout, inductive=False):
         super().__init__()
         self.conv = GCNConv(input_dim, hidden_dim, cached=not inductive)
-        self.bn = BatchNorm1d(hidden_dim)
         self.conv_mu = GCNConv(hidden_dim, output_dim, cached=not inductive)
         self.conv_logvar = GCNConv(hidden_dim, output_dim, cached=not inductive)
         self.dropout = dropout
 
     def forward(self, x, edge_index):
         x = self.conv(x, edge_index)
-        x = self.bn(x)
-        x = F.relu(x)
+        # x = self.bn(x)
+        x = F.selu(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
         return self.conv_mu(x, edge_index), self.conv_logvar(x, edge_index)
 
