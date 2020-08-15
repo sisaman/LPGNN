@@ -265,7 +265,7 @@ def load_dataset(dataset_name, split_edges=False, normalize=True, device='cpu'):
         beta = data.x.max(dim=0)[0]
         delta = beta - alpha
         data.x = (data.x - alpha) / delta
-        data.x[:, (delta == 0)] = 0
+        data.x = data.x[:, torch.nonzero(delta).squeeze()]  # remove features with delta = 0
 
     if device == 'cuda' and torch.cuda.is_available():
         data = data.to('cuda')
