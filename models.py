@@ -34,7 +34,6 @@ class GraphEncoder(torch.nn.Module):
 
     def forward(self, x, edge_index):
         x = self.conv(x, edge_index)
-        # x = self.bn(x)
         x = F.selu(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
         return self.conv_mu(x, edge_index), self.conv_logvar(x, edge_index)
@@ -78,7 +77,8 @@ class NodeClassifier(LightningModule):
     def training_step(self, data, index):
         out = self(data)
         loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask])
-        return {'loss': loss}
+        log = {'loss': loss}
+        return {'loss': loss, 'log': log}
 
     def validation_step(self, data, index):
         out = self(data)
@@ -88,7 +88,7 @@ class NodeClassifier(LightningModule):
     def validation_epoch_end(self, outputs):
         avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean().item()
         logs = {'val_loss': avg_loss}
-        return {'val_loss': avg_loss, 'progress_bar': logs}
+        return {'val_loss': avg_loss, 'progress_bar': logs, 'log': logs}
 
     def test_step(self, data, index):
         out = self(data)
@@ -152,7 +152,8 @@ class LinkPredictor(LightningModule):
 
     def training_step(self, data, index):
         loss = self.model_loss(data, data.train_pos_edge_index)
-        return {'loss': loss}
+        log = {'loss': loss}
+        return {'loss': loss, 'log': log}
 
     def validation_step(self, data, index):
         loss = self.model_loss(data, data.val_pos_edge_index)
@@ -160,8 +161,8 @@ class LinkPredictor(LightningModule):
 
     def validation_epoch_end(self, outputs):
         avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean().item()
-        log = {'val_loss': avg_loss}
-        return {'val_loss': avg_loss, 'progress_bar': log}
+        logs = {'val_loss': avg_loss}
+        return {'val_loss': avg_loss, 'progress_bar': logs, 'log': logs}
 
     def test_step(self, data, index):
         z = self(data)
