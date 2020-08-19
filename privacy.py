@@ -92,6 +92,6 @@ def privatize(data, method, eps):
     data = Data(**dict(data()))
 
     if method in available_mechanisms:
-        data.x = available_mechanisms[method](eps=eps).transform(data.x)
+        data.x = available_mechanisms[method](eps=eps).fit_transform(data.x)
 
     return data
