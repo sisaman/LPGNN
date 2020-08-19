@@ -1,9 +1,11 @@
+from abc import ABC
 from argparse import ArgumentParser
 
 import torch
 import torch.nn.functional as F
 from pytorch_lightning import LightningModule
 from torch.optim import Adam
+from torch_geometric.data import DataLoader
 from torch_geometric.nn import GCNConv
 from torch_geometric.nn import VGAE
 
@@ -39,9 +41,29 @@ class GraphEncoder(torch.nn.Module):
         return self.conv_mu(x, edge_index), self.conv_logvar(x, edge_index)
 
 
-class NodeClassifier(LightningModule):
+class BaseModule(LightningModule, ABC):
+    def __init__(self, **kwargs):
+        super().__init__()
+
+    def init_model(self, data): pass
+
+    def fit(self, data, trainer):
+        self.init_model(data)
+        dataloader = DataLoader([data])
+        trainer.fit(self, train_dataloader=dataloader, val_dataloaders=dataloader)
+
     @staticmethod
-    def add_model_specific_args(parent_parser):
+    def test(data, trainer, ckpt_path=None):
+        dataloader = DataLoader([data])
+        trainer.test(test_dataloaders=dataloader, ckpt_path=ckpt_path)
+
+    @staticmethod
+    def add_module_specific_args(parent_parser): pass
+
+
+class NodeClassifier(BaseModule):
+    @staticmethod
+    def add_module_specific_args(parent_parser):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
         parser.add_argument('--hidden-dim', type=int, default=16)
         parser.add_argument('--dropout', type=float, default=0.5)
@@ -53,23 +75,27 @@ class NodeClassifier(LightningModule):
         parser.add_argument('--patience', type=int, default=20)
         return parser
 
-    def __init__(self, num_classes, input_dim, hidden_dim=16,
-                 dropout=0.5, learning_rate=0.001, weight_decay=0, **kwargs):
-        super().__init__()
+    def __init__(self, hidden_dim=16, dropout=0.5, learning_rate=0.001, weight_decay=0, **kwargs):
+        super().__init__(**kwargs)
+        self.hidden_dim = hidden_dim
+        self.dropout = dropout
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.save_hyperparameters()
 
-        self.model = GCN(
-            input_dim=input_dim,
-            hidden_dim=hidden_dim,
-            output_dim=num_classes,
-            dropout=dropout,
+        self.gcn = None
+
+    def init_model(self, data):
+        self.gcn = GCN(
+            input_dim=data.num_features,
+            hidden_dim=self.hidden_dim,
+            output_dim=data.num_classes,
+            dropout=self.dropout,
             inductive=False
         )
 
     def forward(self, data):
-        return self.model(data.x, data.edge_index)
+        return self.gcn(data.x, data.edge_index)
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
@@ -105,9 +131,9 @@ class NodeClassifier(LightningModule):
         return {'test_acc': acc, 'log': log}
 
 
-class LinkPredictor(LightningModule):
+class LinkPredictor(BaseModule):
     @staticmethod
-    def add_model_specific_args(parent_parser):
+    def add_module_specific_args(parent_parser):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
         parser.add_argument('--encoder-hidden-dim', type=int, default=32)
         parser.add_argument('--encoder-output-dim', type=int, default=16)
@@ -121,22 +147,26 @@ class LinkPredictor(LightningModule):
         parser.add_argument('--patience', type=int, default=10)
         return parser
 
-    def __init__(self, input_dim, encoder_hidden_dim=32, encoder_output_dim=16,
-                 dropout=0, learning_rate=0.001, weight_decay=0, **kwargs):
-        super().__init__()
+    def __init__(self, encoder_hidden_dim=32, encoder_output_dim=16, dropout=0, learning_rate=0.001, weight_decay=0,
+                 **kwargs):
+        super().__init__(**kwargs)
+        self.encoder_hidden_dim = encoder_hidden_dim
+        self.encoder_output_dim = encoder_output_dim
+        self.dropout = dropout
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.save_hyperparameters()
 
-        encoder = GraphEncoder(
-            input_dim=input_dim,
-            hidden_dim=encoder_hidden_dim,
-            output_dim=encoder_output_dim,
-            dropout=dropout
-        )
+        self.model = None
 
+    def init_model(self, data):
+        encoder = GraphEncoder(
+            input_dim=data.num_features,
+            hidden_dim=self.encoder_hidden_dim,
+            output_dim=self.encoder_output_dim,
+            dropout=self.dropout
+        )
         self.model = VGAE(encoder=encoder)
-        self.trainer = None
 
     def forward(self, data):
         x = self.model.encode(data.x, data.train_pos_edge_index)
