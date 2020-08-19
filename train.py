@@ -1,17 +1,15 @@
 import logging
-
-logging.captureWarnings(True)
-
 from argparse import ArgumentParser
-
+import os
 import time
 import torch
+from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning import Trainer, seed_everything
-from pytorch_lightning.callbacks import EarlyStopping
+from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from datasets import load_dataset, get_available_datasets
 from privacy import privatize, get_available_mechanisms
 from models import NodeClassifier, LinkPredictor
-from utils import TrainOnlyProgressBar, PandasLogger, TermColors
+from utils import TermColors
 
 
 available_tasks = {
@@ -20,7 +18,7 @@ available_tasks = {
 }
 
 
-def train_and_test(task, data, method, eps, hparams, logger, repeats):
+def train_and_test(task, data, method, eps, hparams, repeats, save_dir):
     for run in range(repeats):
         params = {
             'task': task,
@@ -32,9 +30,12 @@ def train_and_test(task, data, method, eps, hparams, logger, repeats):
 
         params_str = ' | '.join([f'{key}={val}' for key, val in params.items()])
         print(TermColors.FG.green + params_str + TermColors.reset)
-        logger.log_params(params)
 
-        data_priv = privatize(data, method=method, eps=eps)
+        experiment_name = f'train_{task}_{data.name}_{method}_{eps}'
+        logger = TensorBoardLogger(save_dir=save_dir, name=experiment_name, version=run)
+
+        checkpoint_path = os.path.join('checkpoints', experiment_name)
+        checkpoint_callback = ModelCheckpoint(monitor='val_loss', filepath=checkpoint_path)
 
         params = vars(hparams)
         model = available_tasks[task](**params)
@@ -42,44 +43,40 @@ def train_and_test(task, data, method, eps, hparams, logger, repeats):
         trainer = Trainer.from_argparse_args(
             args=hparams,
             gpus=int(hparams.device == 'cuda' and torch.cuda.is_available()),
-            callbacks=[TrainOnlyProgressBar()],
-            checkpoint_callback=False,
+            checkpoint_callback=checkpoint_callback,
             logger=logger,
-            row_log_interval=1000,
             log_save_interval=1000,
             weights_summary=None,
             deterministic=True,
-            progress_bar_refresh_rate=5,
+            progress_bar_refresh_rate=10,
             early_stop_callback=EarlyStopping(min_delta=hparams.min_delta, patience=hparams.patience),
         )
 
+        data_priv = privatize(data, method=method, eps=eps)
         model.fit(data=data_priv, trainer=trainer)
-        model.test(data=data_priv, trainer=trainer, ckpt_path=None)
+        model.test(data=data_priv, trainer=trainer, ckpt_path='best')
 
 
 def batch_train_and_test(args):
     data = load_dataset(args.dataset, split_edges=(args.task == 'link'), device=args.device)
     for method in args.methods:
-        experiment_name = f'{args.task}_{args.dataset}_{method}'
-        with PandasLogger(
-                output_dir=args.output_dir,
-                experiment_name=experiment_name,
-                write_mode='replace'
-        ) as logger:
-            for eps in args.eps_list:
-                train_and_test(
-                    task=args.task,
-                    data=data,
-                    method=method,
-                    eps=eps,
-                    hparams=args,
-                    repeats=args.repeats,
-                    logger=logger,
-                )
+        for eps in args.eps_list:
+            train_and_test(
+                task=args.task,
+                data=data,
+                method=method,
+                eps=eps,
+                hparams=args,
+                repeats=args.repeats,
+                save_dir=args.output_dir
+            )
 
 
 def main():
     seed_everything(12345)
+    logging.getLogger("lightning").setLevel(logging.ERROR)
+    logging.captureWarnings(True)
+
     parser = ArgumentParser()
 
     parser.add_argument('-t', '--task', type=str, choices=available_tasks, required=True,
@@ -100,7 +97,7 @@ def main():
                              'The "raw" method does not support this options.'
                         )
     parser.add_argument('-r', '--repeats', type=int, default=1,
-                        help='The number of repeating the experiment. Default is 10.'
+                        help='The number of repeating the experiment. Default is 1.'
                         )
     parser.add_argument('-o', '--output-dir', type=str, default='./results',
                         help='The path to store the results. Default is "./results".'
