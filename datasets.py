@@ -153,11 +153,14 @@ class Elliptic(InMemoryDataset):
 
     @property
     def raw_dir(self):
-        return osp.join(self.root, 'raw', 'elliptic_bitcoin_dataset')
+        return osp.join(self.root, 'raw')
 
     @property
     def raw_file_names(self):
-        return ['elliptic_txs_classes.csv', 'elliptic_txs_edgelist.csv', 'elliptic_txs_features.csv']
+        return [
+            osp.join('elliptic_bitcoin_dataset', file) for file in
+            ['elliptic_txs_classes.csv', 'elliptic_txs_edgelist.csv', 'elliptic_txs_features.csv']
+        ]
 
     @property
     def processed_dir(self):
@@ -257,7 +260,7 @@ def load_dataset(dataset_name, split_edges=False, normalize=True, device='cpu'):
         data.train_mask = data.val_mask = data.test_mask = None
         seed = sum([ord(c) for c in dataset_name])
         rng = torch.Generator().manual_seed(seed)
-        data = train_test_split_edges(data, val_ratio=0.05, test_ratio=0.1, rng=rng)
+        data = train_test_split_edges(data, val_ratio=0.1, test_ratio=0.1, rng=rng)
         data.edge_index = data.train_pos_edge_index
 
     if normalize:
@@ -274,4 +277,4 @@ def load_dataset(dataset_name, split_edges=False, normalize=True, device='cpu'):
 
 
 if __name__ == '__main__':
-    load_dataset('twitch')
+    load_dataset('elliptic')
