@@ -66,7 +66,7 @@ def convergence_test(args):
                 'method': method,
                 'eps': eps,
             }
-            experiment_name = f'{args.task}_{args.dataset}_{method}_{eps}'
+            experiment_name = f'{args.task}_{args.dataset}_{eps}'
             logger = TensorBoardLogger(save_dir="tb_logs", name=experiment_name)
 
             params_str = ' | '.join([f'{key}={val}' for key, val in params.items()])
@@ -113,6 +113,7 @@ def main():
                 parser.error('LDP require eps > 0.')
 
     args = parser.parse_args()
+    args.check_val_every_n_epoch = 1
     print(args)
 
     start = time.time()

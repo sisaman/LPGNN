@@ -74,3 +74,4 @@ python convergence.py -t link -d flickr   -m pgc  -e 1 5 9  --learning-rate 0.01
 ### Twitch
 python convergence.py -t link -d twitch   -m raw  -e 0      --learning-rate 0.01  --weight-decay 0.001
 python convergence.py -t link -d twitch   -m pgc  -e 1 5 9  --learning-rate 0.01  --weight-decay 0.001
+
