@@ -121,7 +121,7 @@ def main():
                         help='The list of epsilon values for LDP mechanisms. The values must be greater than zero. '
                              'The "raw" method does not support this options.'
                         )
-    parser.add_argument('-r', '--repeats', type=int, default=10,
+    parser.add_argument('-r', '--repeats', type=int, default=1,
                         help='The number of repeating the experiment. Default is 10.'
                         )
     parser.add_argument('-o', '--output-dir', type=str, default='./results',
