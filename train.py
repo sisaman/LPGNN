@@ -8,55 +8,16 @@ import time
 import torch
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import EarlyStopping
-from torch_geometric.data import DataLoader
 from datasets import load_dataset, get_available_datasets
 from privacy import privatize, get_available_mechanisms
 from models import NodeClassifier, LinkPredictor
 from utils import TrainOnlyProgressBar, PandasLogger, TermColors
 
 
-class GraphTask:
-    task_models = {
-        'node': NodeClassifier,
-        'link': LinkPredictor
-    }
-
-    @staticmethod
-    def get_available_tasks():
-        return list(GraphTask.task_models.keys())
-
-    @staticmethod
-    def add_task_specific_args(task_name, parent_parser):
-        return GraphTask.task_models[task_name].add_model_specific_args(parent_parser)
-
-    def __init__(self, logger, hparams):
-        self.hparams = hparams
-        self.trainer = Trainer.from_argparse_args(
-            args=self.hparams,
-            gpus=int(hparams.device == 'cuda' and torch.cuda.is_available()),
-            callbacks=[TrainOnlyProgressBar()],
-            checkpoint_callback=False,
-            logger=logger,
-            row_log_interval=1000,
-            log_save_interval=1000,
-            weights_summary=None,
-            deterministic=True,
-            progress_bar_refresh_rate=5,
-            early_stop_callback=EarlyStopping(min_delta=self.hparams.min_delta, patience=self.hparams.patience),
-        )
-
-    def train(self, data):
-        params = vars(self.hparams)
-        params['input_dim'] = data.num_features
-        if self.hparams.task == 'node':
-            params['num_classes'] = data.num_classes
-        model = self.task_models[self.hparams.task](**params)
-        dataloader = DataLoader([data])
-        self.trainer.fit(model, train_dataloader=dataloader, val_dataloaders=dataloader)
-
-    def test(self, data):
-        dataloader = DataLoader([data])
-        self.trainer.test(test_dataloaders=dataloader, ckpt_path=None)
+available_tasks = {
+    'node': NodeClassifier,
+    'link': LinkPredictor
+}
 
 
 def train_and_test(task, data, method, eps, hparams, logger, repeats):
@@ -74,9 +35,26 @@ def train_and_test(task, data, method, eps, hparams, logger, repeats):
         logger.log_params(params)
 
         data_priv = privatize(data, method=method, eps=eps)
-        t = GraphTask(logger, hparams)
-        t.train(data_priv)
-        t.test(data_priv)
+
+        params = vars(hparams)
+        model = available_tasks[task](**params)
+
+        trainer = Trainer.from_argparse_args(
+            args=hparams,
+            gpus=int(hparams.device == 'cuda' and torch.cuda.is_available()),
+            callbacks=[TrainOnlyProgressBar()],
+            checkpoint_callback=False,
+            logger=logger,
+            row_log_interval=1000,
+            log_save_interval=1000,
+            weights_summary=None,
+            deterministic=True,
+            progress_bar_refresh_rate=5,
+            early_stop_callback=EarlyStopping(min_delta=hparams.min_delta, patience=hparams.patience),
+        )
+
+        model.fit(data=data_priv, trainer=trainer)
+        model.test(data=data_priv, trainer=trainer, ckpt_path=None)
 
 
 def batch_train_and_test(args):
@@ -104,7 +82,7 @@ def main():
     seed_everything(12345)
     parser = ArgumentParser()
 
-    parser.add_argument('-t', '--task', type=str, choices=GraphTask.get_available_tasks(), required=True,
+    parser.add_argument('-t', '--task', type=str, choices=available_tasks, required=True,
                         help='The graph learning task. Either "node" for node classification, '
                              'or "link" for link prediction.'
                         )
@@ -133,8 +111,8 @@ def main():
 
     # add args based on the task
     temp_args, _ = parser.parse_known_args()
-    parser = GraphTask.add_task_specific_args(task_name=temp_args.task, parent_parser=parser)
-        
+    parser = available_tasks[temp_args.task].add_module_specific_args(parser)
+
     # check if eps > 0 for LDP methods
     if len(set(temp_args.methods).intersection(get_available_mechanisms())) > 0:
         for eps in temp_args.eps_list:
