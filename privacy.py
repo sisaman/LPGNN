@@ -4,12 +4,12 @@ from torch_geometric.data import Data
 
 
 class Mechanism:
-    def __init__(self, x, eps, alpha=None, delta=None):
-        self.x = x
+    def __init__(self, eps, alpha=None, delta=None):
         self.eps = eps
         self.alpha = alpha
         self.delta = delta
 
+    def fit(self, x):
         # set alpha and delta
         if self.alpha is None:
             self.alpha = x.min(dim=0)[0]
@@ -17,21 +17,25 @@ class Mechanism:
             beta = x.max(dim=0)[0]
             self.delta = beta - self.alpha
 
-    def transform(self):
+    def transform(self, x):
         raise NotImplementedError
+
+    def fit_transform(self, x):
+        self.fit(x)
+        return self.transform(x)
 
 
 class Laplace(Mechanism):
-    def transform(self):
-        scale = torch.ones_like(self.x) * (self.delta / self.eps)
-        y_star = torch.distributions.Laplace(self.x, scale).sample()
+    def transform(self, x):
+        scale = torch.ones_like(x) * (self.delta / self.eps)
+        y_star = torch.distributions.Laplace(x, scale).sample()
         return y_star
 
 
 class PrivGraphConv(Mechanism):
-    def transform(self):
+    def transform(self, x):
         exp = np.exp(self.eps)
-        p = (self.x - self.alpha) / self.delta
+        p = (x - self.alpha) / self.delta
         p[:, (self.delta == 0)] = 0
         p = p * (exp - 1) / (exp + 1) + 1 / (exp + 1)
         y = torch.bernoulli(p)
@@ -40,9 +44,9 @@ class PrivGraphConv(Mechanism):
 
 
 class Piecewise(Mechanism):
-    def transform(self):
+    def transform(self, x):
         # normalize x between -1,1
-        t = (self.x - self.alpha) / self.delta
+        t = (x - self.alpha) / self.delta
         t[:, (self.delta == 0)] = 0
         t = 2 * t - 1
 
@@ -88,6 +92,6 @@ def privatize(data, method, eps):
     data = Data(**dict(data()))
 
     if method in available_mechanisms:
-        data.x = available_mechanisms[method](x=data.x, eps=eps).transform()
+        data.x = available_mechanisms[method](eps=eps).transform(data.x)
 
     return data
