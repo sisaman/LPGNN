@@ -4,6 +4,7 @@ from argparse import ArgumentParser
 import torch
 import torch.nn.functional as F
 from pytorch_lightning import LightningModule
+from pytorch_lightning.metrics.functional import accuracy
 from torch.optim import Adam
 from torch_geometric.data import DataLoader
 from torch_geometric.nn import GCNConv
@@ -69,7 +70,7 @@ class NodeClassifier(BaseModule):
         parser.add_argument('--dropout', type=float, default=0.5)
         parser.add_argument('--learning-rate', type=float, default=0.001)
         parser.add_argument('--weight-decay', type=float, default=0)
-        parser.add_argument('--min-epochs', type=int, default=10)
+        parser.add_argument('--min-epochs', type=int, default=0)
         parser.add_argument('--max-epochs', type=int, default=500)
         parser.add_argument('--min-delta', type=float, default=0.0)
         parser.add_argument('--patience', type=int, default=20)
@@ -109,26 +110,26 @@ class NodeClassifier(BaseModule):
     def validation_step(self, data, index):
         out = self(data)
         loss = F.nll_loss(out[data.val_mask], data.y[data.val_mask])
-        return {'val_loss': loss}
+        pred = out.argmax(dim=1)
+        acc = accuracy(pred=pred[data.val_mask], target=data.y[data.val_mask])
+        return {'val_loss': loss, 'val_acc': acc}
 
     def validation_epoch_end(self, outputs):
-        avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean().item()
-        logs = {'val_loss': avg_loss}
+        avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
+        avg_acc = torch.stack([x['val_acc'] for x in outputs]).mean()
+        logs = {'val_loss': avg_loss, 'val_acc': avg_acc}
         return {'val_loss': avg_loss, 'progress_bar': logs, 'log': logs}
 
     def test_step(self, data, index):
         out = self(data)
         pred = out.argmax(dim=1)
-        corrects = (pred[data.test_mask] == data.y[data.test_mask]).sum().item()
-        num_test_nodes = data.test_mask.sum().item()
-        return {'corrects': corrects, 'num_nodes': num_test_nodes}
+        acc = accuracy(pred=pred[data.test_mask], target=data.y[data.test_mask])
+        return {'test_acc': acc}
 
     def test_epoch_end(self, outputs):
-        total_corrects = sum([x['corrects'] for x in outputs])
-        total_nodes = sum([x['num_nodes'] for x in outputs])
-        acc = total_corrects / total_nodes
-        log = {'test_result': acc}
-        return {'test_acc': acc, 'log': log}
+        avg_acc = torch.stack([x['test_acc'] for x in outputs]).mean().item()
+        log = {'test_acc': avg_acc}
+        return {'test_acc': avg_acc, 'log': log}
 
 
 class LinkPredictor(BaseModule):
@@ -140,9 +141,9 @@ class LinkPredictor(BaseModule):
         parser.add_argument('--dropout', type=float, default=0)
         parser.add_argument('--learning-rate', type=float, default=0.001)
         parser.add_argument('--weight-decay', type=float, default=0.0)
-        parser.add_argument('--min-epochs', type=int, default=100)
+        parser.add_argument('--min-epochs', type=int, default=0)
         parser.add_argument('--max-epochs', type=int, default=500)
-        parser.add_argument('--check-val-every-n-epoch', type=int, default=10)
+        parser.add_argument('--check-val-every-n-epoch', type=int, default=5)
         parser.add_argument('--min-delta', type=float, default=0.0)
         parser.add_argument('--patience', type=int, default=10)
         return parser
@@ -176,8 +177,8 @@ class LinkPredictor(BaseModule):
         return Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
 
     def model_loss(self, data, pos_edge_index):
-        z = self(data)
-        loss = self.model.recon_loss(z, pos_edge_index)
+        out = self(data)
+        loss = self.model.recon_loss(out, pos_edge_index)
         return loss + (1 / data.num_nodes) * self.model.kl_loss()
 
     def training_step(self, data, index):
@@ -186,20 +187,25 @@ class LinkPredictor(BaseModule):
         return {'loss': loss, 'log': log}
 
     def validation_step(self, data, index):
+        out = self(data)
         loss = self.model_loss(data, data.val_pos_edge_index)
-        return {'val_loss': loss}
+        auc, ap = self.model.test(out, data.val_pos_edge_index, data.val_neg_edge_index)
+        return {'val_loss': loss, 'val_auc': auc, 'val_ap': ap}
 
     def validation_epoch_end(self, outputs):
-        avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean().item()
-        logs = {'val_loss': avg_loss}
+        avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
+        avg_auc = torch.tensor([x['val_auc'] for x in outputs]).mean()
+        avg_ap = torch.tensor([x['val_ap'] for x in outputs]).mean()
+        logs = {'val_loss': avg_loss, 'val_auc': avg_auc, 'val_ap': avg_ap}
         return {'val_loss': avg_loss, 'progress_bar': logs, 'log': logs}
 
     def test_step(self, data, index):
-        z = self(data)
-        auc, ap = self.model.test(z, data.test_pos_edge_index, data.test_neg_edge_index)
-        return {'auc': auc, 'ap': ap}
+        out = self(data)
+        auc, ap = self.model.test(out, data.test_pos_edge_index, data.test_neg_edge_index)
+        return {'test_auc': auc, 'test_ap': ap}
 
     def test_epoch_end(self, outputs):
-        auc = torch.tensor([x['auc'] for x in outputs]).mean().item()
-        log = {'test_result': auc}
+        auc = torch.tensor([x['test_auc'] for x in outputs]).mean().item()
+        ap = torch.tensor([x['test_ap'] for x in outputs]).mean().item()
+        log = {'test_auc': auc, 'test_ap': ap}
         return {'test_auc': auc, 'log': log}
