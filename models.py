@@ -12,34 +12,34 @@ from torch_geometric.nn import VGAE
 
 
 class GCN(torch.nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, dropout, inductive=False):
+    def __init__(self, input_dim, hidden_dim, output_dim, dropout, inductive=False, normalize=True):
         super().__init__()
-        self.conv1 = GCNConv(input_dim, hidden_dim, cached=not inductive)
-        self.conv2 = GCNConv(hidden_dim, output_dim, cached=not inductive)
+        self.conv1 = GCNConv(input_dim, hidden_dim, cached=not inductive, normalize=normalize)
+        self.conv2 = GCNConv(hidden_dim, output_dim, cached=not inductive, normalize=normalize)
         self.dropout = dropout
 
-    def forward(self, x, edge_index):
-        x = self.conv1(x, edge_index)
+    def forward(self, x, edge_index, edge_weight=None):
+        x = self.conv1(x, edge_index, edge_weight)
         x = torch.selu(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
-        x = self.conv2(x, edge_index)
+        x = self.conv2(x, edge_index, edge_weight)
         x = F.log_softmax(x, dim=1)
         return x
 
 
 class GraphEncoder(torch.nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, dropout, inductive=False):
+    def __init__(self, input_dim, hidden_dim, output_dim, dropout, inductive=False, normalize=True):
         super().__init__()
-        self.conv = GCNConv(input_dim, hidden_dim, cached=not inductive)
-        self.conv_mu = GCNConv(hidden_dim, output_dim, cached=not inductive)
-        self.conv_logvar = GCNConv(hidden_dim, output_dim, cached=not inductive)
+        self.conv = GCNConv(input_dim, hidden_dim, cached=not inductive, normalize=normalize)
+        self.conv_mu = GCNConv(hidden_dim, output_dim, cached=not inductive, normalize=normalize)
+        self.conv_logvar = GCNConv(hidden_dim, output_dim, cached=not inductive, normalize=normalize)
         self.dropout = dropout
 
-    def forward(self, x, edge_index):
-        x = self.conv(x, edge_index)
+    def forward(self, x, edge_index, edge_weight=None):
+        x = self.conv(x, edge_index, edge_weight)
         x = F.selu(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
-        return self.conv_mu(x, edge_index), self.conv_logvar(x, edge_index)
+        return self.conv_mu(x, edge_index, edge_weight), self.conv_logvar(x, edge_index, edge_weight)
 
 
 class BaseModule(LightningModule, ABC):
@@ -92,11 +92,12 @@ class NodeClassifier(BaseModule):
             hidden_dim=self.hidden_dim,
             output_dim=data.num_classes,
             dropout=self.dropout,
-            inductive=False
+            inductive=False,
+            normalize=not data.use_gdc
         )
 
     def forward(self, data):
-        return self.gcn(data.x, data.edge_index)
+        return self.gcn(data.x, data.edge_index, data.edge_attr)
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
@@ -165,11 +166,13 @@ class LinkPredictor(BaseModule):
             input_dim=data.num_features,
             hidden_dim=self.encoder_hidden_dim,
             output_dim=self.encoder_output_dim,
-            dropout=self.dropout
+            dropout=self.dropout,
+            normalize=not data.use_gdc
         )
         self.model = VGAE(encoder=encoder)
 
     def forward(self, data):
+        # Todo fix edge_attr for train/val/test
         x = self.model.encode(data.x, data.train_pos_edge_index)
         return x
 

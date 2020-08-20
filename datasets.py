@@ -9,6 +9,7 @@ import torch
 from torch_geometric.data import Data, InMemoryDataset, download_url, extract_zip
 from torch_geometric.datasets import Planetoid, Flickr
 from torch_geometric.utils import to_undirected, negative_sampling
+from torch_geometric.transforms import GDC
 
 
 def train_test_split_nodes(data, val_ratio=.25, test_ratio=.25, rng=None):
@@ -133,7 +134,7 @@ class MUSAE(InMemoryDataset):
                 x = pd.read_csv(file).drop_duplicates()
                 x = x.pivot(index='node_id', columns='feature_id', values='value').fillna(0)
                 x = torch.from_numpy(x.to_numpy()).float()
-        
+
         data = Data(x=x, edge_index=edge_index, y=y, num_nodes=num_nodes)
         seed = sum([ord(c) for c in 'musae'])
         rng = torch.Generator().manual_seed(seed)
@@ -250,11 +251,12 @@ def get_available_datasets():
     return list(available_datasets.keys())
 
 
-def load_dataset(dataset_name, split_edges=False, normalize=True, device='cpu'):
+def load_dataset(dataset_name, split_edges=False, normalize=True, use_gdc=False, device='cpu'):
     dataset = available_datasets[dataset_name]()
     data = dataset[0]
     data.name = dataset_name
     data.num_classes = dataset.num_classes
+    data.use_gdc = use_gdc
 
     if split_edges:
         data.train_mask = data.val_mask = data.test_mask = None
@@ -262,6 +264,17 @@ def load_dataset(dataset_name, split_edges=False, normalize=True, device='cpu'):
         rng = torch.Generator().manual_seed(seed)
         data = train_test_split_edges(data, val_ratio=0.1, test_ratio=0.1, rng=rng)
         data.edge_index = data.train_pos_edge_index
+
+    if use_gdc:
+        gdc = GDC(
+            self_loop_weight=1, normalization_in='sym',
+            normalization_out='col',
+            diffusion_kwargs=dict(method='ppr', alpha=0.05),
+            sparsification_kwargs=dict(method='topk', k=256, dim=0),
+            exact=True
+        )
+        data = gdc(data)
+        print('\n   GDC ENABLED   \n')
 
     if normalize:
         alpha = data.x.min(dim=0)[0]

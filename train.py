@@ -50,6 +50,7 @@ def train_and_test(task, data, method, eps, hparams, repeats, save_dir):
             deterministic=True,
             progress_bar_refresh_rate=10,
             early_stop_callback=EarlyStopping(min_delta=hparams.min_delta, patience=hparams.patience),
+            # early_stop_callback=False,
         )
 
         data_priv = privatize(data, method=method, eps=eps)
@@ -58,7 +59,13 @@ def train_and_test(task, data, method, eps, hparams, repeats, save_dir):
 
 
 def batch_train_and_test(args):
-    data = load_dataset(args.dataset, split_edges=(args.task == 'link'), device=args.device)
+    data = load_dataset(
+        dataset_name=args.dataset,
+        split_edges=(args.task == 'link'),
+        normalize=True,
+        use_gdc=args.gdc,
+        device=args.device
+    )
     for method in args.methods:
         for eps in args.eps_list:
             train_and_test(
@@ -102,6 +109,7 @@ def main():
     parser.add_argument('-o', '--output-dir', type=str, default='./results',
                         help='The path to store the results. Default is "./results".'
                         )
+    parser.add_argument('--gdc', action='store_true', default=False)
     parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'],
                         help='The device used for the training. Either "cpu" or "cuda". Default is "cuda".'
                         )
