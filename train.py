@@ -31,7 +31,7 @@ def train_and_test(task, data, method, eps, hparams, repeats, save_dir):
         params_str = ' | '.join([f'{key}={val}' for key, val in params.items()])
         print(TermColors.FG.green + params_str + TermColors.reset)
 
-        experiment_name = f'train_{task}_{data.name}_{method}_{eps}'
+        experiment_name = f'{task}_{data.name}_{method}_{eps}'
         logger = TensorBoardLogger(save_dir=save_dir, name=experiment_name, version=run)
 
         checkpoint_path = os.path.join('checkpoints', experiment_name)
@@ -96,8 +96,8 @@ def main():
                         help='The list of epsilon values for LDP mechanisms. The values must be greater than zero. '
                              'The "raw" method does not support this options.'
                         )
-    parser.add_argument('-r', '--repeats', type=int, default=1,
-                        help='The number of repeating the experiment. Default is 1.'
+    parser.add_argument('-r', '--repeats', type=int, default=10,
+                        help='The number of repeating the experiment. Default is 10.'
                         )
     parser.add_argument('-o', '--output-dir', type=str, default='./results',
                         help='The path to store the results. Default is "./results".'
