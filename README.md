@@ -45,7 +45,7 @@ Optional arguments for node classification (with ``python train.py --task node``
 --dropout       <float>     Rate of dropout between zero and one. Default is 0.5.
 --learning-rate <float>     Initial learning rate for the Adam optimizer. Default is 0.001.
 --weight-decay  <float>     Weight decay (L2 penalty) for the Adam optimizer. Default is 0.
---min-epochs    <integer>   Minimum number of training epochs. Default is 10.
+--min-epochs    <integer>   Minimum number of training epochs. Default is 0.
 --max-epochs    <integer>   Maximum number of training epochs. Default is 500.
 --min-delta     <float>     Minimum change in the validation loss to qualify as an improvement in the early stopping, i.e. an absolute change of less than min-delta, will count as no improvement. Default is 0.
 --patience      <integer>   Number of validation epochs with no improvement after which training will be stopped. Default is 20.
@@ -57,11 +57,11 @@ Optional arguments for link prediction (with ``python train.py --task link``)
 --dropout                   <float>     Rate of dropout between zero and one. Default is 0.
 --learning-rate             <float>     Initial learning rate for the Adam optimizer. Default is 0.001.
 --weight-decay              <float>     Weight decay (L2 penalty) for the Adam optimizer. Default is 0.
---min-epochs                <integer>   Minimum number of training epochs. Default is 100.
+--min-epochs                <integer>   Minimum number of training epochs. Default is 0.
 --max-epochs                <integer>   Maximum number of training epochs. Default is 500.
 --min-delta                 <float>     Minimum change in the validation loss to qualify as an improvement in the early stopping, i.e. an absolute change of less than min-delta, will count as no improvement. Default is 0.
 --patience                  <integer>   Number of validation epochs with no improvement after which training will be stopped. Default is 10.
---check-val-every-n-epoch   <integer>   Evaluate validation loss every n train epochs. Default is 10.
+--check-val-every-n-epoch   <integer>   Evaluate validation loss every n train epochs. Default is 5.
 ```
 The test result for each method will be saved as a pickled Pandas dataframe in ``<output-dir>`` directory under the name `<task>_<dataset>_<method>.pkl`.
 
