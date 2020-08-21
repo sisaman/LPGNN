@@ -1,4 +1,3 @@
-from abc import ABC
 from argparse import ArgumentParser
 
 import torch
@@ -6,7 +5,6 @@ import torch.nn.functional as F
 from pytorch_lightning import LightningModule
 from pytorch_lightning.metrics.functional import accuracy
 from torch.optim import Adam
-from torch_geometric.data import DataLoader
 from torch_geometric.nn import GCNConv
 from torch_geometric.nn import VGAE
 
@@ -42,27 +40,7 @@ class GraphEncoder(torch.nn.Module):
         return self.conv_mu(x, edge_index, edge_weight), self.conv_logvar(x, edge_index, edge_weight)
 
 
-class BaseModule(LightningModule, ABC):
-    def __init__(self, **kwargs):
-        super().__init__()
-
-    def init_model(self, data): pass
-
-    def fit(self, data, trainer):
-        self.init_model(data)
-        dataloader = DataLoader([data])
-        trainer.fit(self, train_dataloader=dataloader, val_dataloaders=dataloader)
-
-    @staticmethod
-    def test(data, trainer, ckpt_path=None):
-        dataloader = DataLoader([data])
-        trainer.test(test_dataloaders=dataloader, ckpt_path=ckpt_path)
-
-    @staticmethod
-    def add_module_specific_args(parent_parser): pass
-
-
-class NodeClassifier(BaseModule):
+class NodeClassifier(LightningModule):
     @staticmethod
     def add_module_specific_args(parent_parser):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
@@ -77,7 +55,7 @@ class NodeClassifier(BaseModule):
         return parser
 
     def __init__(self, hidden_dim=16, dropout=0.5, learning_rate=0.001, weight_decay=0, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__()
         self.hidden_dim = hidden_dim
         self.dropout = dropout
         self.learning_rate = learning_rate
@@ -86,15 +64,17 @@ class NodeClassifier(BaseModule):
 
         self.gcn = None
 
-    def init_model(self, data):
-        self.gcn = GCN(
-            input_dim=data.num_features,
-            hidden_dim=self.hidden_dim,
-            output_dim=data.num_classes,
-            dropout=self.dropout,
-            inductive=False,
-            normalize=not data.use_gdc
-        )
+    def setup(self, stage):
+        if stage == 'fit':
+            dataset = self.trainer.datamodule
+            self.gcn = GCN(
+                input_dim=dataset.num_features,
+                hidden_dim=self.hidden_dim,
+                output_dim=dataset.num_classes,
+                dropout=self.dropout,
+                inductive=False,
+                normalize=not dataset.use_gdc
+            )
 
     def forward(self, data):
         return self.gcn(data.x, data.edge_index, data.edge_attr)
@@ -133,7 +113,7 @@ class NodeClassifier(BaseModule):
         return {'test_acc': avg_acc, 'log': log}
 
 
-class LinkPredictor(BaseModule):
+class LinkPredictor(LightningModule):
     @staticmethod
     def add_module_specific_args(parent_parser):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
@@ -151,7 +131,7 @@ class LinkPredictor(BaseModule):
 
     def __init__(self, encoder_hidden_dim=32, encoder_output_dim=16, dropout=0, learning_rate=0.001, weight_decay=0,
                  **kwargs):
-        super().__init__(**kwargs)
+        super().__init__()
         self.encoder_hidden_dim = encoder_hidden_dim
         self.encoder_output_dim = encoder_output_dim
         self.dropout = dropout
@@ -161,15 +141,17 @@ class LinkPredictor(BaseModule):
 
         self.model = None
 
-    def init_model(self, data):
-        encoder = GraphEncoder(
-            input_dim=data.num_features,
-            hidden_dim=self.encoder_hidden_dim,
-            output_dim=self.encoder_output_dim,
-            dropout=self.dropout,
-            normalize=not data.use_gdc
-        )
-        self.model = VGAE(encoder=encoder)
+    def setup(self, stage):
+        if stage == 'fit':
+            dataset = self.trainer.datamodule
+            encoder = GraphEncoder(
+                input_dim=dataset.num_features,
+                hidden_dim=self.encoder_hidden_dim,
+                output_dim=self.encoder_output_dim,
+                dropout=self.dropout,
+                normalize=not dataset.use_gdc
+            )
+            self.model = VGAE(encoder=encoder)
 
     def forward(self, data):
         # Todo fix edge_attr for train/val/test

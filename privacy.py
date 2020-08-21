@@ -1,6 +1,5 @@
 import torch
 import numpy as np
-from torch_geometric.data import Data
 
 
 class Mechanism:
@@ -87,11 +86,19 @@ def get_available_mechanisms():
     return list(available_mechanisms.keys())
 
 
-def privatize(data, method, eps):
-    # copy data to avoid changing the original
-    data = Data(**dict(data()))
+class Privatize:
+    def __init__(self, method, eps):
+        self.method = method
+        self.eps = eps
 
-    if method in available_mechanisms:
-        data.x = available_mechanisms[method](eps=eps).fit_transform(data.x)
-
-    return data
+    def __call__(self, data):
+        # print('\n    BEGIN PRIVATIZE    \n')
+        if self.method == 'raw':
+            if hasattr(data, 'x_raw'):
+                data.x = data.x_raw  # bring back x_raw
+        else:
+            if not hasattr(data, 'x_raw'):
+                data.x_raw = data.x  # save original x to x_raw
+            data.x = available_mechanisms[self.method](self.eps).fit_transform(data.x_raw)
+        # print('\n    END PRIVATIZE    \n')
+        return data

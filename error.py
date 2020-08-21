@@ -6,9 +6,9 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from torch_geometric.nn import GCNConv
 from torch_geometric.utils import degree
 import pandas as pd
-from datasets import load_dataset, get_available_datasets
+from datasets import get_available_datasets
 from utils import TermColors
-from privacy import privatize, get_available_mechanisms
+from privacy import get_available_mechanisms
 
 
 class ErrorEstimation:

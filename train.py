@@ -6,8 +6,8 @@ import torch
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
-from datasets import load_dataset, get_available_datasets
-from privacy import privatize, get_available_mechanisms
+from datasets import GraphDataset, get_available_datasets
+from privacy import get_available_mechanisms, Privatize
 from models import NodeClassifier, LinkPredictor
 from utils import TermColors
 
@@ -18,11 +18,11 @@ available_tasks = {
 }
 
 
-def train_and_test(task, data, method, eps, hparams, repeats, save_dir):
+def train_and_test(task, dataset, method, eps, hparams, repeats, save_dir):
     for run in range(repeats):
         params = {
             'task': task,
-            'dataset': data.name,
+            'dataset': dataset.dataset_name,
             'method': method,
             'eps': eps,
             'run': run
@@ -31,7 +31,7 @@ def train_and_test(task, data, method, eps, hparams, repeats, save_dir):
         params_str = ' | '.join([f'{key}={val}' for key, val in params.items()])
         print(TermColors.FG.green + params_str + TermColors.reset)
 
-        experiment_name = f'{task}_{data.name}_{method}_{eps}'
+        experiment_name = f'{task}_{dataset.dataset_name}_{method}_{eps}'
         logger = TensorBoardLogger(save_dir=save_dir, name=experiment_name, version=run)
 
         checkpoint_path = os.path.join('checkpoints', experiment_name)
@@ -50,27 +50,27 @@ def train_and_test(task, data, method, eps, hparams, repeats, save_dir):
             deterministic=True,
             progress_bar_refresh_rate=10,
             early_stop_callback=EarlyStopping(min_delta=hparams.min_delta, patience=hparams.patience),
-            # early_stop_callback=False,
         )
 
-        data_priv = privatize(data, method=method, eps=eps)
-        model.fit(data=data_priv, trainer=trainer)
-        model.test(data=data_priv, trainer=trainer, ckpt_path='best')
+        # data_priv = privatize(data, method=method, eps=eps)
+        privatize = Privatize(method=method, eps=eps)
+        dataset.apply_transform(privatize)
+        trainer.fit(model=model, datamodule=dataset)
+        trainer.test(datamodule=dataset)
 
 
 def batch_train_and_test(args):
-    data = load_dataset(
+    dataset = GraphDataset(
         dataset_name=args.dataset,
         split_edges=(args.task == 'link'),
         normalize=True,
         use_gdc=args.gdc,
-        device=args.device
     )
     for method in args.methods:
         for eps in args.eps_list:
             train_and_test(
                 task=args.task,
-                data=data,
+                dataset=dataset,
                 method=method,
                 eps=eps,
                 hparams=args,
