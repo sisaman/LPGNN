@@ -52,11 +52,11 @@ def train_and_test(task, dataset, method, eps, hparams, repeats, save_dir):
             early_stop_callback=EarlyStopping(min_delta=hparams.min_delta, patience=hparams.patience),
         )
 
-        # data_priv = privatize(data, method=method, eps=eps)
         privatize = Privatize(method=method, eps=eps)
         dataset.apply_transform(privatize)
         trainer.fit(model=model, datamodule=dataset)
-        trainer.test(datamodule=dataset)
+        result = trainer.test(datamodule=dataset)
+        print(result)
 
 
 def batch_train_and_test(args):
@@ -65,6 +65,7 @@ def batch_train_and_test(args):
         split_edges=(args.task == 'link'),
         normalize=True,
         use_gdc=args.gdc,
+        device=args.device
     )
     for method in args.methods:
         for eps in args.eps_list:

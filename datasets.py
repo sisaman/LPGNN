@@ -274,7 +274,7 @@ class Normalize:
 
 
 class GraphDataset(LightningDataModule):
-    def __init__(self, dataset_name, data_dir='datasets', normalize=True, split_edges=False, use_gdc=False):
+    def __init__(self, dataset_name, data_dir='datasets', normalize=True, split_edges=False, use_gdc=False, device='cpu'):
         super().__init__()
         self.dataset_name = dataset_name
         self.root_dir = os.path.join(data_dir, dataset_name)
@@ -293,6 +293,7 @@ class GraphDataset(LightningDataModule):
 
         self.transforms = Compose(transforms)
         self.use_gdc = use_gdc
+        self.device = device
         self.data = None
 
     def prepare_data(self):
@@ -300,6 +301,9 @@ class GraphDataset(LightningDataModule):
         dataset = available_datasets[self.dataset_name](root=self.root_dir, transform=self.transforms)
         self.num_classes = dataset.num_classes
         self.data = dataset[0]
+
+        if self.device == 'cuda' and torch.cuda.is_available():
+            self.data.to('cuda')
 
     def apply_transform(self, transform):
         if not self.has_prepared_data:

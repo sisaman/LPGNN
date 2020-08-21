@@ -92,7 +92,6 @@ class Privatize:
         self.eps = eps
 
     def __call__(self, data):
-        # print('\n    BEGIN PRIVATIZE    \n')
         if self.method == 'raw':
             if hasattr(data, 'x_raw'):
                 data.x = data.x_raw  # bring back x_raw
@@ -100,5 +99,4 @@ class Privatize:
             if not hasattr(data, 'x_raw'):
                 data.x_raw = data.x  # save original x to x_raw
             data.x = available_mechanisms[self.method](self.eps).fit_transform(data.x_raw)
-        # print('\n    END PRIVATIZE    \n')
         return data
