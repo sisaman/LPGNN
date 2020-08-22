@@ -228,6 +228,7 @@ class EdgeSplit:
         self.rng = rng
 
     def __call__(self, data):
+        data.y = data.train_mask = data.val_mask = data.test_mask = None
         row, col = data.edge_index
         data.edge_index = None
 
@@ -260,6 +261,7 @@ class EdgeSplit:
         data.val_neg_edge_index = neg_edge_index[:, :n_v]
         data.test_neg_edge_index = neg_edge_index[:, n_v:]
 
+
         return data
 
 
@@ -276,7 +278,7 @@ class Normalize:
 class GraphDataset(LightningDataModule):
     def __init__(self, dataset_name, data_dir='datasets', normalize=True, split_edges=False, use_gdc=False, device='cpu'):
         super().__init__()
-        self.dataset_name = dataset_name
+        self.name = dataset_name
         self.root_dir = os.path.join(data_dir, dataset_name)
 
         transforms = []
@@ -298,7 +300,7 @@ class GraphDataset(LightningDataModule):
 
     def prepare_data(self):
         assert self.data is None
-        dataset = available_datasets[self.dataset_name](root=self.root_dir, transform=self.transforms)
+        dataset = available_datasets[self.name](root=self.root_dir, transform=self.transforms)
         self.num_classes = dataset.num_classes
         self.data = dataset[0]
 
@@ -309,6 +311,11 @@ class GraphDataset(LightningDataModule):
         if not self.has_prepared_data:
             self.prepare_data()
         self.data = transform(self.data)
+
+    def get_data(self):
+        if not self.has_prepared_data:
+            self.prepare_data()
+        return self.data
 
     def train_dataloader(self):
         return DataLoader([self.data], pin_memory=True)
