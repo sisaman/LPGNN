@@ -6,16 +6,16 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from torch_geometric.nn import GCNConv
 from torch_geometric.utils import degree
 import pandas as pd
-from datasets import get_available_datasets
+from datasets import get_available_datasets, GraphDataset
 from utils import TermColors
-from privacy import get_available_mechanisms
+from privacy import get_available_mechanisms, Privatize
 
 
 class ErrorEstimation:
-    def __init__(self, data, raw_features, max_degree_quantile=0.99, device='cuda'):
+    def __init__(self, data, max_degree_quantile=0.99, device='cuda'):
         self.data = data
-        alpha = raw_features.min(dim=0)[0]
-        beta = raw_features.max(dim=0)[0]
+        alpha = data.x_raw.min(dim=0)[0]
+        beta = data.x_raw.max(dim=0)[0]
         self.delta = beta - alpha
         self.max_degree_quantile = max_degree_quantile
 
@@ -23,9 +23,8 @@ class ErrorEstimation:
         if device == 'cuda' and torch.cuda.is_available():
             self.model = self.model.cuda()
         self.model.weight.data.copy_(torch.eye(data.num_features))  # identity transformation
-        self.gc = self.model(raw_features, data.edge_index)
+        self.gc = self.model(data.x_raw, data.edge_index)
 
-    @torch.no_grad()
     def run(self, logger):
         # calculate error
         gc_hat = self.model(self.data.x, self.data.edge_index)
@@ -45,11 +44,11 @@ class ErrorEstimation:
             logger.log_metrics(metrics={'mae': mae, 'std': std}, step=deg)
 
 
-def error_estimation(data, method, eps, repeats, save_dir, device):
+def error_estimation(dataset, method, eps, repeats, save_dir, device):
     for run in range(repeats):
         params = {
             'task': 'error',
-            'dataset': data.name,
+            'dataset': dataset.name,
             'method': method,
             'eps': eps,
             'run': run
@@ -58,21 +57,21 @@ def error_estimation(data, method, eps, repeats, save_dir, device):
         params_str = ' | '.join([f'{key}={val}' for key, val in params.items()])
         print(TermColors.FG.green + params_str + TermColors.reset)
 
-        experiment_name = f'error_{data.name}_{method}_{eps}'
+        experiment_name = f'error_{dataset.name}_{method}_{eps}'
         logger = TensorBoardLogger(save_dir=save_dir, name=experiment_name, version=run)
 
-        raw_features = data.x
-        data = privatize(data, method=method, eps=eps)
-        ErrorEstimation(data=data, raw_features=raw_features, device=device).run(logger)
+        data = Privatize(method=method, eps=eps)(dataset.get_data())
+        ErrorEstimation(data=data, device=device).run(logger)
 
 
+@torch.no_grad()
 def batch_error_estimation(args):
     for dataset_name in args.datasets:
-        data = load_dataset(dataset_name, device=args.device)
+        dataset = GraphDataset(dataset_name=dataset_name, device=args.device)
         for method in args.methods:
             for eps in args.eps_list:
                 error_estimation(
-                    data=data,
+                    dataset=dataset,
                     method=method,
                     eps=eps,
                     repeats=args.repeats,
