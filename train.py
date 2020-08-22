@@ -1,8 +1,8 @@
 import logging
-from argparse import ArgumentParser
 import os
 import time
 import torch
+from argparse import ArgumentParser
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
@@ -10,6 +10,7 @@ from datasets import GraphDataset, get_available_datasets
 from privacy import get_available_mechanisms, Privatize
 from models import NodeClassifier, LinkPredictor
 from utils import TermColors
+from itertools import product
 
 
 available_tasks = {
@@ -22,7 +23,7 @@ def train_and_test(task, dataset, method, eps, hparams, repeats, save_dir):
     for run in range(repeats):
         params = {
             'task': task,
-            'dataset': dataset.dataset_name,
+            'dataset': dataset.name,
             'method': method,
             'eps': eps,
             'run': run
@@ -31,17 +32,19 @@ def train_and_test(task, dataset, method, eps, hparams, repeats, save_dir):
         params_str = ' | '.join([f'{key}={val}' for key, val in params.items()])
         print(TermColors.FG.green + params_str + TermColors.reset)
 
-        experiment_name = f'{task}_{dataset.dataset_name}_{method}_{eps}'
+        experiment_name = f'{task}_{dataset.name}_{method}_{eps}'
         logger = TensorBoardLogger(save_dir=save_dir, name=experiment_name, version=run)
 
         checkpoint_path = os.path.join('checkpoints', experiment_name)
         checkpoint_callback = ModelCheckpoint(monitor='val_loss', filepath=checkpoint_path)
 
         params = vars(hparams)
-        model = available_tasks[task](**params)
+        log_learning_curve = run == 0 and (method == 'raw' or method == 'pgc')
+        model = available_tasks[task](**params, log_learning_curve=log_learning_curve)
 
         trainer = Trainer.from_argparse_args(
             args=hparams,
+            precision=32,
             gpus=int(hparams.device == 'cuda' and torch.cuda.is_available()),
             checkpoint_callback=checkpoint_callback,
             logger=logger,
@@ -55,8 +58,7 @@ def train_and_test(task, dataset, method, eps, hparams, repeats, save_dir):
         privatize = Privatize(method=method, eps=eps)
         dataset.apply_transform(privatize)
         trainer.fit(model=model, datamodule=dataset)
-        result = trainer.test(datamodule=dataset)
-        print(result)
+        trainer.test(datamodule=dataset, ckpt_path='best', verbose=True)
 
 
 def batch_train_and_test(args):
@@ -67,17 +69,16 @@ def batch_train_and_test(args):
         use_gdc=args.gdc,
         device=args.device
     )
-    for method in args.methods:
-        for eps in args.eps_list:
-            train_and_test(
-                task=args.task,
-                dataset=dataset,
-                method=method,
-                eps=eps,
-                hparams=args,
-                repeats=args.repeats,
-                save_dir=args.output_dir
-            )
+    for method, eps in product(args.methods, args.eps_list):
+        train_and_test(
+            task=args.task,
+            dataset=dataset,
+            method=method,
+            eps=eps,
+            hparams=args,
+            repeats=args.repeats,
+            save_dir=args.output_dir
+        )
 
 
 def main():
