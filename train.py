@@ -46,14 +46,14 @@ def train_and_test(task, dataset, method, eps, hparams, repeats, output_dir):
             args=hparams,
             precision=32,
             gpus=int(hparams.device == 'cuda' and torch.cuda.is_available()),
-            max_epochs=200,
+            max_epochs=500,
             checkpoint_callback=checkpoint_callback,
             logger=logger,
             log_save_interval=1000,
             weights_summary=None,
             deterministic=True,
             progress_bar_refresh_rate=10,
-            # early_stop_callback=EarlyStopping(patience=hparams.patience),
+            early_stop_callback=EarlyStopping(patience=hparams.patience),
         )
 
         privatize = Privatize(method=method, eps=eps)

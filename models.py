@@ -5,18 +5,19 @@ import torch.nn.functional as F
 from pytorch_lightning import LightningModule, TrainResult, EvalResult
 from pytorch_lightning.metrics.functional import accuracy, average_precision, auroc
 from torch.optim import Adam
-from torch_geometric.nn import GCNConv
-from torch_geometric.nn import VGAE
+from torch_geometric.nn import GCNConv, VGAE, APPNP
 
 
 class GCN(torch.nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, dropout, inductive=False, normalize=True):
         super().__init__()
+        # self.ppr = APPNP(K=10, alpha=0.05, add_self_loops=True)
         self.conv1 = GCNConv(input_dim, hidden_dim, cached=not inductive, normalize=normalize)
         self.conv2 = GCNConv(hidden_dim, output_dim, cached=not inductive, normalize=normalize)
         self.dropout = dropout
 
     def forward(self, x, edge_index, edge_weight=None):
+        # x = self.ppr(x, edge_index, edge_weight)
         x = self.conv1(x, edge_index, edge_weight)
         x = torch.selu(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
