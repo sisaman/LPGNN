@@ -48,9 +48,6 @@ class NodeClassifier(LightningModule):
         parser.add_argument('--dropout', type=float, default=0.5)
         parser.add_argument('--learning-rate', type=float, default=0.001)
         parser.add_argument('--weight-decay', type=float, default=0)
-        parser.add_argument('--min-epochs', type=int, default=0)
-        parser.add_argument('--max-epochs', type=int, default=500)
-        parser.add_argument('--min-delta', type=float, default=0.0)
         parser.add_argument('--patience', type=int, default=20)
         return parser
 
@@ -87,8 +84,13 @@ class NodeClassifier(LightningModule):
     def training_step(self, data, index):
         out = self(data)
         loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask])
+        pred = out.argmax(dim=1)
+        acc = accuracy(pred=pred[data.train_mask], target=data.y[data.train_mask])
         result = TrainResult(minimize=loss)
-        result.log('train_loss', loss, prog_bar=False, logger=self.log_learning_curve, on_step=False, on_epoch=True)
+        result.log_dict(
+            dictionary={'train_loss': loss, 'train_acc': acc},
+            prog_bar=True, logger=self.log_learning_curve, on_step=False, on_epoch=True
+        )
         return result
 
     def validation_step(self, data, index):
@@ -98,7 +100,7 @@ class NodeClassifier(LightningModule):
         acc = accuracy(pred=pred[data.val_mask], target=data.y[data.val_mask])
         result = EvalResult(early_stop_on=loss, checkpoint_on=loss)
         result.log_dict(
-            {'val_loss': loss, 'val_acc': acc},
+            dictionary={'val_loss': loss, 'val_acc': acc},
             prog_bar=True, logger=self.log_learning_curve, on_step=False, on_epoch=True
         )
         return result
@@ -121,10 +123,7 @@ class LinkPredictor(LightningModule):
         parser.add_argument('--dropout', type=float, default=0)
         parser.add_argument('--learning-rate', type=float, default=0.001)
         parser.add_argument('--weight-decay', type=float, default=0.0)
-        parser.add_argument('--min-epochs', type=int, default=0)
-        parser.add_argument('--max-epochs', type=int, default=500)
         parser.add_argument('--check-val-every-n-epoch', type=int, default=5)
-        parser.add_argument('--min-delta', type=float, default=0.0)
         parser.add_argument('--patience', type=int, default=10)
         return parser
 
