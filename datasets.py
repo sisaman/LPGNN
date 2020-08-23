@@ -2,7 +2,6 @@ import math
 import os
 import os.path as osp
 from functools import partial
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -261,7 +260,6 @@ class EdgeSplit:
         data.val_neg_edge_index = neg_edge_index[:, :n_v]
         data.test_neg_edge_index = neg_edge_index[:, n_v:]
 
-
         return data
 
 
@@ -276,7 +274,8 @@ class Normalize:
 
 
 class GraphDataset(LightningDataModule):
-    def __init__(self, dataset_name, data_dir='datasets', normalize=True, split_edges=False, use_gdc=False, device='cpu'):
+    def __init__(self, dataset_name, data_dir='datasets', normalize=True,
+                 split_edges=False, use_gdc=False, device='cpu'):
         super().__init__()
         self.name = dataset_name
         self.root_dir = os.path.join(data_dir, dataset_name)
@@ -289,11 +288,11 @@ class GraphDataset(LightningDataModule):
         if use_gdc:
             transforms.append(
                 GDC(self_loop_weight=1, normalization_in='sym', normalization_out='sym',
-                    # diffusion_kwargs=dict(method='ppr', alpha=0.05),
-                    diffusion_kwargs=dict(method='heat', t=10),
+                    diffusion_kwargs=dict(method='ppr', alpha=0.05, eps=1e-4),
+                    # diffusion_kwargs=dict(method='heat', t=10),
                     # sparsification_kwargs=dict(method='topk', k=256, dim=0),
                     sparsification_kwargs=dict(method='threshold', avg_degree=256),
-                    exact=True)
+                    exact=False)
             )
 
         self.transforms = Compose(transforms)
