@@ -288,9 +288,12 @@ class GraphDataset(LightningDataModule):
             transforms.append(EdgeSplit(val_ratio=0.1, test_ratio=0.1))
         if use_gdc:
             transforms.append(
-                GDC(self_loop_weight=1, normalization_in='sym', normalization_out='col',
-                    diffusion_kwargs=dict(method='ppr', alpha=0.05),
-                    sparsification_kwargs=dict(method='topk', k=256, dim=0), exact=True)
+                GDC(self_loop_weight=1, normalization_in='sym', normalization_out='sym',
+                    # diffusion_kwargs=dict(method='ppr', alpha=0.05),
+                    diffusion_kwargs=dict(method='heat', t=10),
+                    # sparsification_kwargs=dict(method='topk', k=256, dim=0),
+                    sparsification_kwargs=dict(method='threshold', avg_degree=256),
+                    exact=True)
             )
 
         self.transforms = Compose(transforms)
