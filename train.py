@@ -19,7 +19,7 @@ available_tasks = {
 }
 
 
-def train_and_test(task, dataset, method, eps, hparams, repeats, save_dir):
+def train_and_test(task, dataset, method, eps, hparams, repeats, output_dir):
     for run in range(repeats):
         params = {
             'task': task,
@@ -32,10 +32,10 @@ def train_and_test(task, dataset, method, eps, hparams, repeats, save_dir):
         params_str = ' | '.join([f'{key}={val}' for key, val in params.items()])
         print(TermColors.FG.green + params_str + TermColors.reset)
 
-        experiment_name = f'{task}_{dataset.name}_{method}_{eps}'
-        logger = TensorBoardLogger(save_dir=save_dir, name=experiment_name, version=run)
+        save_dir = os.path.join(output_dir, task, dataset.name, method, str(eps))
+        logger = TensorBoardLogger(save_dir=save_dir, name=None)
 
-        checkpoint_path = os.path.join('checkpoints', experiment_name)
+        checkpoint_path = os.path.join('checkpoints', save_dir)
         checkpoint_callback = ModelCheckpoint(monitor='val_loss', filepath=checkpoint_path)
 
         params = vars(hparams)
@@ -46,13 +46,14 @@ def train_and_test(task, dataset, method, eps, hparams, repeats, save_dir):
             args=hparams,
             precision=32,
             gpus=int(hparams.device == 'cuda' and torch.cuda.is_available()),
+            max_epochs=200,
             checkpoint_callback=checkpoint_callback,
             logger=logger,
             log_save_interval=1000,
             weights_summary=None,
             deterministic=True,
             progress_bar_refresh_rate=10,
-            early_stop_callback=EarlyStopping(min_delta=hparams.min_delta, patience=hparams.patience),
+            # early_stop_callback=EarlyStopping(patience=hparams.patience),
         )
 
         privatize = Privatize(method=method, eps=eps)
@@ -77,7 +78,7 @@ def batch_train_and_test(args):
             eps=eps,
             hparams=args,
             repeats=args.repeats,
-            save_dir=args.output_dir
+            output_dir=args.output_dir
         )
 
 
