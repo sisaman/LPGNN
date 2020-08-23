@@ -134,3 +134,8 @@ dmypy.json
 datasets
 results
 
+# local files
+data.ipynb
+dpgnn.job
+testpad.ipynb
+variance.ipynb
