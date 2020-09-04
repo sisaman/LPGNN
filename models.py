@@ -9,15 +9,16 @@ from torch_geometric.nn import GCNConv, VGAE, APPNP
 
 
 class GCN(torch.nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, dropout, inductive=False, normalize=True):
+    def __init__(self, input_dim, hidden_dim, output_dim, dropout, inductive=False, normalize=True, appnp=True):
         super().__init__()
-        # self.ppr = APPNP(K=10, alpha=0.05, add_self_loops=True)
+        self.appnp = APPNP(K=10, alpha=0.05, add_self_loops=True) if appnp else False
         self.conv1 = GCNConv(input_dim, hidden_dim, cached=not inductive, normalize=normalize)
         self.conv2 = GCNConv(hidden_dim, output_dim, cached=not inductive, normalize=normalize)
         self.dropout = dropout
 
     def forward(self, x, edge_index, edge_weight=None):
-        # x = self.ppr(x, edge_index, edge_weight)
+        if self.appnp:
+            x = self.appnp(x, edge_index, edge_weight)
         x = self.conv1(x, edge_index, edge_weight)
         x = torch.selu(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
@@ -27,14 +28,17 @@ class GCN(torch.nn.Module):
 
 
 class GraphEncoder(torch.nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, dropout, inductive=False, normalize=True):
+    def __init__(self, input_dim, hidden_dim, output_dim, dropout, inductive=False, normalize=True, appnp=False):
         super().__init__()
+        self.appnp = APPNP(K=10, alpha=0.05, add_self_loops=True) if appnp else False
         self.conv = GCNConv(input_dim, hidden_dim, cached=not inductive, normalize=normalize)
         self.conv_mu = GCNConv(hidden_dim, output_dim, cached=not inductive, normalize=normalize)
         self.conv_logvar = GCNConv(hidden_dim, output_dim, cached=not inductive, normalize=normalize)
         self.dropout = dropout
 
     def forward(self, x, edge_index, edge_weight=None):
+        if self.appnp:
+            x = self.appnp(x, edge_index, edge_weight)
         x = self.conv(x, edge_index, edge_weight)
         x = F.selu(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
@@ -84,7 +88,7 @@ class NodeClassifier(LightningModule):
 
     def training_step(self, data, index):
         out = self(data)
-        loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask])
+        loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask], ignore_index=-1)
         pred = out.argmax(dim=1)
         acc = accuracy(pred=pred[data.train_mask], target=data.y[data.train_mask])
         result = TrainResult(minimize=loss)
@@ -96,7 +100,7 @@ class NodeClassifier(LightningModule):
 
     def validation_step(self, data, index):
         out = self(data)
-        loss = F.nll_loss(out[data.val_mask], data.y[data.val_mask])
+        loss = F.nll_loss(out[data.val_mask], data.y[data.val_mask], ignore_index=-1)
         pred = out.argmax(dim=1)
         acc = accuracy(pred=pred[data.val_mask], target=data.y[data.val_mask])
         result = EvalResult(early_stop_on=loss, checkpoint_on=loss)
