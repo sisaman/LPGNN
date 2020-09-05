@@ -2,6 +2,7 @@ import os
 import ssl
 from functools import partial
 
+import numpy as np
 import pandas as pd
 import torch
 from pytorch_lightning import LightningDataModule
@@ -12,6 +13,55 @@ from torch_geometric.utils import to_undirected, from_scipy_sparse_matrix
 from transforms import NodeSplit, Normalize, EdgeSplit
 from scipy.io import loadmat
 from sklearn.preprocessing import LabelEncoder
+
+
+class AirUSA(InMemoryDataset):
+    url = 'https://github.com/GAugAuthors/GAug/raw/master/data/graphs'
+
+    def __init__(self, root, transform=None, pre_transform=None):
+        super().__init__(root, transform, pre_transform)
+        self.data, self.slices = torch.load(self.processed_paths[0])
+
+    @property
+    def raw_file_names(self):
+        return ['airport_adj.pkl', 'airport_features.pkl', 'airport_labels.pkl', 'airport_tvt_nids.pkl']
+
+    @property
+    def processed_file_names(self):
+        return 'data.pt'
+
+    def download(self):
+        for file in self.raw_file_names:
+            download_url(f'{self.url}/{file}', self.raw_dir)
+
+    # noinspection PyTypeChecker
+    def process(self):
+        x = np.load(os.path.join(self.raw_dir, 'airport_features.pkl'), allow_pickle=True)
+        y = np.load(os.path.join(self.raw_dir, 'airport_labels.pkl'), allow_pickle=True)
+        adj = np.load(os.path.join(self.raw_dir, 'airport_adj.pkl'), allow_pickle=True)
+        edge_index, _ = from_scipy_sparse_matrix(adj)
+
+        train, val, test = np.load(os.path.join(self.raw_dir, 'airport_tvt_nids.pkl'), allow_pickle=True)
+        train_mask = torch.zeros_like(y, dtype=torch.bool)
+        val_mask = torch.zeros_like(y, dtype=torch.bool)
+        test_mask = torch.zeros_like(y, dtype=torch.bool)
+
+        train_mask[train] = True
+        val_mask[val] = True
+        test_mask[test] = True
+
+        data = Data(
+            x=x, edge_index=edge_index, y=y, num_nodes=len(y),
+            train_mask=train_mask, val_mask=val_mask, test_mask=test_mask
+        )
+
+        if self.pre_transform is not None:
+            data = self.pre_transform(data)
+
+        torch.save(self.collate([data]), self.processed_paths[0])
+
+    def __repr__(self):
+        return f'KarateClub-{self.name}()'
 
 
 class Facebook100(InMemoryDataset):
@@ -208,7 +258,8 @@ class GraphDataset(LightningDataModule):
         'github': partial(KarateClub, name='github', pre_transform=NodeSplit()),
         'twitch': partial(KarateClub, name='twitch', pre_transform=NodeSplit()),
         'mit': partial(Facebook100, name='MIT8', target='status', pre_transform=NodeSplit()),
-        'cmu': partial(Facebook100, name='Carnegie49', target='status', pre_transform=NodeSplit())
+        'cmu': partial(Facebook100, name='Carnegie49', target='status', pre_transform=NodeSplit()),
+        'air': AirUSA
     }
 
     def __init__(self, dataset_name, data_dir='datasets', normalize=True,
