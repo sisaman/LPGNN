@@ -34,6 +34,10 @@ class Laplace(Mechanism):
 
 
 class Gaussian(Mechanism):
+    def __init__(self, *args, **kwargs):
+        super(Gaussian, self).__init__(*args, **kwargs)
+        self.sigma = None
+
     def fit(self, x):
         super().fit(x)
         if torch.is_tensor(self.sensitivity) and len(self.sensitivity) > 1:
@@ -83,31 +87,24 @@ class Gaussian(Mechanism):
         Output:
         sigma : standard deviation of Gaussian noise needed to achieve (epsilon,delta)-DP under global sensitivity GS
         """
-
         delta_thr = self._case_a(0.0)
-
         if self.delta == delta_thr:
             alpha = 1.0
-
         else:
             if self.delta > delta_thr:
                 predicate_stop_DT = lambda s: self._case_a(s) >= self.delta
                 function_s_to_delta = lambda s: self._case_a(s)
                 predicate_left_BS = lambda s: function_s_to_delta(s) > self.delta
                 function_s_to_alpha = lambda s: math.sqrt(1.0 + s / 2.0) - math.sqrt(s / 2.0)
-
             else:
                 predicate_stop_DT = lambda s: self._case_b(s) <= self.delta
                 function_s_to_delta = lambda s: self._case_b(s)
                 predicate_left_BS = lambda s: function_s_to_delta(s) < self.delta
                 function_s_to_alpha = lambda s: math.sqrt(1.0 + s / 2.0) + math.sqrt(s / 2.0)
-
             predicate_stop_BS = lambda s: abs(function_s_to_delta(s) - self.delta) <= tol
-
             s_inf, s_sup = self._doubling_trick(predicate_stop_DT, 0.0, 1.0)
             s_final = self._binary_search(predicate_stop_BS, predicate_left_BS, s_inf, s_sup)
             alpha = function_s_to_alpha(s_final)
-
         sigma = alpha * self.sensitivity / math.sqrt(2.0 * self.eps)
         return sigma
 
@@ -226,6 +223,24 @@ class MultiDimDuchi(Mechanism):
         return y_star
 
 
+class MultiOneBit(Mechanism):
+    def transform(self, x):
+        n, d = x.size()
+        k = int(max(1, min(d, math.floor(self.eps / 2.18))))
+        ek = math.exp(self.eps / k)
+        p = (x - self.alpha) / self.sensitivity
+        p = (p * (ek - 1) + 1) / (ek + 1)
+        xs = torch.bernoulli(p) * 2 - 1
+        sample = torch.cat([torch.randperm(d, device=x.device)[:k] for _ in range(n)]).view(n, k)
+        mask = torch.zeros_like(x, dtype=torch.bool)
+        mask.scatter_(dim=1, index=sample, value=True)
+        xs = mask * xs
+        ys = xs * (d*self.sensitivity) / (2 * k)
+        ys = ys * (ek + 1) / (ek - 1)
+        ys = ys + self.alpha + self.sensitivity / 2
+        return ys
+
+
 class Wang(Mechanism):
     def transform(self, x):
         # normalize x between -1,1
@@ -264,6 +279,7 @@ available_mechanisms = {
     'mpm': MultiDimPiecewise,
     'spm': SpecialPiecewise,
     'mwm': MultiDimWang,
+    'mob': MultiOneBit
 }
 
 
