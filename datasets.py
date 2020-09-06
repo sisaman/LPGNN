@@ -8,9 +8,9 @@ import torch
 from pytorch_lightning import LightningDataModule
 from torch_geometric.data import Data, InMemoryDataset, download_url, extract_zip, DataLoader
 from torch_geometric.datasets import Planetoid
-from torch_geometric.transforms import GDC, Compose
+from torch_geometric.transforms import Compose
 from torch_geometric.utils import to_undirected, from_scipy_sparse_matrix
-from transforms import NodeSplit, Normalize, EdgeSplit
+from transforms import NodeSplit, Normalize
 from scipy.io import loadmat
 from sklearn.preprocessing import LabelEncoder
 
@@ -100,6 +100,8 @@ class Facebook100(InMemoryDataset):
     def process(self):
         mat = loadmat(os.path.join(self.raw_dir, self.raw_file_names))
         features = pd.DataFrame(mat['local_info'][:, :-1], columns=self.targets)
+        if self.target == 'year':
+            features.loc[(features['year'] < 2004) | (features['year'] > 2009), 'year'] = 0
         y = torch.from_numpy(LabelEncoder().fit_transform(features[self.target]))
         if 0 in features[self.target].values:
             y = y - 1
@@ -249,7 +251,7 @@ class Elliptic(InMemoryDataset):
         return f'Elliptic()'
 
 
-class GraphDataset(LightningDataModule):
+class GraphDataModule(LightningDataModule):
     available_datasets = {
         'cora': partial(Planetoid, name='cora'),
         'citeseer': partial(Planetoid, name='citeseer'),
@@ -258,69 +260,60 @@ class GraphDataset(LightningDataModule):
         'github': partial(KarateClub, name='github', pre_transform=NodeSplit()),
         'twitch': partial(KarateClub, name='twitch', pre_transform=NodeSplit()),
         'mit': partial(Facebook100, name='MIT8', target='status', pre_transform=NodeSplit()),
-        'cmu': partial(Facebook100, name='Carnegie49', target='status', pre_transform=NodeSplit()),
-        'air': AirUSA
+        'cmu': partial(Facebook100, name='Carnegie49', target='year', pre_transform=NodeSplit()),
     }
 
-    def __init__(self, dataset_name, data_dir='datasets', normalize=True,
-                 split_edges=False, use_gdc=False, device='cpu'):
+    def __init__(self, name, root='datasets', normalize=False, transform=None, device='cpu'):
         super().__init__()
-        self.name = dataset_name
-        self.root_dir = os.path.join(data_dir, dataset_name)
+        # transforms.append(
+        #     GDC(self_loop_weight=1, normalization_in='sym', normalization_out='sym',
+        #         diffusion_kwargs=dict(method='ppr', alpha=0.05, eps=1e-4),
+        #         # diffusion_kwargs=dict(method='heat', t=10),
+        #         # sparsification_kwargs=dict(method='topk', k=256, dim=0),
+        #         sparsification_kwargs=dict(method='threshold', avg_degree=256),
+        #         exact=False)
+        # )
+        self.name = name
+        self.dataset = self.available_datasets[name](root=os.path.join(root, name), transform=transform)
+        self.device = 'cpu' if not torch.cuda.is_available() else device
+        self.data_list = None
 
-        transforms = []
         if normalize:
-            transforms.append(Normalize(0, 1))
-        if split_edges:
-            transforms.append(EdgeSplit(val_ratio=0.1, test_ratio=0.1))
-        if use_gdc:
-            transforms.append(
-                GDC(self_loop_weight=1, normalization_in='sym', normalization_out='sym',
-                    diffusion_kwargs=dict(method='ppr', alpha=0.05, eps=1e-4),
-                    # diffusion_kwargs=dict(method='heat', t=10),
-                    # sparsification_kwargs=dict(method='topk', k=256, dim=0),
-                    sparsification_kwargs=dict(method='threshold', avg_degree=256),
-                    exact=False)
-            )
-
-        self.transforms = Compose(transforms)
-        self.use_gdc = use_gdc
-        self.device = device
-        self.data = None
-        self.num_classes = None
+            low, high = normalize
+            self.add_transform(Normalize(low, high))
 
     def prepare_data(self):
-        assert self.data is None
-        dataset = self.available_datasets[self.name](root=self.root_dir, transform=self.transforms)
-        self.num_classes = dataset.num_classes
-        self.data = dataset[0]
+        assert self.data_list is None
+        self.data_list = [data.to(self.device) for data in self.dataset]
 
-        if self.device == 'cuda' and torch.cuda.is_available():
-            self.data.to('cuda')
-
-    def apply_transform(self, transform):
-        if not self.has_prepared_data:
-            self.prepare_data()
-        self.data = transform(self.data)
-
-    def get_data(self):
-        if not self.has_prepared_data:
-            self.prepare_data()
-        return self.data
+    def add_transform(self, transform):
+        if self.has_prepared_data:
+            self.data_list = [transform(data) for data in self.data_list]
+        else:
+            current_transform = self.dataset.transform
+            new_transform = transform if current_transform is None else Compose([current_transform, transform])
+            self.dataset.transform = new_transform
 
     def train_dataloader(self):
-        return DataLoader([self.data], pin_memory=True)
+        return DataLoader(self.data_list, pin_memory=True)
 
     def val_dataloader(self):
-        return DataLoader([self.data], pin_memory=True)
+        return DataLoader(self.data_list, pin_memory=True)
 
     def test_dataloader(self):
-        return DataLoader([self.data], pin_memory=True)
+        return DataLoader(self.data_list, pin_memory=True)
 
-    @property
-    def num_features(self):
-        return self.data.num_features
+    def __getattr__(self, attr):
+        return getattr(self.dataset, attr)
+
+    def __getitem__(self, item):
+        if not self.has_prepared_data:
+            self.prepare_data()
+        return self.data_list[item]
+
+    def __str__(self):
+        return self.dataset.__str__()
 
 
 def get_available_datasets():
-    return list(GraphDataset.available_datasets.keys())
+    return list(GraphDataModule.available_datasets.keys())
