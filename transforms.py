@@ -1,5 +1,10 @@
+import os
 import math
+import numpy as np
 import torch
+import subprocess
+
+from torch_cluster import random_walk
 from torch_geometric.utils import to_undirected, negative_sampling
 
 
@@ -113,4 +118,76 @@ class FeatureSelection:
         v = data.x.var(dim=0)
         idx = v.sort()[1][-self.k:]
         data.x = data.x[:, idx]
+        return data
+
+
+class RandomWalkExpand:
+    def __init__(self, walk_length, p):
+        self.num_steps = min(walk_length, max(1, int(1/p))) if p > 0 else walk_length
+        self.num_walks = walk_length // self.num_steps
+
+    def __call__(self, data):
+        if not hasattr(data, 'edge_index_backup'):
+            data.edge_index_backup = data.edge_index
+
+        data.edge_index = torch.cat([
+            self.random_walk(
+                edge_index=data.edge_index_backup,
+                num_nodes=data.num_nodes,
+                walk_length=self.num_steps
+            ) for _ in range(self.num_walks)
+        ], dim=1)
+
+        return data
+
+    @staticmethod
+    def random_walk(edge_index, num_nodes, walk_length):
+        row, col = edge_index
+        start = torch.arange(num_nodes, device=row.device)
+        walk = random_walk(row, col, start, walk_length=walk_length)
+        walk = walk[:, 1:].contiguous()
+        row = torch.arange(num_nodes, device=row.device).repeat(walk_length, 1).T.reshape(1, -1)
+        col = walk.view(1, -1)
+        edge_index = torch.cat([row, col], dim=0).contiguous()
+        return edge_index
+
+
+
+class BiasedRandomWalkExpand:
+    def __init__(self, walk_length, p, q):
+        self.walk_length = walk_length
+        self.p = p
+        self.q = q
+
+    def __call__(self, data):
+        if not hasattr(data, 'edge_index_backup'):
+            data.edge_index_backup = data.edge_index
+
+        device = data.edge_index.device
+        cwd = os.getcwd()
+        os.chdir('snap')
+
+        try:
+            # save edge_index to disk
+            edge_index = data.edge_index_backup.cpu().numpy().T
+            np.savetxt(fname='edges.txt', X=edge_index, fmt='%d')
+
+            # call node2vec on the saved file to generate random walks
+            result = subprocess.run([
+                './node2vec',
+                f'-i:edges.txt',
+                f'-o:walks.txt',
+                f'-l:{self.walk_length}', f'-p:{self.p}', f'-q:{self.q}',
+                '-r:1', '-v', '-dr', '-ow'
+            ])
+            result.check_returncode()
+
+            # load walks from disk and set edge_index
+            walks = torch.tensor(np.loadtxt(fname='walks.txt', dtype=int), device=device)
+            row = torch.arange(data.num_nodes, device=device).repeat(self.walk_length, 1).T.reshape(1, -1)
+            col = walks.view(1, -1)
+            data.edge_index = torch.cat([row, col], dim=0).contiguous()
+        finally:
+            os.chdir(cwd)
+
         return data
