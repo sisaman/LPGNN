@@ -3,6 +3,24 @@ import torch
 
 from torch_cluster import random_walk
 from torch_geometric.utils import to_undirected, negative_sampling
+from privacy import available_mechanisms
+
+
+class Privatize:
+    def __init__(self, method, eps, **kwargs):
+        self.method = method
+        self.eps = eps
+        self.kwargs = kwargs
+
+    def __call__(self, data):
+        if self.method == 'raw':
+            if hasattr(data, 'x_raw'):
+                data.x = data.x_raw  # bring back x_raw
+        else:
+            if not hasattr(data, 'x_raw'):
+                data.x_raw = data.x  # save original x to x_raw
+            data.x = available_mechanisms[self.method](eps=self.eps, **self.kwargs)(data.x_raw)
+        return data
 
 
 class NodeSplit:

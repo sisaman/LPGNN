@@ -165,32 +165,26 @@ class MultiBit(Mechanism):
         return ys
 
 
+class PrivGraphConv(Mechanism):
+    def transform(self, x):
+        exp = math.exp(self.eps)
+        p = (x - self.alpha) / self.sensitivity
+        p = p * (exp - 1) / (exp + 1) + 1 / (exp + 1)
+        y = torch.bernoulli(p)
+        y_star = ((y * (exp + 1) - 1) * self.sensitivity) / (exp - 1) + self.alpha
+        return y_star
+
+
 available_mechanisms = {
     'gm': Gaussian,
     'mpm': MultiDimPiecewise,
-    'mbm': MultiBit
+    'mbm': MultiBit,
+    'pgc': PrivGraphConv,
 }
 
 
 def get_available_mechanisms():
     return list(available_mechanisms.keys())
-
-
-class Privatize:
-    def __init__(self, method, eps, **kwargs):
-        self.method = method
-        self.eps = eps
-        self.kwargs = kwargs
-
-    def __call__(self, data):
-        if self.method == 'raw':
-            if hasattr(data, 'x_raw'):
-                data.x = data.x_raw  # bring back x_raw
-        else:
-            if not hasattr(data, 'x_raw'):
-                data.x_raw = data.x  # save original x to x_raw
-            data.x = available_mechanisms[self.method](eps=self.eps, **self.kwargs)(data.x_raw)
-        return data
 
 
 if __name__ == '__main__':
