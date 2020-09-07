@@ -265,14 +265,6 @@ class GraphDataModule(LightningDataModule):
 
     def __init__(self, name, root='datasets', normalize=False, transform=None, device='cpu'):
         super().__init__()
-        # transforms.append(
-        #     GDC(self_loop_weight=1, normalization_in='sym', normalization_out='sym',
-        #         diffusion_kwargs=dict(method='ppr', alpha=0.05, eps=1e-4),
-        #         # diffusion_kwargs=dict(method='heat', t=10),
-        #         # sparsification_kwargs=dict(method='topk', k=256, dim=0),
-        #         sparsification_kwargs=dict(method='threshold', avg_degree=256),
-        #         exact=False)
-        # )
         self.name = name
         self.dataset = self.available_datasets[name](root=os.path.join(root, name), transform=transform)
         self.device = 'cpu' if not torch.cuda.is_available() else device
