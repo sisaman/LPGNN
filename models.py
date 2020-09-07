@@ -31,7 +31,7 @@ class GCN(torch.nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, dropout, inductive=False, normalize=True, k_hop=False):
         super().__init__()
         Conv = (GCNConv if normalize else MeanConv)
-        self.appnp = APPNP(K=20, alpha=0, add_self_loops=True) if k_hop else False
+        self.appnp = APPNP(K=k_hop, alpha=0, add_self_loops=True) if k_hop else False
         self.conv1 = Conv(input_dim, hidden_dim, cached=not inductive)
         self.conv2 = GCNConv(hidden_dim, output_dim, cached=not inductive)
         self.dropout = dropout
@@ -55,7 +55,7 @@ class NodeClassifier(LightningModule):
         parser.add_argument('--dropout', type=float, default=0)
         parser.add_argument('--learning-rate', '--lr', type=float, default=0.001)
         parser.add_argument('--weight-decay', type=float, default=0)
-        parser.add_argument('--k-hop', action='store_true', default=False)
+        parser.add_argument('--k-hop', type=int, default=0)
         parser.add_argument('--patience', type=int, default=50)
         return parser
 
