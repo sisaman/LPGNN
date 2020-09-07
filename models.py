@@ -9,7 +9,7 @@ from torch_geometric.nn import GCNConv, APPNP, MessagePassing
 from torch_geometric.utils import add_remaining_self_loops
 
 
-class UnnormalizedGCNConv(MessagePassing):
+class MeanConv(MessagePassing):
     def __init__(self, in_channels, out_channels, add_self_loops=True, **kwargs):
         super().__init__(aggr='mean')
         self.fc = torch.nn.Linear(in_channels, out_channels)
@@ -30,7 +30,7 @@ class UnnormalizedGCNConv(MessagePassing):
 class GCN(torch.nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, dropout, inductive=False, normalize=True, k_hop=False):
         super().__init__()
-        Conv = (GCNConv if normalize else UnnormalizedGCNConv)
+        Conv = (GCNConv if normalize else MeanConv)
         self.appnp = APPNP(K=20, alpha=0, add_self_loops=True) if k_hop else False
         self.conv1 = Conv(input_dim, hidden_dim, cached=not inductive)
         self.conv2 = GCNConv(hidden_dim, output_dim, cached=not inductive)
