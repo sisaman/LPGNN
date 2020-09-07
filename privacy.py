@@ -26,13 +26,6 @@ class Mechanism:
         return self.transform(x)
 
 
-class Laplace(Mechanism):
-    def transform(self, x):
-        scale = torch.ones_like(x) * (self.sensitivity / self.eps)
-        y_star = torch.distributions.Laplace(x, scale).sample()
-        return y_star
-
-
 class Gaussian(Mechanism):
     def __init__(self, *args, **kwargs):
         super(Gaussian, self).__init__(*args, **kwargs)
@@ -109,16 +102,6 @@ class Gaussian(Mechanism):
         return sigma
 
 
-class PrivGraphConv(Mechanism):
-    def transform(self, x):
-        exp = math.exp(self.eps)
-        p = (x - self.alpha) / self.sensitivity
-        p = p * (exp - 1) / (exp + 1) + 1 / (exp + 1)
-        y = torch.bernoulli(p)
-        y_star = ((y * (exp + 1) - 1) * self.sensitivity) / (exp - 1) + self.alpha
-        return y_star
-
-
 class Piecewise(Mechanism):
     def transform(self, x):
         # normalize x between -1,1
@@ -164,66 +147,7 @@ class MultiDimPiecewise(Piecewise):
         return z
 
 
-class SpecialPiecewise(Piecewise):
-    def __init__(self, dv=None, **kwargs):
-        super(SpecialPiecewise, self).__init__(**kwargs)
-        self.dv = dv / dv.max()
-
-    def transform(self, x):
-        n, d = x.size()
-        c = 100
-        eps_total = self.eps
-        Z = torch.empty(0, device=x.device)
-        for i in range(n):
-            k = max(int(self.dv[i] * c), 1)
-            self.eps = eps_total / k
-            y = super().transform(x[i, :])
-            choice = torch.randperm(d, device=x.device)[:k]
-            mask = torch.zeros_like(y, dtype=torch.bool)
-            mask[choice] = True
-            z = mask * y * d / k
-            Z = torch.cat([Z, z])
-
-        self.eps = eps_total
-        Z = Z.view(n, d)
-        return Z
-
-
-class MultiDimDuchi(Mechanism):
-    def transform(self, x):
-        # normalize x between -1,1
-        t = (x - self.alpha) / self.sensitivity
-        t = 2 * t - 1
-
-        n, d = t.size()
-        if d % 2 == 0:
-            C = (2 ** (d - 1)) / math.comb(d - 1, d // 2) + (math.comb(d, d // 2) / math.comb(d - 1, d // 2)) * 0.5
-        else:
-            C = (2 ** (d - 1)) / math.comb(d - 1, (d - 1) // 2)
-
-        B = C * (math.exp(self.eps) + 1) / (math.exp(self.eps) - 1)
-        V = torch.bernoulli(t * 0.5 + 0.5)
-        V = V * 2 - 1  # rescale between -1 and 1
-        u = torch.bernoulli(torch.ones(n, device=x.device) * (math.exp(self.eps) / (math.exp(self.eps) + 1)))
-        u = u * 2 - 1
-
-        T = torch.empty(0, device=x.device)
-        for i in range(n):
-            v = V[i, :]
-            while True:
-                t = torch.randint_like(v, low=0, high=2) * 2 - 1
-                t *= B
-                if t.dot(v) * u[i] >= 0:
-                    break
-            T = torch.cat([T, t])
-        T = T.view(n, d)
-
-        # unbias data
-        y_star = self.sensitivity * (T + 1) / 2 + self.alpha
-        return y_star
-
-
-class MultiOneBit(Mechanism):
+class MultiBit(Mechanism):
     def transform(self, x):
         n, d = x.size()
         k = int(max(1, min(d, math.floor(self.eps / 2.18))))
@@ -241,45 +165,10 @@ class MultiOneBit(Mechanism):
         return ys
 
 
-class Wang(Mechanism):
-    def transform(self, x):
-        # normalize x between -1,1
-        t = (x - self.alpha) / self.sensitivity
-        t = 2 * t - 1
-
-        p = t * (math.exp(self.eps) + 2 * self.delta - 1) / (2 * (math.exp(self.eps)+ 1)) + 0.5
-        u = torch.bernoulli(p) * 2 - 1
-        t = u * (math.exp(self.eps) + 1) / (math.exp(self.eps) + 2 * self.delta - 1)
-
-        # unbias data
-        y_star = self.sensitivity * (t + 1) / 2 + self.alpha
-        return y_star
-
-
-class MultiDimWang(Wang):
-    def transform(self, x):
-        n, d = x.size()
-        k = int(max(1, min(d, math.floor(self.eps / 2.17))))
-        sample = torch.cat([torch.randperm(d, device=x.device)[:k] for _ in range(n)]).view(n, k)
-        mask = torch.zeros_like(x, dtype=torch.bool)
-        mask.scatter_(dim=1, index=sample, value=True)
-        self.eps /= k
-        y = super().transform(x)
-        z = mask * y * d / k
-        return z
-
-
 available_mechanisms = {
-    'pgc': PrivGraphConv,
-    'pm': Piecewise,
-    'lm': Laplace,
-    'wm': Wang,
     'gm': Gaussian,
-    'mdm': MultiDimDuchi,
     'mpm': MultiDimPiecewise,
-    'spm': SpecialPiecewise,
-    'mwm': MultiDimWang,
-    'mob': MultiOneBit
+    'mbm': MultiBit
 }
 
 
