@@ -9,7 +9,7 @@ from torch_geometric.nn import GCNConv
 from torch_geometric.utils import degree
 import pandas as pd
 from datasets import get_available_datasets, GraphDataModule
-from models import KOrderPass
+from models import KProp
 from transforms import Privatize
 from utils import TermColors
 from privacy import get_available_mechanisms
@@ -25,7 +25,7 @@ class ErrorEstimation:
         self.max_degree_quantile = max_degree_quantile
         device = 'cpu' if not torch.cuda.is_available() else device
 
-        self.model = KOrderPass(K=k, aggr=agg).to(device)
+        self.model = KProp(K=k, aggr=agg).to(device)
         self.gc = self.model(data.x_raw, data.edge_index)
 
     def run(self):
