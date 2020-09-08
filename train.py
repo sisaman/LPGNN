@@ -5,7 +5,7 @@ import torch
 from argparse import ArgumentParser
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning import Trainer, seed_everything
-from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint
 from torch_geometric.transforms import GDC
 from datasets import get_available_datasets, GraphDataModule
 from privacy import get_available_mechanisms
@@ -15,29 +15,33 @@ from utils import TermColors
 from itertools import product
 
 
-def train_and_test(dataset, method, eps, args, repeats, output_dir):
+def train_and_test(dataset, method, eps, hops, aggr, args, repeats, output_dir):
     for run in range(repeats):
         params = {
             'task': 'node',
             'dataset': dataset.name,
             'method': method,
             'eps': eps,
+            'hops': hops,
+            'aggr': aggr,
             'run': run
         }
 
         params_str = ' | '.join([f'{key}={val}' for key, val in params.items()])
         print(TermColors.FG.green + params_str + TermColors.reset)
 
-        save_dir = os.path.join(output_dir, 'node', dataset.name, method, str(eps))
+        save_dir = os.path.join(output_dir, 'node', dataset.name, method, str(eps), str(hops), aggr)
         logger = TensorBoardLogger(save_dir=save_dir, name=None)
 
         checkpoint_path = os.path.join('checkpoints', save_dir)
         checkpoint_callback = ModelCheckpoint(monitor='val_loss', filepath=checkpoint_path)
 
         params = vars(args)
-        # log_learning_curve = run == 0 and (method == 'raw' or method == 'pgc')
-        log_learning_curve = True
-        model = NodeClassifier(**params, log_learning_curve=log_learning_curve)
+        log_learning_curve = run == 0 and (method == 'raw' or method == 'mbm')
+        # log_learning_curve = True
+        params['hops'] = hops
+        params['aggr'] = aggr
+        model = NodeClassifier(log_learning_curve=log_learning_curve, **params)
 
         trainer = Trainer.from_argparse_args(
             args=args,
@@ -50,7 +54,7 @@ def train_and_test(dataset, method, eps, args, repeats, output_dir):
             weights_summary=None,
             deterministic=True,
             progress_bar_refresh_rate=10,
-            early_stop_callback=EarlyStopping(patience=500),
+            # early_stop_callback=EarlyStopping(patience=500),
         )
 
         privatize = Privatize(method=method, eps=eps)
@@ -74,16 +78,18 @@ def batch_train_and_test(args):
         args.normalize = False
 
     if 'raw' in args.methods:
-        configs = [('raw', 0)]
-        configs += list(product(set(args.methods) - {'raw'}, set(args.epsilons) - {0.0}))
+        configs = list(product(['raw'], [0.0], args.hops, args.aggs))
+        configs += list(product(set(args.methods) - {'raw'}, set(args.epsilons), args.hops, args.aggs))
     else:
-        configs = product(args.methods, args.epsilons)
+        configs = list(product(args.methods, args.epsilons, args.hops, args.aggs))
 
-    for method, eps in configs:
+    for method, eps, hops, aggr in configs:
         train_and_test(
             dataset=dataset,
             method=method,
             eps=eps,
+            hops=hops,
+            aggr=aggr,
             args=args,
             repeats=args.repeats,
             output_dir=args.output_dir
@@ -105,10 +111,12 @@ def main():
                              '"pm" for Piecewise Mechanism, and "lm" for Laplace Mechanism, '
                              'as local differentially private algorithms.'
                         )
-    parser.add_argument('-e', '--eps', nargs='*', type=float, dest='epsilons', default=[0],
+    parser.add_argument('-e', '--eps', nargs='*', type=float, dest='epsilons', default=[1],
                         help='The list of epsilon values for LDP mechanisms. The values must be greater than zero. '
                              'The "raw" method does not support this options.'
                         )
+    parser.add_argument('-k', '--hops', nargs='*', type=int, default=[1])
+    parser.add_argument('--aggs', nargs='*', type=str, default=['gcn'])
     parser.add_argument('-r', '--repeats', type=int, default=1,
                         help='The number of repeating the experiment. Default is 1.'
                         )
