@@ -257,7 +257,6 @@ class GraphDataModule(LightningDataModule):
         'elliptic': partial(Elliptic, pre_transform=NodeSplit()),
         'facebook': partial(KarateClub, name='facebook', pre_transform=NodeSplit()),
         'github': partial(KarateClub, name='github', pre_transform=NodeSplit()),
-        'mit': partial(Facebook100, name='MIT8', target='status', pre_transform=NodeSplit()),
         'twitch': partial(KarateClub, name='twitch', pre_transform=NodeSplit()),
     }
 
