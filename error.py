@@ -5,7 +5,6 @@ from itertools import product
 import torch
 from pytorch_lightning import seed_everything
 from pytorch_lightning.loggers import TensorBoardLogger
-from torch_geometric.nn import GCNConv
 from torch_geometric.utils import degree
 import pandas as pd
 from datasets import get_available_datasets, GraphDataModule
