@@ -14,14 +14,14 @@ from utils import TermColors
 from itertools import product
 
 
-def train_and_test(dataset, method, eps, hops, aggr, args, repeats, output_dir):
+def train_and_test(dataset, method, eps, steps, aggr, args, repeats, output_dir):
     for run in range(repeats):
         params = {
             'task': 'node',
             'dataset': dataset.name,
             'method': method,
             'eps': eps,
-            'hops': hops,
+            'steps': steps,
             'aggr': aggr,
             'run': run
         }
@@ -29,7 +29,7 @@ def train_and_test(dataset, method, eps, hops, aggr, args, repeats, output_dir):
         params_str = ' | '.join([f'{key}={val}' for key, val in params.items()])
         print(TermColors.FG.green + params_str + TermColors.reset)
 
-        save_dir = os.path.join(output_dir, 'node', dataset.name, method, str(eps), str(hops), aggr)
+        save_dir = os.path.join(output_dir, 'node', dataset.name, method, str(eps), str(steps), aggr)
         logger = TensorBoardLogger(save_dir=save_dir, name=None)
 
         checkpoint_path = os.path.join('checkpoints', save_dir)
@@ -38,7 +38,7 @@ def train_and_test(dataset, method, eps, hops, aggr, args, repeats, output_dir):
         params = vars(args)
         log_learning_curve = run == 0 and (method == 'raw' or method == 'mbm')
         # log_learning_curve = True
-        params['hops'] = hops
+        params['steps'] = steps
         params['aggr'] = aggr
         model = NodeClassifier(log_learning_curve=log_learning_curve, **params)
 
@@ -66,17 +66,17 @@ def batch_train_and_test(args):
     dataset = GraphDataModule(name=args.dataset, normalize=(0, 1), device=args.device)
 
     if 'raw' in args.methods:
-        configs = list(product(['raw'], [0.0], args.hops, args.aggs))
-        configs += list(product(set(args.methods) - {'raw'}, set(args.epsilons), args.hops, args.aggs))
+        configs = list(product(['raw'], [0.0], args.steps, args.aggs))
+        configs += list(product(set(args.methods) - {'raw'}, set(args.epsilons), args.steps, args.aggs))
     else:
-        configs = list(product(args.methods, args.epsilons, args.hops, args.aggs))
+        configs = list(product(args.methods, args.epsilons, args.steps, args.aggs))
 
-    for method, eps, hops, aggr in configs:
+    for method, eps, steps, aggr in configs:
         train_and_test(
             dataset=dataset,
             method=method,
             eps=eps,
-            hops=hops,
+            steps=steps,
             aggr=aggr,
             args=args,
             repeats=args.repeats,
@@ -90,30 +90,14 @@ def main():
     logging.captureWarnings(True)
 
     parser = ArgumentParser()
-    parser.add_argument('-d', '--dataset', type=str, choices=get_available_datasets(), required=True,
-                        help='The dataset to train on. One of "citeseer", "cora", "elliptic", "flickr", and "twitch".'
-                        )
-    parser.add_argument('-m', '--methods', nargs='+', choices=get_available_mechanisms() + ['raw'], required=True,
-                        help='The list of mechanisms to perturb node features. '
-                             'Can choose "raw" to use original features, or "pgc" for Private Graph Convolution, '
-                             '"pm" for Piecewise Mechanism, and "lm" for Laplace Mechanism, '
-                             'as local differentially private algorithms.'
-                        )
-    parser.add_argument('-e', '--eps', nargs='*', type=float, dest='epsilons', default=[1],
-                        help='The list of epsilon values for LDP mechanisms. The values must be greater than zero. '
-                             'The "raw" method does not support this options.'
-                        )
-    parser.add_argument('-k', '--hops', nargs='*', type=int, default=[1])
-    parser.add_argument('--aggs', nargs='*', type=str, default=['gcn'])
-    parser.add_argument('-r', '--repeats', type=int, default=1,
-                        help='The number of repeating the experiment. Default is 1.'
-                        )
-    parser.add_argument('-o', '--output-dir', type=str, default='./results',
-                        help='The path to store the results. Default is "./results".'
-                        )
-    parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'],
-                        help='The device used for the training. Either "cpu" or "cuda". Default is "cuda".'
-                        )
+    parser.add_argument('-d', '--dataset', type=str, choices=get_available_datasets(), required=True)
+    parser.add_argument('-m', '--methods', nargs='+', choices=get_available_mechanisms() + ['raw'], required=True)
+    parser.add_argument('-e', '--epsilons', nargs='*', type=float, dest='epsilons', default=[1])
+    parser.add_argument('-k', '--steps', nargs='*', type=int, default=[1])
+    parser.add_argument('-a', '--aggs', nargs='*', type=str, default=['mean'])
+    parser.add_argument('-r', '--repeats', type=int, default=1)
+    parser.add_argument('-o', '--output-dir', type=str, default='./results')
+    parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'])
     parser = NodeClassifier.add_module_specific_args(parser)
     args = parser.parse_args()
 
