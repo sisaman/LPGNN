@@ -68,7 +68,7 @@ def error_estimation(dataset, method, eps, k, agg, repeats, output_dir, device):
 def batch_error_estimation(args):
     for dataset_name in args.datasets:
         dataset = GraphDataModule(name=dataset_name, normalize=(0, 1), device=args.device)
-        configs = product(args.methods, args.epsilons, args.hops, args.aggs)
+        configs = product(args.methods, args.epsilons, args.steps, args.aggs)
         for method, eps, k, agg in configs:
             error_estimation(
                 dataset=dataset,
@@ -89,8 +89,8 @@ def main():
     parser = ArgumentParser()
     parser.add_argument('-d', '--datasets',     nargs='+', choices=get_available_datasets(), required=True)
     parser.add_argument('-m', '--methods',      nargs='+', choices=get_available_mechanisms(), required=True)
-    parser.add_argument('-e', '--eps',          nargs='+', type=float, dest='epsilons', required=True)
-    parser.add_argument('-k', '--hops',         nargs='*', type=int, default=[1])
+    parser.add_argument('-e', '--epsilons',     nargs='+', type=float, dest='epsilons', required=True)
+    parser.add_argument('-k', '--steps',        nargs='*', type=int, default=[1])
     parser.add_argument('-a', '--aggs',         nargs='*', type=str, default=['gcn'])
     parser.add_argument('-r', '--repeats',      type=int, default=1)
     parser.add_argument('-o', '--output-dir',   type=str, default='./results')

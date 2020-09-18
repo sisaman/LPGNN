@@ -47,10 +47,10 @@ class KProp(MessagePassing):
 
 
 class GCN(torch.nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, dropout, inductive=False, aggr='gcn', hops=1):
+    def __init__(self, input_dim, hidden_dim, output_dim, dropout, inductive=False, aggr='gcn', steps=1):
         super().__init__()
         self.fc = torch.nn.Linear(input_dim, hidden_dim)
-        self.conv1 = KProp(K=hops, cached=not inductive, aggr=aggr)
+        self.conv1 = KProp(K=steps, cached=not inductive, aggr=aggr)
         self.conv2 = GCNConv(hidden_dim, output_dim, cached=not inductive)
         self.dropout = dropout
 
@@ -69,19 +69,19 @@ class NodeClassifier(LightningModule):
     def add_module_specific_args(parent_parser):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
         parser.add_argument('--hidden-dim', type=int, default=16)
-        parser.add_argument('--dropout', type=float, default=0)
+        parser.add_argument('--dropout', '--dp', type=float, default=0)
         parser.add_argument('--learning-rate', '--lr', type=float, default=0.001)
-        parser.add_argument('--weight-decay', type=float, default=0)
+        parser.add_argument('--weight-decay', '--wd', type=float, default=0)
         return parser
 
-    def __init__(self, hidden_dim=16, dropout=0.5, learning_rate=0.001, weight_decay=0, hops=1, aggr='gcn',
+    def __init__(self, hidden_dim=16, dropout=0.5, learning_rate=0.001, weight_decay=0, steps=1, aggr='gcn',
                  log_learning_curve=False, **kwargs):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.dropout = dropout
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
-        self.hops = hops
+        self.steps = steps
         self.aggr = aggr
         self.save_hyperparameters()
         self.log_learning_curve = log_learning_curve
@@ -96,7 +96,7 @@ class NodeClassifier(LightningModule):
                 output_dim=dataset.num_classes,
                 dropout=self.dropout,
                 inductive=False,
-                hops=self.hops,
+                steps=self.steps,
                 aggr=self.aggr
             )
 
