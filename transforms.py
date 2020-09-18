@@ -1,7 +1,7 @@
 import math
 import torch
-
 from torch_geometric.utils import to_undirected, negative_sampling
+
 from privacy import available_mechanisms
 
 
@@ -122,5 +122,3 @@ class Normalize:
         data.x = (data.x - alpha) * (self.max - self.min) / delta + self.min
         data.x = data.x[:, torch.nonzero(delta, as_tuple=False).squeeze()]  # remove features with delta = 0
         return data
-
-

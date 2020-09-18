@@ -1,17 +1,19 @@
 import logging
 import os
 import time
-import torch
 from argparse import ArgumentParser
-from pytorch_lightning.loggers import TensorBoardLogger
+from itertools import product
+
+import torch
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.loggers import TensorBoardLogger
+
 from datasets import get_available_datasets, GraphDataModule
-from privacy import get_available_mechanisms
 from models import NodeClassifier
+from privacy import get_available_mechanisms
 from transforms import Privatize
 from utils import TermColors
-from itertools import product
 
 
 def train_and_test(dataset, method, eps, steps, aggr, args, repeats, output_dir):

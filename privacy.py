@@ -116,7 +116,7 @@ class MultiBit(Mechanism):
         p = (x - self.alpha) / (self.beta - self.alpha)
         p = (p * (em - 1) + 1) / (em + 1)
         t = torch.bernoulli(p)
-        x_star = s * (2*t - 1)
+        x_star = s * (2 * t - 1)
 
         # unbiase the result
         x_prime = d * (self.beta - self.alpha) / (2 * m)

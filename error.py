@@ -2,16 +2,17 @@ import os
 from argparse import ArgumentParser
 from itertools import product
 
+import pandas as pd
 import torch
 from pytorch_lightning import seed_everything
 from pytorch_lightning.loggers import TensorBoardLogger
 from torch_geometric.utils import degree
-import pandas as pd
+
 from datasets import get_available_datasets, GraphDataModule
 from models import KProp
+from privacy import get_available_mechanisms
 from transforms import Privatize
 from utils import TermColors
-from privacy import get_available_mechanisms
 
 
 class ErrorEstimation:
@@ -48,7 +49,7 @@ def error_estimation(dataset, method, eps, k, agg, repeats, output_dir, device):
             'dataset': dataset.name,
             'method': method,
             'eps': eps,
-            'k': k,
+            'steps': k,
             'agg': agg,
             'run': run
         }
@@ -87,14 +88,14 @@ def main():
 
     # parse arguments
     parser = ArgumentParser()
-    parser.add_argument('-d', '--datasets',     nargs='+', choices=get_available_datasets(), required=True)
-    parser.add_argument('-m', '--methods',      nargs='+', choices=get_available_mechanisms(), required=True)
-    parser.add_argument('-e', '--epsilons',     nargs='+', type=float, dest='epsilons', required=True)
-    parser.add_argument('-k', '--steps',        nargs='*', type=int, default=[1])
-    parser.add_argument('-a', '--aggs',         nargs='*', type=str, default=['gcn'])
-    parser.add_argument('-r', '--repeats',      type=int, default=1)
-    parser.add_argument('-o', '--output-dir',   type=str, default='./results')
-    parser.add_argument('--device',             type=str, default='cuda', choices=['cpu', 'cuda'])
+    parser.add_argument('-d', '--datasets', nargs='+', choices=get_available_datasets(), required=True)
+    parser.add_argument('-m', '--methods', nargs='+', choices=get_available_mechanisms(), required=True)
+    parser.add_argument('-e', '--epsilons', nargs='+', type=float, dest='epsilons', required=True)
+    parser.add_argument('-k', '--steps', nargs='*', type=int, default=[1])
+    parser.add_argument('-a', '--aggs', nargs='*', type=str, default=['gcn'])
+    parser.add_argument('-r', '--repeats', type=int, default=1)
+    parser.add_argument('-o', '--output-dir', type=str, default='./results')
+    parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'])
     args = parser.parse_args()
 
     # check if eps > 0 for LDP methods
