@@ -6,11 +6,10 @@ from argparse import ArgumentParser
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
-from torch_geometric.transforms import GDC
 from datasets import get_available_datasets, GraphDataModule
 from privacy import get_available_mechanisms
 from models import NodeClassifier
-from transforms import RandomWalkExpand, Privatize
+from transforms import Privatize
 from utils import TermColors
 from itertools import product
 
@@ -66,17 +65,6 @@ def train_and_test(dataset, method, eps, hops, aggr, args, repeats, output_dir):
 def batch_train_and_test(args):
     dataset = GraphDataModule(name=args.dataset, normalize=(0, 1), device=args.device)
 
-    if args.rw:
-        rw = RandomWalkExpand(walk_length=200, p=0.1)
-        dataset.add_transform(rw)
-
-    if args.gdc:
-        gdc = GDC(self_loop_weight=1, normalization_in='sym', normalization_out='sym',
-                  diffusion_kwargs=dict(method='ppr', alpha=0.05, eps=1e-4),
-                  sparsification_kwargs=dict(method='threshold', avg_degree=100), exact=False)
-        dataset.add_transform(gdc)
-        args.normalize = False
-
     if 'raw' in args.methods:
         configs = list(product(['raw'], [0.0], args.hops, args.aggs))
         configs += list(product(set(args.methods) - {'raw'}, set(args.epsilons), args.hops, args.aggs))
@@ -123,8 +111,6 @@ def main():
     parser.add_argument('-o', '--output-dir', type=str, default='./results',
                         help='The path to store the results. Default is "./results".'
                         )
-    parser.add_argument('--gdc', action='store_true', default=False)
-    parser.add_argument('--rw', action='store_true', default=False)
     parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'],
                         help='The device used for the training. Either "cpu" or "cuda". Default is "cuda".'
                         )
