@@ -4,19 +4,15 @@ from scipy.special import erf
 
 
 class Mechanism:
-    def __init__(self, eps, delta=.001, alpha=None, sensitivity=None, **kwargs):
+    def __init__(self, eps, interval=(None, None), **kwargs):
         self.eps = eps
-        self.delta = delta
-        self.alpha = alpha
-        self.sensitivity = sensitivity
+        self.alpha, self.beta = interval
 
     def fit(self, x):
-        # set alpha and delta
+        # set alpha and beta
         if self.alpha is None:
             self.alpha = x.min(dim=0)[0]
-        if self.sensitivity is None:
-            beta = x.max(dim=0)[0]
-            self.sensitivity = beta - self.alpha
+            self.beta = x.max(dim=0)[0]
 
     def transform(self, x):
         raise NotImplementedError
@@ -27,17 +23,20 @@ class Mechanism:
 
 
 class Gaussian(Mechanism):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, delta=0.001, **kwargs):
         super(Gaussian, self).__init__(*args, **kwargs)
+        self.delta = delta
         self.sigma = None
+        self.sensitivity = None
 
     def fit(self, x):
         super().fit(x)
-        if torch.is_tensor(self.sensitivity) and len(self.sensitivity) > 1:
-            self.sensitivity = torch.norm(self.sensitivity, p=2)
+        len_interval = self.beta - self.alpha
+        if torch.is_tensor(len_interval) and len(len_interval) > 1:
+            self.sensitivity = torch.norm(len_interval, p=2)
         else:
             d = x.size(1)
-            self.sensitivity = self.sensitivity * math.sqrt(d)
+            self.sensitivity = len_interval * math.sqrt(d)
 
         self.sigma = self.calibrate_analytic_gaussian_mechanism()
 
@@ -105,19 +104,25 @@ class Gaussian(Mechanism):
 class MultiBit(Mechanism):
     def transform(self, x):
         n, d = x.size()
-        k = int(max(1, min(d, math.floor(self.eps / 2.18))))
-        ek = math.exp(self.eps / k)
-        p = (x - self.alpha) / self.sensitivity
-        p = (p * (ek - 1) + 1) / (ek + 1)
-        xs = torch.bernoulli(p) * 2 - 1
-        sample = torch.cat([torch.randperm(d, device=x.device)[:k] for _ in range(n)]).view(n, k)
-        mask = torch.zeros_like(x, dtype=torch.bool)
-        mask.scatter_(dim=1, index=sample, value=True)
-        xs = mask * xs
-        ys = xs * (d*self.sensitivity) / (2 * k)
-        ys = ys * (ek + 1) / (ek - 1)
-        ys = ys + self.alpha + self.sensitivity / 2
-        return ys
+        m = int(max(1, min(d, math.floor(self.eps / 2.18))))
+
+        # sample features for perturbation
+        bigS = torch.cat([torch.randperm(d, device=x.device)[:m] for _ in range(n)]).view(n, m)
+        s = torch.zeros_like(x, dtype=torch.bool)
+        s.scatter_(dim=1, index=bigS, value=True)
+
+        # perturb sampled features
+        em = math.exp(self.eps / m)
+        p = (x - self.alpha) / (self.beta - self.alpha)
+        p = (p * (em - 1) + 1) / (em + 1)
+        t = torch.bernoulli(p)
+        x_star = s * (2*t - 1)
+
+        # unbiase the result
+        x_prime = d * (self.beta - self.alpha) / (2 * m)
+        x_prime = x_prime * (em + 1) * x_star / (em - 1)
+        x_prime = x_prime + (self.alpha + self.beta) / 2
+        return x_prime
 
 
 available_mechanisms = {
