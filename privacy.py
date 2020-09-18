@@ -102,51 +102,6 @@ class Gaussian(Mechanism):
         return sigma
 
 
-class Piecewise(Mechanism):
-    def transform(self, x):
-        # normalize x between -1,1
-        t = (x - self.alpha) / self.sensitivity
-        t = 2 * t - 1
-
-        # piecewise mechanism's variables
-        P = (math.exp(self.eps) - math.exp(self.eps / 2)) / (2 * math.exp(self.eps / 2) + 2)
-        C = (math.exp(self.eps / 2) + 1) / (math.exp(self.eps / 2) - 1)
-        L = t * (C + 1) / 2 - (C - 1) / 2
-        R = L + C - 1
-
-        # thresholds for random sampling
-        threshold_left = P * (L + C) / math.exp(self.eps)
-        threshold_right = threshold_left + P * (R - L)
-
-        # masks for piecewise random sampling
-        x = torch.rand_like(t)
-        mask_left = x < threshold_left
-        mask_middle = (threshold_left < x) & (x < threshold_right)
-        mask_right = threshold_right < x
-
-        # random sampling
-        t = mask_left * (torch.rand_like(t) * (L + C) - C)
-        t += mask_middle * (torch.rand_like(t) * (R - L) + L)
-        t += mask_right * (torch.rand_like(t) * (C - R) + R)
-
-        # unbias data
-        y_star = self.sensitivity * (t + 1) / 2 + self.alpha
-        return y_star
-
-
-class MultiDimPiecewise(Piecewise):
-    def transform(self, x):
-        n, d = x.size()
-        k = int(max(1, min(d, math.floor(self.eps / 2.5))))
-        sample = torch.cat([torch.randperm(d, device=x.device)[:k] for _ in range(n)]).view(n, k)
-        mask = torch.zeros_like(x, dtype=torch.bool)
-        mask.scatter_(dim=1, index=sample, value=True)
-        self.eps /= k
-        y = super().transform(x)
-        z = mask * y * d / k
-        return z
-
-
 class MultiBit(Mechanism):
     def transform(self, x):
         n, d = x.size()
@@ -165,32 +120,11 @@ class MultiBit(Mechanism):
         return ys
 
 
-class PrivGraphConv(Mechanism):
-    def transform(self, x):
-        exp = math.exp(self.eps)
-        p = (x - self.alpha) / self.sensitivity
-        p = p * (exp - 1) / (exp + 1) + 1 / (exp + 1)
-        y = torch.bernoulli(p)
-        y_star = ((y * (exp + 1) - 1) * self.sensitivity) / (exp - 1) + self.alpha
-        return y_star
-
-
 available_mechanisms = {
     'gm': Gaussian,
-    'mpm': MultiDimPiecewise,
     'mbm': MultiBit,
-    'pgc': PrivGraphConv,
 }
 
 
 def get_available_mechanisms():
     return list(available_mechanisms.keys())
-
-
-if __name__ == '__main__':
-    # from datasets import GraphDataset
-    # dataset = GraphDataset('cora')
-    # x = dataset.get_data().x
-    # mdm = MultiDimDuchi(eps=1)
-    # t = mdm(x)
-    pass
