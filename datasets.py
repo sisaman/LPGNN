@@ -1,123 +1,15 @@
 import os
-import ssl
 from functools import partial
 
-import numpy as np
 import pandas as pd
 import torch
 from pytorch_lightning import LightningDataModule
 from torch_geometric.data import Data, InMemoryDataset, download_url, extract_zip, DataLoader
 from torch_geometric.datasets import Planetoid
 from torch_geometric.transforms import Compose
-from torch_geometric.utils import to_undirected, from_scipy_sparse_matrix
+from torch_geometric.utils import to_undirected
+
 from transforms import NodeSplit, Normalize
-from scipy.io import loadmat
-from sklearn.preprocessing import LabelEncoder
-
-
-class AirUSA(InMemoryDataset):
-    url = 'https://github.com/GAugAuthors/GAug/raw/master/data/graphs'
-
-    def __init__(self, root, transform=None, pre_transform=None):
-        super().__init__(root, transform, pre_transform)
-        self.data, self.slices = torch.load(self.processed_paths[0])
-
-    @property
-    def raw_file_names(self):
-        return ['airport_adj.pkl', 'airport_features.pkl', 'airport_labels.pkl', 'airport_tvt_nids.pkl']
-
-    @property
-    def processed_file_names(self):
-        return 'data.pt'
-
-    def download(self):
-        for file in self.raw_file_names:
-            download_url(f'{self.url}/{file}', self.raw_dir)
-
-    # noinspection PyTypeChecker
-    def process(self):
-        x = np.load(os.path.join(self.raw_dir, 'airport_features.pkl'), allow_pickle=True)
-        y = np.load(os.path.join(self.raw_dir, 'airport_labels.pkl'), allow_pickle=True)
-        adj = np.load(os.path.join(self.raw_dir, 'airport_adj.pkl'), allow_pickle=True)
-        edge_index, _ = from_scipy_sparse_matrix(adj)
-
-        train, val, test = np.load(os.path.join(self.raw_dir, 'airport_tvt_nids.pkl'), allow_pickle=True)
-        train_mask = torch.zeros_like(y, dtype=torch.bool)
-        val_mask = torch.zeros_like(y, dtype=torch.bool)
-        test_mask = torch.zeros_like(y, dtype=torch.bool)
-
-        train_mask[train] = True
-        val_mask[val] = True
-        test_mask[test] = True
-
-        data = Data(
-            x=x, edge_index=edge_index, y=y, num_nodes=len(y),
-            train_mask=train_mask, val_mask=val_mask, test_mask=test_mask
-        )
-
-        if self.pre_transform is not None:
-            data = self.pre_transform(data)
-
-        torch.save(self.collate([data]), self.processed_paths[0])
-
-    def __repr__(self):
-        return f'KarateClub-{self.name}()'
-
-
-class Facebook100(InMemoryDataset):
-    url = 'https://escience.rpi.edu/data/DA/fb100/'
-    targets = ['status', 'gender', 'major', 'minor', 'housing', 'year']
-
-    def __init__(self, root, name, target, transform=None, pre_transform=None):
-        self.name = name
-        self.target = target
-        assert target in self.targets
-        super().__init__(root, transform, pre_transform)
-        self.data, self.slices = torch.load(self.processed_paths[0])
-
-    @property
-    def raw_dir(self):
-        return os.path.join(self.root, self.name, 'raw')
-
-    @property
-    def raw_file_names(self):
-        return self.name + '.mat'
-
-    @property
-    def processed_dir(self):
-        return os.path.join(self.root, self.name, 'processed')
-
-    @property
-    def processed_file_names(self):
-        return 'data.pt'
-
-    def download(self):
-        context = ssl._create_default_https_context
-        ssl._create_default_https_context = ssl._create_unverified_context
-        download_url(f'{self.url}/{self.raw_file_names}', self.raw_dir)
-        ssl._create_default_https_context = context
-
-    def process(self):
-        mat = loadmat(os.path.join(self.raw_dir, self.raw_file_names))
-        features = pd.DataFrame(mat['local_info'][:, :-1], columns=self.targets)
-        if self.target == 'year':
-            features.loc[(features['year'] < 2004) | (features['year'] > 2009), 'year'] = 0
-        y = torch.from_numpy(LabelEncoder().fit_transform(features[self.target]))
-        if 0 in features[self.target].values:
-            y = y - 1
-
-        x = features.drop(columns=self.target).replace({0: pd.NA})
-        x = torch.tensor(pd.get_dummies(x).values, dtype=torch.float)
-        edge_index = from_scipy_sparse_matrix(mat['A'])[0]
-        data = Data(x=x, edge_index=edge_index, y=y, num_nodes=len(y))
-
-        if self.pre_transform is not None:
-            data = self.pre_transform(data)
-
-        torch.save(self.collate([data]), self.processed_paths[0])
-
-    def __repr__(self):
-        return f'Facebook100-{self.name}()'
 
 
 class KarateClub(InMemoryDataset):
