@@ -1,7 +1,6 @@
 import math
 import torch
 
-from torch_cluster import random_walk
 from torch_geometric.utils import to_undirected, negative_sampling
 from privacy import available_mechanisms
 
@@ -125,43 +124,3 @@ class Normalize:
         return data
 
 
-class FeatureSelection:
-    def __init__(self, k):
-        self.k = k
-
-    def __call__(self, data):
-        v = data.x.var(dim=0)
-        idx = v.sort()[1][-self.k:]
-        data.x = data.x[:, idx]
-        return data
-
-
-class RandomWalkExpand:
-    def __init__(self, walk_length, p):
-        self.num_steps = min(walk_length, max(1, int(1/p))) if p > 0 else walk_length
-        self.num_walks = walk_length // self.num_steps
-
-    def __call__(self, data):
-        if not hasattr(data, 'edge_index_backup'):
-            data.edge_index_backup = data.edge_index
-
-        data.edge_index = torch.cat([
-            self.random_walk(
-                edge_index=data.edge_index_backup,
-                num_nodes=data.num_nodes,
-                walk_length=self.num_steps
-            ) for _ in range(self.num_walks)
-        ], dim=1)
-
-        return data
-
-    @staticmethod
-    def random_walk(edge_index, num_nodes, walk_length):
-        row, col = edge_index
-        start = torch.arange(num_nodes, device=row.device)
-        walk = random_walk(row, col, start, walk_length=walk_length)
-        walk = walk[:, 1:].contiguous()
-        row = torch.arange(num_nodes, device=row.device).repeat(walk_length, 1).T.reshape(1, -1)
-        col = walk.view(1, -1)
-        edge_index = torch.cat([row, col], dim=0).contiguous()
-        return edge_index
