@@ -24,7 +24,7 @@ class Mechanism:
 
 class Gaussian(Mechanism):
     def __init__(self, *args, delta=0.001, **kwargs):
-        super(Gaussian, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.delta = delta
         self.sigma = None
         self.sensitivity = None
