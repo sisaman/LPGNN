@@ -102,9 +102,13 @@ class Gaussian(Mechanism):
 
 
 class MultiBit(Mechanism):
+    def __init__(self, *args, m=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.m = m
+
     def transform(self, x):
         n, d = x.size()
-        m = int(max(1, min(d, math.floor(self.eps / 2.18))))
+        m = int(max(1, min(d, math.floor(self.eps / 2.18)))) if self.m is None else self.m
 
         # sample features for perturbation
         bigS = torch.cat([torch.randperm(d, device=x.device)[:m] for _ in range(n)]).view(n, m)
