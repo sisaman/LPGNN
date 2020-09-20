@@ -1,39 +1,55 @@
-# Error estimation
-python error.py -d citeseer cora elliptic flickr twitch -m lm pm pgc -e 1 3 5 7 9
+#################################################################################################
+###################################### ERROR ESTIMATION #########################################
+#################################################################################################
+
+python error.py -d cora elliptic facebook github twitch -m gm mbm -e 0.5 1 2 4 -k 1 2 4 8 -a mean
 
 
 
-# Node Classification
-### CiteSeer
-python train.py -t node -d citeseer -m raw        -e 0      -r 10 --learning-rate 0.01  --weight-decay 0.1      --dropout 0.5
-python train.py -t node -d citeseer -m lm pm pgc  -e 1 5 9  -r 10 --learning-rate 0.01  --weight-decay 0.1      --dropout 0.5
-### Cora
-python train.py -t node -d cora     -m raw        -e 0      -r 10 --learning-rate 0.01  --weight-decay 0.01     --dropout 0.5
-python train.py -t node -d cora     -m lm pm pgc  -e 1 5 9  -r 10 --learning-rate 0.01  --weight-decay 0.01     --dropout 0.5
-### Twitch
-python train.py -t node -d twitch   -m raw        -e 0      -r 10 --learning-rate 0.001 --weight-decay 0.0001   --dropout 0
-python train.py -t node -d twitch   -m lm pm pgc  -e 1 5 9  -r 10 --learning-rate 0.001 --weight-decay 0.0001   --dropout 0
-### Elliptic
-python train.py -t node -d elliptic -m raw        -e 0      -r 10 --learning-rate 0.01  --weight-decay 0        --dropout 0
-python train.py -t node -d elliptic -m lm pm pgc  -e 1 5 9  -r 10 --learning-rate 0.01  --weight-decay 0        --dropout 0
-### Flickr
-python train.py -t node -d flickr   -m raw        -e 0      -r 10 --learning-rate 0.01  --weight-decay 0        --dropout 0
-python train.py -t node -d flickr   -m lm pm pgc  -e 1 5 9  -r 10 --learning-rate 0.01  --weight-decay 0        --dropout 0
+#################################################################################################
+##################################### NODE CLASSIFICATION #######################################
+#################################################################################################
+
+################### CORA ####################
+### DPGNN
+python train.py -d cora -m mbm -e 0.5 1 2 4 -k 1 2 4 8 16 32 64 -a mean --lr 0.01 --wd 0.01 --dp 0 -r 10
+### GCN+GM
+python train.py -d cora -m gm -e 0.5 1 2 4 -k 1 -a gcn --lr 0.01 --wd 0.01 --dp 0 -r 10
+### GCN
+python train.py -d cora -m raw -k 1 2 4 8 16 32 64 -a gcn --lr 0.01 --wd 0.01 --dp 0 -r 10
 
 
-# Link Prediction
-### CiteSeer
-python train.py -t link -d citeseer -m raw        -e 0      -r 10 --learning-rate 0.01  --weight-decay 0.01
-python train.py -t link -d citeseer -m lm pm pgc  -e 1 5 9  -r 10 --learning-rate 0.01  --weight-decay 0.01
-### Cora
-python train.py -t link -d cora     -m raw        -e 0      -r 10 --learning-rate 0.01  --weight-decay 0.01
-python train.py -t link -d cora     -m lm pm pgc  -e 1 5 9  -r 10 --learning-rate 0.01  --weight-decay 0.01
-### Twitch
-python train.py -t link -d twitch   -m raw        -e 0      -r 10 --learning-rate 0.01  --weight-decay 0.001
-python train.py -t link -d twitch   -m lm pm pgc  -e 1 5 9  -r 10 --learning-rate 0.01  --weight-decay 0.001
-### Elliptic
-python train.py -t link -d elliptic -m raw        -e 0      -r 10 --learning-rate 0.01  --weight-decay 0.0001
-python train.py -t link -d elliptic -m lm pm pgc  -e 1 5 9  -r 10 --learning-rate 0.01  --weight-decay 0.0001
-### Flickr
-python train.py -t link -d flickr   -m raw        -e 0      -r 10 --learning-rate 0.01  --weight-decay 0.001
-python train.py -t link -d flickr   -m lm pm pgc  -e 1 5 9  -r 10 --learning-rate 0.01  --weight-decay 0.001
+################# ELLIPTIC ##################
+### DPGNN
+python train.py -d elliptic -m mbm -e 0.5 1 2 4 -k 1 2 4 8 16 32 64 -a mean --lr 0.01 --wd 0 --dp 0.5 -r 10
+### GCN+GM
+python train.py -d elliptic -m gm -e 0.5 1 2 4 -k 1 -a gcn --lr 0.01 --wd 0 --dp 0.5 -r 10
+### GCN
+python train.py -d elliptic -m raw -k 1 2 4 8 16 32 64 -a gcn --lr 0.01 --wd 0 --dp 0.5 -r 10
+
+
+################# FACEBOOK ##################
+### DPGNN
+python train.py -d facebook -m mbm -e 0.5 1 2 4 -k 1 2 4 8 16 32 64 -a mean --lr 0.01 --wd 0.001 --dp 0.5 -r 10
+### GCN+GM
+python train.py -d facebook -m gm -e 0.5 1 2 4 -k 1 -a gcn --lr 0.01 --wd 0.001 --dp 0.5 -r 10
+### GCN
+python train.py -d facebook -m raw -k 1 2 4 8 16 32 64 -a gcn --lr 0.01 --wd 0.001 --dp 0.5 -r 10
+
+
+################## GITHUB ###################
+### DPGNN
+python train.py -d github -m mbm -e 0.5 1 2 4 -k 1 2 4 8 16 32 64 -a mean --lr 0.01 --wd 0 --dp 0.5 -r 10
+### GCN+GM
+python train.py -d github -m gm -e 0.5 1 2 4 -k 1 -a gcn --lr 0.01 --wd 0 --dp 0.5 -r 10
+### GCN
+python train.py -d github -m raw -k 1 2 4 8 16 32 64 -a gcn --lr 0.01 --wd 0 --dp 0.5 -r 10
+
+
+################## TWITCH ###################
+### DPGNN
+python train.py -d twitch -m mbm -e 0.5 1 2 4 -k 1 2 4 8 16 32 64 -a mean --lr 0.001 --wd 0.01 --dp 0.5 -r 10
+### GCN+GM
+python train.py -d twitch -m gm -e 0.5 1 2 4 -k 1 -a gcn --lr 0.001 --wd 0.01 --dp 0.5 -r 10
+### GCN
+python train.py -d twitch -m raw -k 1 2 4 8 16 32 64 -a gcn --lr 0.001 --wd 0.01 --dp 0.5 -r 10
