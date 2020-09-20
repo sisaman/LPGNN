@@ -23,7 +23,7 @@ class Mechanism:
 
 
 class Gaussian(Mechanism):
-    def __init__(self, *args, delta=0.001, **kwargs):
+    def __init__(self, *args, delta=0.0001, **kwargs):
         super().__init__(*args, **kwargs)
         self.delta = delta
         self.sigma = None
