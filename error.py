@@ -5,7 +5,7 @@ from itertools import product
 import pandas as pd
 import torch
 from pytorch_lightning import seed_everything
-from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.loggers import CSVLogger
 from torch_geometric.utils import degree
 
 from datasets import get_available_datasets, GraphDataModule
@@ -36,10 +36,7 @@ class ErrorEstimation:
 
         df = pd.DataFrame({'degree': degrees.cpu(), 'error': errors.cpu()})
         df = df[df['degree'] < df['degree'].quantile(q=self.max_degree_quantile)]
-        values = df.groupby('degree').agg(['mean', 'std']).fillna(0).reset_index().values
-
-        for deg, mae, std in values:
-            self.logger.log_metrics(metrics={'mae': mae, 'std': std}, step=deg)
+        df.apply(lambda row: self.logger.log_metrics(metrics={'error': row['error'], 'degree': row['degree']}), axis=1)
 
 
 def error_estimation(dataset, method, eps, k, agg, repeats, output_dir, device):
@@ -58,11 +55,12 @@ def error_estimation(dataset, method, eps, k, agg, repeats, output_dir, device):
         print(TermColors.FG.green + params_str + TermColors.reset)
 
         output_dir = os.path.join(output_dir, 'error', dataset.name, method, str(eps), str(k), agg)
-        logger = TensorBoardLogger(save_dir=output_dir, name=None)
+        logger = CSVLogger(save_dir=output_dir, name=None)
 
         privatize = Privatize(method=method, eps=eps)
         dataset.add_transform(privatize)
         ErrorEstimation(data=dataset[0], k=k, agg=agg, logger=logger, device=device).run()
+        logger.save()
 
 
 @torch.no_grad()
