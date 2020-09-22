@@ -196,5 +196,5 @@ class GraphDataModule(LightningDataModule):
         return self.dataset.__str__()
 
 
-def get_available_datasets():
+def available_datasets():
     return list(GraphDataModule.available_datasets.keys())

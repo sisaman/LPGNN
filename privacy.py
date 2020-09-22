@@ -129,11 +129,11 @@ class MultiBit(Mechanism):
         return x_prime
 
 
-available_mechanisms = {
+_available_mechanisms = {
     'gm': Gaussian,
     'mbm': MultiBit,
 }
 
 
-def get_available_mechanisms():
-    return list(available_mechanisms.keys())
+def available_mechanisms():
+    return list(_available_mechanisms.keys())

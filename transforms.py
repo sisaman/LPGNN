@@ -2,7 +2,7 @@ import math
 import torch
 from torch_geometric.utils import to_undirected, negative_sampling
 
-from privacy import available_mechanisms
+from privacy import _available_mechanisms
 
 
 class Privatize:
@@ -18,7 +18,7 @@ class Privatize:
         else:
             if not hasattr(data, 'x_raw'):
                 data.x_raw = data.x  # save original x to x_raw
-            data.x = available_mechanisms[self.method](eps=self.eps, **self.kwargs)(data.x_raw)
+            data.x = _available_mechanisms[self.method](eps=self.eps, **self.kwargs)(data.x_raw)
         return data
 
 

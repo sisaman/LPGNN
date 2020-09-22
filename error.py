@@ -9,9 +9,9 @@ from pytorch_lightning.loggers import CSVLogger
 from torch_geometric.utils import degree
 from tqdm import tqdm
 
-from datasets import get_available_datasets, GraphDataModule
+from datasets import available_datasets, GraphDataModule
 from models import KProp
-from privacy import get_available_mechanisms
+from privacy import available_mechanisms
 from transforms import Privatize
 from utils import TermColors
 
@@ -121,8 +121,8 @@ def main():
     # parse arguments
     parser = ArgumentParser()
     parser.add_argument('-t', '--task', type=str, choices=ErrorEstimation.available_tasks, required=True)
-    parser.add_argument('-d', '--datasets', nargs='+', choices=get_available_datasets(), required=True)
-    parser.add_argument('-m', '--methods', nargs='+', choices=get_available_mechanisms(), required=True)
+    parser.add_argument('-d', '--datasets', nargs='+', choices=available_datasets(), default=available_datasets())
+    parser.add_argument('-m', '--methods', nargs='+', choices=available_mechanisms(), default=available_mechanisms())
     parser.add_argument('-e', '--epsilons', nargs='+', type=float, dest='epsilons', required=True)
     parser.add_argument('-k', '--steps', nargs='*', type=int, default=[1])
     parser.add_argument('-a', '--aggs', nargs='*', type=str, default=['gcn'])

@@ -9,9 +9,9 @@ from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 
-from datasets import get_available_datasets, GraphDataModule
+from datasets import available_datasets, GraphDataModule
 from models import NodeClassifier
-from privacy import get_available_mechanisms
+from privacy import available_mechanisms
 from transforms import Privatize
 from utils import TermColors
 
@@ -92,8 +92,8 @@ def main():
     logging.captureWarnings(True)
 
     parser = ArgumentParser()
-    parser.add_argument('-d', '--dataset', type=str, choices=get_available_datasets(), required=True)
-    parser.add_argument('-m', '--methods', nargs='+', choices=get_available_mechanisms() + ['raw'], required=True)
+    parser.add_argument('-d', '--dataset', type=str, choices=available_datasets(), required=True)
+    parser.add_argument('-m', '--methods', nargs='+', choices=available_mechanisms() + ['raw'], required=True)
     parser.add_argument('-e', '--epsilons', nargs='*', type=float, dest='epsilons', default=[1])
     parser.add_argument('-k', '--steps', nargs='*', type=int, default=[1])
     parser.add_argument('-a', '--aggs', nargs='*', type=str, default=['mean'])
@@ -104,7 +104,7 @@ def main():
     args = parser.parse_args()
 
     # check if eps > 0 for LDP methods
-    if len(set(args.methods) & set(get_available_mechanisms())) > 0:
+    if len(set(args.methods) & set(available_mechanisms())) > 0:
         if min(args.epsilons) <= 0:
             parser.error('LDP methods require eps > 0.')
 
