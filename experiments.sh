@@ -2,7 +2,10 @@
 ###################################### ERROR ESTIMATION #########################################
 #################################################################################################
 
-python error.py -d cora elliptic facebook github twitch -m gm mbm -e 0.5 1 2 4 -k 1 -a mean
+python error.py -t eps -d cora elliptic facebook github twitch -m gm mbm -e 0.5 1 2 4 -k 1 -a mean
+python error.py -t deg -d cora elliptic facebook github twitch -m gm mbm -e 1 -k 1 -a mean
+python error.py -t dim -d cora elliptic facebook github twitch -m mbm -e 3 5 7 -k 1 -a mean
+
 
 
 

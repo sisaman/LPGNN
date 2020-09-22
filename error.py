@@ -7,6 +7,7 @@ import torch
 from pytorch_lightning import seed_everything
 from pytorch_lightning.loggers import CSVLogger
 from torch_geometric.utils import degree
+from tqdm import tqdm
 
 from datasets import get_available_datasets, GraphDataModule
 from models import KProp
@@ -16,33 +17,67 @@ from utils import TermColors
 
 
 class ErrorEstimation:
-    def __init__(self, data, k, agg, logger, max_degree_quantile=0.99, device='cuda'):
-        self.data = data
-        alpha = data.x_raw.min(dim=0)[0]
-        beta = data.x_raw.max(dim=0)[0]
-        self.sensitivity = beta - alpha
+    available_tasks = ['eps', 'deg', 'dim']
+
+    def __init__(self, task, method, eps, k, agg, logger, device='cuda'):
+        self.task = task
+        self.method = method
+        self.eps = eps
         self.logger = logger
-        self.max_degree_quantile = max_degree_quantile
         device = 'cpu' if not torch.cuda.is_available() else device
-
         self.model = KProp(K=k, aggr=agg).to(device)
-        self.gc = self.model(data.x_raw, data.edge_index)
+        self.cache = None
 
-    def run(self):
-        gc_hat = self.model(self.data.x, self.data.edge_index)
-        diff = (self.gc - gc_hat) / self.sensitivity
-        errors = torch.norm(diff, p=1, dim=1) / self.data.num_features
-        degrees = degree(self.data.edge_index[0], self.data.num_nodes)
+    def run(self, data):
+        if self.task == 'eps':
+            self.error_eps(data)
+        elif self.task == 'deg':
+            self.error_degree(data)
+        elif self.task == 'dim':
+            self.error_dimension(data)
+        else:
+            raise ValueError('mode not supported')
 
+    def calculate_error(self, data_priv, norm, cached=False):
+        if self.cache is None or not cached:
+            alpha = data_priv.x_raw.min(dim=0)[0]
+            beta = data_priv.x_raw.max(dim=0)[0]
+            hn = self.model(data_priv.x_raw, data_priv.edge_index)
+            self.cache = alpha, beta, hn
+
+        alpha, beta, hn = self.cache
+        hn_hat = self.model(data_priv.x, data_priv.edge_index)
+        diff = (hn - hn_hat) / (beta - alpha)
+        errors = torch.norm(diff, p=norm, dim=1) / data_priv.num_features
+        return errors
+
+    def error_eps(self, data):
+        privatize = Privatize(method=self.method, eps=self.eps)
+        data = privatize(data)
+        errors = self.calculate_error(data, norm=1)
+        self.logger.log_metrics(metrics={'error': errors.mean(), 'std': errors.std()})
+
+    def error_degree(self, data):
+        privatize = Privatize(method=self.method, eps=self.eps)
+        data = privatize(data)
+        errors = self.calculate_error(data, norm=1)
+        degrees = degree(data.edge_index[0], data.num_nodes)
         df = pd.DataFrame({'degree': degrees.cpu(), 'error': errors.cpu()})
-        df = df[df['degree'] < df['degree'].quantile(q=self.max_degree_quantile)]
+        df = df[df['degree'] < df['degree'].quantile(q=0.99)]
         df.apply(lambda row: self.logger.log_metrics(metrics={'error': row['error'], 'degree': row['degree']}), axis=1)
 
+    def error_dimension(self, data):
+        d = data.num_features
+        for m in tqdm(range(1, d + 1)):
+            data = Privatize(method='mbm', eps=self.eps, m=m)(data)
+            errors = self.calculate_error(data, norm=1, cached=True)
+            self.logger.log_metrics(metrics={'error': errors.mean(), 'std': errors.std(), 'm': m})
 
-def error_estimation(dataset, method, eps, k, agg, repeats, output_dir, device):
+
+def error_estimation(task, dataset, method, eps, k, agg, repeats, output_dir, device):
     for run in range(repeats):
         params = {
-            'task': 'error',
+            'task': task,
             'dataset': dataset.name,
             'method': method,
             'eps': eps,
@@ -54,12 +89,10 @@ def error_estimation(dataset, method, eps, k, agg, repeats, output_dir, device):
         params_str = ' | '.join([f'{key}={val}' for key, val in params.items()])
         print(TermColors.FG.green + params_str + TermColors.reset)
 
-        output_dir = os.path.join(output_dir, 'error', dataset.name, method, str(eps), str(k), agg)
+        output_dir = os.path.join(output_dir, task, dataset.name, method, str(eps), str(k), agg)
         logger = CSVLogger(save_dir=output_dir, name=None)
-
-        privatize = Privatize(method=method, eps=eps)
-        dataset.add_transform(privatize)
-        ErrorEstimation(data=dataset[0], k=k, agg=agg, logger=logger, device=device).run()
+        task = ErrorEstimation(task=task, method=method, eps=eps, k=k, agg=agg, logger=logger, device=device)
+        task.run(dataset[0])
         logger.save()
 
 
@@ -70,6 +103,7 @@ def batch_error_estimation(args):
         configs = product(args.methods, args.epsilons, args.steps, args.aggs)
         for method, eps, k, agg in configs:
             error_estimation(
+                task=args.task,
                 dataset=dataset,
                 method=method,
                 eps=eps,
@@ -77,7 +111,7 @@ def batch_error_estimation(args):
                 agg=agg,
                 repeats=args.repeats,
                 output_dir=args.output_dir,
-                device=args.device
+                device=args.device,
             )
 
 
@@ -86,6 +120,7 @@ def main():
 
     # parse arguments
     parser = ArgumentParser()
+    parser.add_argument('-t', '--task', type=str, choices=ErrorEstimation.available_tasks, required=True)
     parser.add_argument('-d', '--datasets', nargs='+', choices=get_available_datasets(), required=True)
     parser.add_argument('-m', '--methods', nargs='+', choices=get_available_mechanisms(), required=True)
     parser.add_argument('-e', '--epsilons', nargs='+', type=float, dest='epsilons', required=True)
