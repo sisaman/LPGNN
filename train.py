@@ -6,7 +6,7 @@ from itertools import product
 
 import torch
 from pytorch_lightning import Trainer, seed_everything
-from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
+from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 
 from datasets import available_datasets, GraphDataModule
@@ -45,9 +45,8 @@ def train_and_test(dataset, method, eps, K, aggregator, args, repeats, output_di
             args=args,
             precision=32,
             gpus=int(args.device == 'cuda' and torch.cuda.is_available()),
-            max_epochs=1000,
+            max_epochs=500,
             checkpoint_callback=checkpoint_callback,
-            early_stop_callback=EarlyStopping(patience=200),
             logger=logger,
             log_save_interval=500,
             weights_summary=None,
