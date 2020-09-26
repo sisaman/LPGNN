@@ -67,49 +67,6 @@ class NodeSplit:
         return data
 
 
-class EdgeSplit:
-    def __init__(self, val_ratio=0.1, test_ratio=0.1, rng=None):
-        self.val_ratio = val_ratio
-        self.test_ratio = test_ratio
-        self.rng = rng
-
-    def __call__(self, data):
-        data.y = data.train_mask = data.val_mask = data.test_mask = None
-        row, col = data.edge_index
-        data.edge_index = None
-
-        # Return upper triangular portion.
-        mask = row < col
-        row, col = row[mask], col[mask]
-
-        n_v = int(math.floor(self.val_ratio * row.size(0)))
-        n_t = int(math.floor(self.test_ratio * row.size(0)))
-
-        # Positive edges.
-        perm = torch.randperm(row.size(0), generator=self.rng)
-        row, col = row[perm], col[perm]
-
-        r, c = row[:n_v], col[:n_v]
-        data.val_pos_edge_index = torch.stack([r, c], dim=0)
-        r, c = row[n_v:n_v + n_t], col[n_v:n_v + n_t]
-        data.test_pos_edge_index = torch.stack([r, c], dim=0)
-
-        r, c = row[n_v + n_t:], col[n_v + n_t:]
-        data.train_pos_edge_index = torch.stack([r, c], dim=0)
-        data.train_pos_edge_index = to_undirected(data.train_pos_edge_index)
-
-        neg_edge_index = negative_sampling(
-            edge_index=torch.stack([row, col], dim=0),
-            num_nodes=data.num_nodes,
-            num_neg_samples=n_v + n_t
-        )
-
-        data.val_neg_edge_index = neg_edge_index[:, :n_v]
-        data.test_neg_edge_index = neg_edge_index[:, n_v:]
-
-        return data
-
-
 class Normalize:
     def __init__(self, low, high):
         self.min = low
