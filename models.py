@@ -5,40 +5,49 @@ import torch.nn.functional as F
 from pytorch_lightning import LightningModule, TrainResult, EvalResult
 from pytorch_lightning.metrics.functional import accuracy
 from torch.optim import Adam
-from torch_geometric.nn import GCNConv, MessagePassing
+from torch_geometric.nn import MessagePassing
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
 from torch_geometric.utils import add_remaining_self_loops
 
 
 class KProp(MessagePassing):
-    def __init__(self, K: int, cached=False, aggr='gcn'):
+    def __init__(self, in_channels, out_channels, K, aggregator, cached=False):
+        super().__init__(aggr='add' if aggregator == 'gcn' else 'mean')
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.fc = torch.nn.Linear(in_channels, out_channels)
         self.K = K
         self.add_self_loops = K == 1
         self.cached = cached
-        self._cache = None
-        self.agg = aggr
-        super().__init__(aggr='add' if aggr == 'gcn' else 'mean')
+        self._cached_x = None
+        self.aggregator = aggregator
 
     def forward(self, x, edge_index, edge_weight=None):
-        if self._cache is None:
-            if self.agg == 'gcn':
-                edge_index, edge_weight = gcn_norm(
-                    edge_index, edge_weight, x.size(self.node_dim),
-                    add_self_loops=self.add_self_loops, dtype=x.dtype
-                )
-            else:
-                edge_weight = torch.ones(edge_index.size(1), device=edge_index.device)
-                if self.add_self_loops:
-                    edge_index, edge_weight = add_remaining_self_loops(
-                        edge_index, edge_weight, num_nodes=x.size(self.node_dim)
-                    )
+        if self._cached_x is None:
+            x = self.neighborhood_aggregation(x, edge_index, edge_weight)
             if self.cached:
-                self._cache = edge_index, edge_weight
+                self._cached_x = x
         else:
-            edge_index, edge_weight = self._cache
+            x = self._cached_x
+        x = self.fc(x)
+        return x
+
+    def neighborhood_aggregation(self, x, edge_index, edge_weight=None):
+        if self.aggregator == 'gcn':
+            edge_index, edge_weight = gcn_norm(
+                edge_index, edge_weight, x.size(self.node_dim),
+                add_self_loops=self.add_self_loops, dtype=x.dtype
+            )
+        else:
+            edge_weight = torch.ones(edge_index.size(1), device=edge_index.device)
+            if self.add_self_loops:
+                edge_index, edge_weight = add_remaining_self_loops(
+                    edge_index, edge_weight, num_nodes=x.size(self.node_dim)
+                )
 
         for k in range(self.K):
             x = self.propagate(edge_index, x=x, edge_weight=edge_weight)
+
         return x
 
     # noinspection PyMethodOverriding
@@ -46,16 +55,14 @@ class KProp(MessagePassing):
         return edge_weight.view(-1, 1) * x_j
 
 
-class GCN(torch.nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, dropout, inductive=False, aggr='gcn', steps=1):
+class GNN(torch.nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, dropout, K, aggregator):
         super().__init__()
-        self.fc = torch.nn.Linear(input_dim, hidden_dim)
-        self.conv1 = KProp(K=steps, cached=not inductive, aggr=aggr)
-        self.conv2 = GCNConv(hidden_dim, output_dim, cached=not inductive)
+        self.conv1 = KProp(input_dim, hidden_dim, K=K, aggregator=aggregator, cached=True)
+        self.conv2 = KProp(hidden_dim, output_dim, K=1, aggregator=aggregator, cached=False)
         self.dropout = dropout
 
     def forward(self, x, edge_index, edge_weight=None):
-        x = self.fc(x)
         x = self.conv1(x, edge_index, edge_weight)
         x = torch.selu(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
@@ -74,15 +81,15 @@ class NodeClassifier(LightningModule):
         parser.add_argument('--weight-decay', '--wd', type=float, default=0)
         return parser
 
-    def __init__(self, hidden_dim=16, dropout=0.5, learning_rate=0.001, weight_decay=0, steps=1, aggr='gcn',
+    def __init__(self, hidden_dim=16, dropout=0.5, learning_rate=0.001, weight_decay=0, K=1, aggregator='gcn',
                  log_learning_curve=False, **kwargs):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.dropout = dropout
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
-        self.steps = steps
-        self.aggr = aggr
+        self.steps = K
+        self.aggregator = aggregator
         self.save_hyperparameters()
         self.log_learning_curve = log_learning_curve
         self.gcn = None
@@ -90,14 +97,13 @@ class NodeClassifier(LightningModule):
     def setup(self, stage):
         if stage == 'fit':
             dataset = self.trainer.datamodule
-            self.gcn = GCN(
+            self.gcn = GNN(
                 input_dim=dataset.num_features,
                 hidden_dim=self.hidden_dim,
                 output_dim=dataset.num_classes,
                 dropout=self.dropout,
-                inductive=False,
-                steps=self.steps,
-                aggr=self.aggr
+                K=self.steps,
+                aggregator=self.aggregator
             )
 
     def forward(self, data):
