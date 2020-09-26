@@ -16,6 +16,14 @@ from transforms import Privatize
 from utils import TermColors
 
 
+class KPropError(KProp):
+    def __init__(self, K, aggregator):
+        super().__init__(in_channels=1, out_channels=1, K=K, aggregator=aggregator, cached=False)
+
+    def forward(self, x, edge_index, edge_weight=None):
+        return self.neighborhood_aggregation(x, edge_index, edge_weight)
+
+
 class ErrorEstimation:
     available_tasks = ['eps', 'deg', 'dim']
 
@@ -25,7 +33,7 @@ class ErrorEstimation:
         self.eps = eps
         self.logger = logger
         device = 'cpu' if not torch.cuda.is_available() else device
-        self.model = KProp(K=k, aggr=agg).to(device)
+        self.model = KPropError(K=k, aggregator=agg).to(device)
         self.cache = None
 
     def run(self, data):
