@@ -1,9 +1,11 @@
 from argparse import ArgumentParser
 
+import math
 import torch
 import torch.nn.functional as F
 from pytorch_lightning import LightningModule, TrainResult, EvalResult
 from pytorch_lightning.metrics.functional import accuracy
+from torch.nn import Linear, Dropout
 from torch.optim import Adam
 from torch_geometric.nn import MessagePassing
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
@@ -15,7 +17,7 @@ class KProp(MessagePassing):
         super().__init__(aggr='add' if aggregator == 'gcn' else 'mean')
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.fc = torch.nn.Linear(in_channels, out_channels)
+        self.fc = Linear(in_channels, out_channels)
         self.K = K
         self.p = p
         self.add_self_loops = K == 1
@@ -46,10 +48,10 @@ class KProp(MessagePassing):
                     edge_index, edge_weight, num_nodes=x.size(self.node_dim)
                 )
 
-        coeff = self.p
+        coeff = 1
         for k in range(self.K):
             x = self.propagate(edge_index, x=x, edge_weight=edge_weight) * coeff
-            coeff *= self.p
+            coeff *= math.exp(-self.p)
 
         return x
 
@@ -63,12 +65,12 @@ class GNN(torch.nn.Module):
         super().__init__()
         self.conv1 = KProp(input_dim, hidden_dim, K=K, aggregator=aggregator, p=p, cached=True)
         self.conv2 = KProp(hidden_dim, output_dim, K=1, aggregator=aggregator, p=p, cached=False)
-        self.dropout = dropout
+        self.dropout = Dropout(p=dropout)
 
     def forward(self, x, edge_index, edge_weight=None):
         x = self.conv1(x, edge_index, edge_weight)
         x = torch.selu(x)
-        x = F.dropout(x, p=self.dropout, training=self.training)
+        x = self.dropout(x)
         x = self.conv2(x, edge_index, edge_weight)
         x = F.log_softmax(x, dim=1)
         return x
@@ -84,7 +86,7 @@ class NodeClassifier(LightningModule):
         parser.add_argument('--weight-decay', '--wd', type=float, default=0)
         return parser
 
-    def __init__(self, hidden_dim=16, dropout=0.5, learning_rate=0.001, weight_decay=0, K=1, p=.8, aggregator='gcn',
+    def __init__(self, hidden_dim=16, dropout=0.5, learning_rate=0.001, weight_decay=0, K=1, p=0, aggregator='gcn',
                  log_learning_curve=False, **kwargs):
         super().__init__()
         self.hidden_dim = hidden_dim
