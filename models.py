@@ -11,12 +11,13 @@ from torch_geometric.utils import add_remaining_self_loops
 
 
 class KProp(MessagePassing):
-    def __init__(self, in_channels, out_channels, K, aggregator, cached=False):
+    def __init__(self, in_channels, out_channels, K, p, aggregator, cached=False):
         super().__init__(aggr='add' if aggregator == 'gcn' else 'mean')
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.fc = torch.nn.Linear(in_channels, out_channels)
         self.K = K
+        self.p = p
         self.add_self_loops = K == 1
         self.cached = cached
         self._cached_x = None
@@ -45,8 +46,10 @@ class KProp(MessagePassing):
                     edge_index, edge_weight, num_nodes=x.size(self.node_dim)
                 )
 
+        coeff = self.p
         for k in range(self.K):
-            x = self.propagate(edge_index, x=x, edge_weight=edge_weight)
+            x = self.propagate(edge_index, x=x, edge_weight=edge_weight) * coeff
+            coeff *= self.p
 
         return x
 
@@ -56,10 +59,10 @@ class KProp(MessagePassing):
 
 
 class GNN(torch.nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, dropout, K, aggregator):
+    def __init__(self, input_dim, hidden_dim, output_dim, dropout, K, p, aggregator):
         super().__init__()
-        self.conv1 = KProp(input_dim, hidden_dim, K=K, aggregator=aggregator, cached=True)
-        self.conv2 = KProp(hidden_dim, output_dim, K=1, aggregator=aggregator, cached=False)
+        self.conv1 = KProp(input_dim, hidden_dim, K=K, aggregator=aggregator, p=p, cached=True)
+        self.conv2 = KProp(hidden_dim, output_dim, K=1, aggregator=aggregator, p=p, cached=False)
         self.dropout = dropout
 
     def forward(self, x, edge_index, edge_weight=None):
@@ -81,7 +84,7 @@ class NodeClassifier(LightningModule):
         parser.add_argument('--weight-decay', '--wd', type=float, default=0)
         return parser
 
-    def __init__(self, hidden_dim=16, dropout=0.5, learning_rate=0.001, weight_decay=0, K=1, aggregator='gcn',
+    def __init__(self, hidden_dim=16, dropout=0.5, learning_rate=0.001, weight_decay=0, K=1, p=.8, aggregator='gcn',
                  log_learning_curve=False, **kwargs):
         super().__init__()
         self.hidden_dim = hidden_dim
@@ -89,6 +92,7 @@ class NodeClassifier(LightningModule):
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.steps = K
+        self.p = p
         self.aggregator = aggregator
         self.save_hyperparameters()
         self.log_learning_curve = log_learning_curve
@@ -103,6 +107,7 @@ class NodeClassifier(LightningModule):
                 output_dim=dataset.num_classes,
                 dropout=self.dropout,
                 K=self.steps,
+                p=self.p,
                 aggregator=self.aggregator
             )
 
