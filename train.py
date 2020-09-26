@@ -6,7 +6,7 @@ from itertools import product
 
 import torch
 from pytorch_lightning import Trainer, seed_everything
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 
 from datasets import available_datasets, GraphDataModule
@@ -16,22 +16,22 @@ from transforms import Privatize
 from utils import TermColors
 
 
-def train_and_test(dataset, method, eps, steps, aggr, args, repeats, output_dir):
+def train_and_test(dataset, method, eps, K, aggregator, args, repeats, output_dir):
     for run in range(repeats):
         params = {
             'task': 'node',
             'dataset': dataset.name,
             'method': method,
             'eps': eps,
-            'steps': steps,
-            'aggr': aggr,
+            'steps': K,
+            'aggr': aggregator,
             'run': run
         }
 
         params_str = ' | '.join([f'{key}={val}' for key, val in params.items()])
         print(TermColors.FG.green + params_str + TermColors.reset)
 
-        save_dir = os.path.join(output_dir, 'node', dataset.name, method, str(eps), str(steps), aggr)
+        save_dir = os.path.join(output_dir, 'node', dataset.name, method, str(eps), str(K), aggregator)
         logger = TensorBoardLogger(save_dir=save_dir, name=None)
 
         checkpoint_path = os.path.join('checkpoints', save_dir)
@@ -39,23 +39,20 @@ def train_and_test(dataset, method, eps, steps, aggr, args, repeats, output_dir)
 
         params = vars(args)
         log_learning_curve = run == 0 and (method == 'raw' or method == 'mbm')
-        # log_learning_curve = True
-        params['steps'] = steps
-        params['aggr'] = aggr
-        model = NodeClassifier(log_learning_curve=log_learning_curve, **params)
+        model = NodeClassifier(aggregator=aggregator, K=K, log_learning_curve=log_learning_curve, **params)
 
         trainer = Trainer.from_argparse_args(
             args=args,
             precision=32,
             gpus=int(args.device == 'cuda' and torch.cuda.is_available()),
-            max_epochs=500,
+            max_epochs=1000,
             checkpoint_callback=checkpoint_callback,
+            early_stop_callback=EarlyStopping(patience=200),
             logger=logger,
             log_save_interval=500,
             weights_summary=None,
             deterministic=True,
             progress_bar_refresh_rate=10,
-            # early_stop_callback=EarlyStopping(patience=500),
         )
 
         privatize = Privatize(method=method, eps=eps)
@@ -78,8 +75,8 @@ def batch_train_and_test(args):
             dataset=dataset,
             method=method,
             eps=eps,
-            steps=steps,
-            aggr=aggr,
+            K=steps,
+            aggregator=aggr,
             args=args,
             repeats=args.repeats,
             output_dir=args.output_dir
