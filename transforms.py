@@ -1,6 +1,4 @@
-import math
 import torch
-from torch_geometric.utils import to_undirected, negative_sampling
 
 from privacy import _available_mechanisms
 
