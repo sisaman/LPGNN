@@ -12,6 +12,49 @@ from torch_geometric.nn.conv.gcn_conv import gcn_norm
 from torch_sparse import matmul
 
 
+class BFSConv(MessagePassing):
+    def __init__(self, in_channels, out_channels, K, aggregator, cached=False):
+        super().__init__(aggr='add' if aggregator == 'gcn' else 'mean')
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.fc = Linear(in_channels, out_channels)
+        self.K = K
+        self.add_self_loops = K == 1
+        self.cached = cached
+        self._cached_x = None
+        self.aggregator = aggregator
+
+    def forward(self, x, adj_t):
+        if self._cached_x is None:
+            x = self.neighborhood_aggregation(x, adj_t)
+            if self.cached:
+                self._cached_x = x
+        else:
+            x = self._cached_x
+        x = self.fc(x)
+        return x
+
+    def neighborhood_aggregation(self, x, adj_t):
+        if self.add_self_loops:
+            adj_t = adj_t.set_diag()
+
+        A = adj_t
+        for k in range(1, self.K):
+            A = matmul(A, adj_t)
+
+        A = A.fill_value(1.0)
+
+        if self.aggregator == 'gcn':
+            A = gcn_norm(A, num_nodes=x.size(self.node_dim), add_self_loops=False, dtype=x.dtype)
+
+        x = self.propagate(A, x=x)
+        return x
+
+    # noinspection PyMethodOverriding
+    def message_and_aggregate(self, adj_t, x):
+        return matmul(adj_t, x, reduce=self.aggr)
+
+
 class KProp(MessagePassing):
     def __init__(self, in_channels, out_channels, K, p, aggregator, cached=False):
         super().__init__(aggr='add' if aggregator == 'gcn' else 'mean')
