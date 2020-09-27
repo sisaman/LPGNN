@@ -7,7 +7,7 @@ from pytorch_lightning import LightningModule, TrainResult, EvalResult
 from pytorch_lightning.metrics.functional import accuracy
 from torch.nn import Linear, Dropout
 from torch.optim import Adam
-from torch_geometric.nn import MessagePassing, SGConv
+from torch_geometric.nn import MessagePassing
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
 from torch_sparse import matmul
 
