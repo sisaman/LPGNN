@@ -76,7 +76,7 @@ class NodeClassifier(LightningModule):
         parser.add_argument('--dropout', '--dp', type=float, default=0)
         parser.add_argument('--learning-rate', '--lr', type=float, default=0.001)
         parser.add_argument('--weight-decay', '--wd', type=float, default=0)
-        parser.add_argument('--self-loops', type=bool, action='store_true', default=False)
+        parser.add_argument('--self-loops', action='store_true', default=False)
         return parser
 
     def __init__(self, hidden_dim=16, dropout=0.5, learning_rate=0.001, weight_decay=0, K=1, aggregator='gcn',
