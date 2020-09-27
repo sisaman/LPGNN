@@ -90,7 +90,7 @@ def main():
     parser = ArgumentParser()
     parser.add_argument('-d', '--dataset', type=str, choices=available_datasets(), required=True)
     parser.add_argument('-m', '--methods', nargs='+', choices=available_mechanisms() + ['raw'], required=True)
-    parser.add_argument('-e', '--epsilons', nargs='*', type=float, dest='epsilons', default=[1])
+    parser.add_argument('-e', '--epsilons', nargs='*', type=float, default=[1])
     parser.add_argument('-k', '--steps', nargs='*', type=int, default=[1])
     parser.add_argument('-a', '--aggs', nargs='*', type=str, default=['mean'])
     parser.add_argument('-r', '--repeats', type=int, default=1)
