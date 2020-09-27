@@ -17,29 +17,23 @@ from utils import TermColors
 
 
 def train_and_test(dataset, method, eps, K, aggregator, args, repeats, output_dir):
+    experiment_dir = os.path.join(
+        'task:node',
+        f'dataset:{dataset.name}',
+        f'method:{method}',
+        f'eps:{eps}',
+        f'step:{K}',
+        f'agg:{aggregator}'
+    )
+    print(TermColors.FG.green + experiment_dir + TermColors.reset)
+
     for run in range(repeats):
-        params = {
-            'task': 'node',
-            'dataset': dataset.name,
-            'method': method,
-            'eps': eps,
-            'steps': K,
-            'aggr': aggregator,
-            'run': run
-        }
+        print(TermColors.FG.lightblue + f'Run {run}:' + TermColors.reset)
+        logger = TensorBoardLogger(save_dir=os.path.join(output_dir, experiment_dir), name=None)
+        checkpoint_callback = ModelCheckpoint(monitor='val_loss', filepath=os.path.join('checkpoints', experiment_dir))
 
-        params_str = ' | '.join([f'{key}={val}' for key, val in params.items()])
-        print(TermColors.FG.green + params_str + TermColors.reset)
-
-        save_dir = os.path.join(output_dir, 'node', dataset.name, method, str(eps), str(K), aggregator)
-        logger = TensorBoardLogger(save_dir=save_dir, name=None)
-
-        checkpoint_path = os.path.join('checkpoints', save_dir)
-        checkpoint_callback = ModelCheckpoint(monitor='val_loss', filepath=checkpoint_path)
-
-        params = vars(args)
         log_learning_curve = run == 0 and (method == 'raw' or method == 'mbm')
-        model = NodeClassifier(aggregator=aggregator, K=K, log_learning_curve=log_learning_curve, **params)
+        model = NodeClassifier(aggregator=aggregator, K=K, log_learning_curve=log_learning_curve, **vars(args))
 
         trainer = Trainer.from_argparse_args(
             args=args,
