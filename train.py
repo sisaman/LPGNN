@@ -23,7 +23,8 @@ def train_and_test(dataset, method, eps, K, aggregator, args, repeats, output_di
         f'method:{method}',
         f'eps:{eps}',
         f'step:{K}',
-        f'agg:{aggregator}'
+        f'agg:{aggregator}',
+        f'loops:{args.self_loops}'
     )
     print(TermColors.FG.green + experiment_dir + TermColors.reset)
 

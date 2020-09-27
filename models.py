@@ -53,9 +53,9 @@ class KProp(MessagePassing):
 
 
 class GNN(torch.nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, dropout, K, aggregator):
+    def __init__(self, input_dim, hidden_dim, output_dim, dropout, K, aggregator, self_loops):
         super().__init__()
-        self.conv1 = KProp(input_dim, hidden_dim, K=K, aggregator=aggregator, add_self_loops=False, cached=True)
+        self.conv1 = KProp(input_dim, hidden_dim, K=K, aggregator=aggregator, add_self_loops=self_loops, cached=True)
         self.conv2 = KProp(hidden_dim, output_dim, K=1, aggregator=aggregator, add_self_loops=True, cached=False)
         self.dropout = Dropout(p=dropout)
 
@@ -76,10 +76,11 @@ class NodeClassifier(LightningModule):
         parser.add_argument('--dropout', '--dp', type=float, default=0)
         parser.add_argument('--learning-rate', '--lr', type=float, default=0.001)
         parser.add_argument('--weight-decay', '--wd', type=float, default=0)
+        parser.add_argument('--self-loops', type=bool, action='store_true', default=False)
         return parser
 
     def __init__(self, hidden_dim=16, dropout=0.5, learning_rate=0.001, weight_decay=0, K=1, aggregator='gcn',
-                 log_learning_curve=False, **kwargs):
+                 self_loops=True, log_learning_curve=False, **kwargs):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.dropout = dropout
@@ -87,6 +88,7 @@ class NodeClassifier(LightningModule):
         self.weight_decay = weight_decay
         self.steps = K
         self.aggregator = aggregator
+        self.self_loops = self_loops
         self.save_hyperparameters()
         self.log_learning_curve = log_learning_curve
         self.gcn = None
@@ -100,7 +102,8 @@ class NodeClassifier(LightningModule):
                 output_dim=dataset.num_classes,
                 dropout=self.dropout,
                 K=self.steps,
-                aggregator=self.aggregator
+                aggregator=self.aggregator,
+                self_loops=self.self_loops
             )
 
     def forward(self, data):
