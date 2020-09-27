@@ -12,13 +12,13 @@ from torch_sparse import matmul
 
 
 class KProp(MessagePassing):
-    def __init__(self, in_channels, out_channels, K, aggregator, cached=False):
-        super().__init__(aggr='add' if aggregator == 'gcn' else 'mean')
+    def __init__(self, in_channels, out_channels, K, aggregator, add_self_loops, cached=False):
+        super().__init__(aggr='add' if aggregator == 'gcn' else aggregator)
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.fc = Linear(in_channels, out_channels)
         self.K = K
-        self.add_self_loops = K == 1
+        self.add_self_loops = add_self_loops
         self.cached = cached
         self._cached_x = None
         self.aggregator = aggregator
@@ -55,8 +55,8 @@ class KProp(MessagePassing):
 class GNN(torch.nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, dropout, K, aggregator):
         super().__init__()
-        self.conv1 = KProp(input_dim, hidden_dim, K=K, aggregator=aggregator, cached=True)
-        self.conv2 = KProp(hidden_dim, output_dim, K=1, aggregator=aggregator, cached=False)
+        self.conv1 = KProp(input_dim, hidden_dim, K=K, aggregator=aggregator, add_self_loops=False, cached=True)
+        self.conv2 = KProp(hidden_dim, output_dim, K=1, aggregator=aggregator, add_self_loops=True, cached=False)
         self.dropout = Dropout(p=dropout)
 
     def forward(self, x, adj_t):
