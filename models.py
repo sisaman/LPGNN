@@ -7,9 +7,9 @@ from pytorch_lightning import LightningModule, TrainResult, EvalResult
 from pytorch_lightning.metrics.functional import accuracy
 from torch.nn import Linear, Dropout
 from torch.optim import Adam
-from torch_geometric.nn import MessagePassing
+from torch_geometric.nn import MessagePassing, SGConv
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
-from torch_geometric.utils import add_remaining_self_loops
+from torch_sparse import matmul
 
 
 class KProp(MessagePassing):
@@ -25,9 +25,9 @@ class KProp(MessagePassing):
         self._cached_x = None
         self.aggregator = aggregator
 
-    def forward(self, x, edge_index, edge_weight=None):
+    def forward(self, x, adj_t):
         if self._cached_x is None:
-            x = self.neighborhood_aggregation(x, edge_index, edge_weight)
+            x = self.neighborhood_aggregation(x, adj_t)
             if self.cached:
                 self._cached_x = x
         else:
@@ -35,29 +35,25 @@ class KProp(MessagePassing):
         x = self.fc(x)
         return x
 
-    def neighborhood_aggregation(self, x, edge_index, edge_weight=None):
+    def neighborhood_aggregation(self, x, adj_t):
         if self.aggregator == 'gcn':
-            edge_index, edge_weight = gcn_norm(
-                edge_index, edge_weight, x.size(self.node_dim),
+            adj_t = gcn_norm(
+                adj_t, num_nodes=x.size(self.node_dim),
                 add_self_loops=self.add_self_loops, dtype=x.dtype
             )
-        else:
-            edge_weight = torch.ones(edge_index.size(1), device=edge_index.device)
-            if self.add_self_loops:
-                edge_index, edge_weight = add_remaining_self_loops(
-                    edge_index, edge_weight, num_nodes=x.size(self.node_dim)
-                )
+        elif self.add_self_loops:
+            adj_t = adj_t.set_diag()
 
         coeff = 1
         for k in range(self.K):
-            x = self.propagate(edge_index, x=x, edge_weight=edge_weight) * coeff
+            x = self.propagate(adj_t, x=x) * coeff
             coeff *= math.exp(-self.p)
 
         return x
 
     # noinspection PyMethodOverriding
-    def message(self, x_j, edge_weight):
-        return edge_weight.view(-1, 1) * x_j
+    def message_and_aggregate(self, adj_t, x):
+        return matmul(adj_t, x, reduce=self.aggr)
 
 
 class GNN(torch.nn.Module):
@@ -67,11 +63,11 @@ class GNN(torch.nn.Module):
         self.conv2 = KProp(hidden_dim, output_dim, K=1, aggregator=aggregator, p=p, cached=False)
         self.dropout = Dropout(p=dropout)
 
-    def forward(self, x, edge_index, edge_weight=None):
-        x = self.conv1(x, edge_index, edge_weight)
+    def forward(self, x, adj_t):
+        x = self.conv1(x, adj_t)
         x = torch.selu(x)
         x = self.dropout(x)
-        x = self.conv2(x, edge_index, edge_weight)
+        x = self.conv2(x, adj_t)
         x = F.log_softmax(x, dim=1)
         return x
 
@@ -114,7 +110,7 @@ class NodeClassifier(LightningModule):
             )
 
     def forward(self, data):
-        return self.gcn(data.x, data.edge_index, data.edge_attr)
+        return self.gcn(data.x, data.adj_t)
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)

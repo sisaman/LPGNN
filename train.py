@@ -61,7 +61,7 @@ def train_and_test(dataset, method, eps, K, aggregator, args, repeats, output_di
 
 
 def batch_train_and_test(args):
-    dataset = GraphDataModule(name=args.dataset, normalize=(0, 1), device=args.device)
+    dataset = GraphDataModule(name=args.dataset, normalize=(0, 1), sparse=True, device=args.device)
 
     if 'raw' in args.methods:
         configs = list(product(['raw'], [0.0], args.steps, args.aggs))

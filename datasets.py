@@ -6,7 +6,7 @@ import torch
 from pytorch_lightning import LightningDataModule
 from torch_geometric.data import Data, InMemoryDataset, download_url, extract_zip, DataLoader
 from torch_geometric.datasets import Planetoid
-from torch_geometric.transforms import Compose
+from torch_geometric.transforms import Compose, ToSparseTensor
 from torch_geometric.utils import to_undirected
 
 from transforms import NodeSplit, Normalize
@@ -152,7 +152,7 @@ class GraphDataModule(LightningDataModule):
         'twitch': partial(KarateClub, name='twitch', pre_transform=NodeSplit()),
     }
 
-    def __init__(self, name, root='datasets', normalize=False, transform=None, device='cpu'):
+    def __init__(self, name, root='datasets', normalize=False, sparse=False, transform=None, device='cpu'):
         super().__init__()
         self.name = name
         self.dataset = self.available_datasets[name](root=os.path.join(root, name), transform=transform)
@@ -162,6 +162,9 @@ class GraphDataModule(LightningDataModule):
         if normalize:
             low, high = normalize
             self.add_transform(Normalize(low, high))
+
+        if sparse:
+            self.add_transform(ToSparseTensor())
 
     def prepare_data(self):
         assert self.data_list is None
