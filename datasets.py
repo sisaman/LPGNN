@@ -145,8 +145,9 @@ class Elliptic(InMemoryDataset):
 
 class GraphDataModule(LightningDataModule):
     available_datasets = {
-        'cora': partial(Planetoid, name='cora'),
-        'elliptic': partial(Elliptic, pre_transform=NodeSplit()),
+        'cora': partial(Planetoid, name='cora', split='full'),
+        'citeseer': partial(Planetoid, name='citeseer', split='full'),
+        'pubmed': partial(Planetoid, name='pubmed', split='full'),
         'facebook': partial(KarateClub, name='facebook', pre_transform=NodeSplit()),
         'github': partial(KarateClub, name='github', pre_transform=NodeSplit()),
         'twitch': partial(KarateClub, name='twitch', pre_transform=NodeSplit()),
