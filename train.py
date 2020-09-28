@@ -57,12 +57,15 @@ def train_and_test(dataset, method, eps, K, aggregator, args, repeats, output_di
 
 def batch_train_and_test(args):
     dataset = GraphDataModule(name=args.dataset, normalize=(0, 1), sparse=True, device=args.device)
+    non_priv_methods = {'raw', 'cst'} & set(args.methods)
+    priv_methods = set(args.methods) - non_priv_methods
 
-    if 'raw' in args.methods:
-        configs = list(product(['raw'], [0.0], args.steps, args.aggs))
-        configs += list(product(set(args.methods) - {'raw'}, set(args.epsilons), args.steps, args.aggs))
-    else:
-        configs = list(product(args.methods, args.epsilons, args.steps, args.aggs))
+    configs = []
+    for method in non_priv_methods:
+        configs += list(product(method, [0.0], args.steps, args.aggs))  # bind non-private methods with eps=0
+
+    for method in priv_methods:
+        configs += list(product(method, args.epsilons, args.steps, args.aggs))
 
     for method, eps, steps, aggr in configs:
         train_and_test(
@@ -84,10 +87,10 @@ def main():
 
     parser = ArgumentParser()
     parser.add_argument('-d', '--dataset', type=str, choices=available_datasets(), required=True)
-    parser.add_argument('-m', '--methods', nargs='+', choices=available_mechanisms() + ['raw'], required=True)
+    parser.add_argument('-m', '--methods', nargs='+', choices=available_mechanisms() + ['raw', 'cst'], required=True)
     parser.add_argument('-e', '--epsilons', nargs='*', type=float, default=[1])
     parser.add_argument('-k', '--steps', nargs='*', type=int, default=[1])
-    parser.add_argument('-a', '--aggs', nargs='*', type=str, default=['mean'])
+    parser.add_argument('-a', '--aggs', nargs='*', type=str, default=['gcn'])
     parser.add_argument('-r', '--repeats', type=int, default=1)
     parser.add_argument('-o', '--output-dir', type=str, default='./results')
     parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'])
