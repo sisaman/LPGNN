@@ -176,23 +176,21 @@ class KarateClub(InMemoryDataset):
             download_url(f'{self.url}/{self.name}/{part}.csv', self.raw_dir)
 
     def process(self):
-        filenames = os.listdir(self.raw_dir)
-        raw_files = sorted([os.path.join(self.raw_dir, f) for f in filenames])
-        x, edge_index, y, num_nodes = None, None, None, None
+        target_file = os.path.join(self.raw_dir, self.raw_file_names[2])
+        y = pd.read_csv(target_file)['target']
+        y = torch.from_numpy(y.to_numpy(dtype=int))
+        num_nodes = len(y)
 
-        for file in raw_files:
-            if 'target' in file:
-                y = pd.read_csv(file)['target']
-                y = torch.from_numpy(y.to_numpy(dtype=int))
-                num_nodes = len(y)
-            elif 'edges' in file:
-                edge_index = pd.read_csv(file)
-                edge_index = torch.from_numpy(edge_index.to_numpy()).t().contiguous()
-                edge_index = to_undirected(edge_index, num_nodes)  # undirected edges
-            elif 'features' in file:
-                x = pd.read_csv(file).drop_duplicates()
-                x = x.pivot(index='node_id', columns='feature_id', values='value').fillna(0)
-                x = torch.from_numpy(x.to_numpy()).float()
+        edge_file = os.path.join(self.raw_dir, self.raw_file_names[0])
+        edge_index = pd.read_csv(edge_file)
+        edge_index = torch.from_numpy(edge_index.to_numpy()).t().contiguous()
+        edge_index = to_undirected(edge_index, num_nodes)  # undirected edges
+
+        feature_file = os.path.join(self.raw_dir, self.raw_file_names[1])
+        x = pd.read_csv(feature_file).drop_duplicates()
+        x = x.pivot(index='node_id', columns='feature_id', values='value').fillna(0)
+        x = x.reindex(range(num_nodes), fill_value=0)
+        x = torch.from_numpy(x.to_numpy()).float()
 
         data = Data(x=x, edge_index=edge_index, y=y, num_nodes=num_nodes)
 
@@ -275,8 +273,7 @@ class GraphDataModule(LightningDataModule):
         'pubmed': partial(Planetoid, name='pubmed', split='full'),
         'facebook': partial(KarateClub, name='facebook', pre_transform=NodeSplit()),
         'github': partial(KarateClub, name='github', pre_transform=NodeSplit()),
-        'twitch': partial(Twitch, name='RU', pre_transform=NodeSplit()),
-        'mit': partial(Facebook100, name='MIT8', target='status', pre_transform=NodeSplit())
+        'lastfm': partial(KarateClub, name='lastfm', pre_transform=NodeSplit()),
     }
 
     def __init__(self, name, root='datasets', normalize=False, sparse=False, transform=None, device='cpu'):
