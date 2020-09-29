@@ -6,7 +6,6 @@ import pandas as pd
 import torch
 from pytorch_lightning import seed_everything
 from pytorch_lightning.loggers import CSVLogger
-from torch_geometric.utils import degree
 
 from datasets import available_datasets, GraphDataModule
 from models import KProp
@@ -46,8 +45,8 @@ class ErrorEstimation:
             raise ValueError('task not supported')
 
     def calculate_error(self, data_priv, norm):
-        hn = self.model(data_priv.x_raw, data_priv.edge_index)
-        hn_hat = self.model(data_priv.x, data_priv.edge_index)
+        hn = self.model(data_priv.x_raw, data_priv.adj_t)
+        hn_hat = self.model(data_priv.x, data_priv.adj_t)
         diff = hn - hn_hat
         errors = torch.norm(diff, p=norm, dim=1) / data_priv.num_features
         return errors
@@ -62,7 +61,7 @@ class ErrorEstimation:
         privatize = Privatize(method=self.method, eps=self.eps)
         data = privatize(data)
         errors = self.calculate_error(data, norm=1)
-        degrees = degree(data.edge_index[0], data.num_nodes)
+        degrees = data.adj_t.sum(dim=0)
         df = pd.DataFrame({'degree': degrees.cpu(), 'error': errors.cpu()})
         df = df[df['degree'] < df['degree'].quantile(q=0.99)]
         df.apply(lambda row: self.logger.log_metrics(metrics={'error': row['error'], 'degree': row['degree']}), axis=1)
@@ -89,7 +88,7 @@ def error_estimation(task, dataset, method, eps, aggr, repeats, output_dir, devi
 @torch.no_grad()
 def batch_error_estimation(args):
     for dataset_name in args.datasets:
-        dataset = GraphDataModule(name=dataset_name, normalize=(0, 1), device=args.device)
+        dataset = GraphDataModule(name=dataset_name, normalize=(0, 1), sparse=True, device=args.device)
         configs = product(args.methods, args.epsilons, args.aggs)
         for method, eps, agg in configs:
             error_estimation(
