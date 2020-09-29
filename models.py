@@ -24,13 +24,11 @@ class KProp(MessagePassing):
         self.aggregator = aggregator
 
     def forward(self, x, adj_t):
-        if self._cached_x is None:
+        if self._cached_x is None or not self.cached:
             x = self.neighborhood_aggregation(x, adj_t)
-            if self.cached:
-                self._cached_x = x
-        else:
-            x = self._cached_x
-        x = self.fc(x)
+            self._cached_x = x
+
+        x = self.fc(self._cached_x)
         return x
 
     def neighborhood_aggregation(self, x, adj_t):
