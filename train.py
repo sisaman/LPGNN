@@ -64,8 +64,7 @@ def batch_train_and_test(args):
     for method in non_priv_methods:
         configs += list(product(method, [0.0], args.steps, args.aggs))  # bind non-private methods with eps=0
 
-    for method in priv_methods:
-        configs += list(product(method, args.epsilons, args.steps, args.aggs))
+    configs += list(product(priv_methods, args.epsilons, args.steps, args.aggs))
 
     for method, eps, steps, aggr in configs:
         train_and_test(
