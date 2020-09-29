@@ -13,14 +13,12 @@ class Privatize:
         if self.method == 'raw':
             if hasattr(data, 'x_raw'):
                 data.x = data.x_raw  # bring back x_raw
-        elif self.method == 'cst':
+        elif self.method == 'rnd':
             if hasattr(data, 'x_raw'):
                 data.x = data.x_raw  # bring back x_raw
             else:
                 data.x_raw = data.x  # save original x to x_raw
-            alpha = data.x.min(dim=0)[0]
-            beta = data.x.max(dim=0)[0]
-            data.x = torch.ones_like(data.x)# * (alpha + beta) / 2
+            data.x = torch.rand_like(data.x)
         else:
             if not hasattr(data, 'x_raw'):
                 data.x_raw = data.x  # save original x to x_raw
