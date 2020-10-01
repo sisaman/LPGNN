@@ -1,8 +1,6 @@
-DB="github"
-LR=0.01
-WD=0.0
-DP=0.5
-REP=10
-DIR="./results"
+export DB="github"
+export LR=0.01
+export WD=0.0
+export DP=0.5
 
-sh run.sh
+sh train.sh

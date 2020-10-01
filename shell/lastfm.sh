@@ -1,8 +1,6 @@
-DB="lastfm"
-LR=0.01
-WD=0.001
-DP=0.75
-REP=10
-DIR="./results"
+export DB="lastfm"
+export LR=0.01
+export WD=0.001
+export DP=0.75
 
-sh run.sh
+sh train.sh

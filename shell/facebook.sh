@@ -1,8 +1,6 @@
-DB="facebook"
-LR=0.01
-WD=0.001
-DP=0.5
-REP=10
-DIR="./results"
+export DB="facebook"
+export LR=0.01
+export WD=0.001
+export DP=0.5
 
-sh run.sh
+sh train.sh
