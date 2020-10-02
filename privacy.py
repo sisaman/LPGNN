@@ -121,9 +121,9 @@ class MultiBit(Mechanism):
             m = self.m
 
         # sample features for perturbation
-        bigS = torch.cat([torch.randperm(d, device=x.device)[:m] for _ in range(n)]).view(n, m)
-        s = torch.zeros_like(x, dtype=torch.bool)
-        s.scatter_(dim=1, index=bigS, value=True)
+        rand_mat = torch.rand(n, d)
+        m_th_quant = torch.topk(rand_mat, m, largest=False)[0][:, -1:]
+        s = rand_mat <= m_th_quant
 
         # perturb sampled features
         em = math.exp(self.eps / m)
