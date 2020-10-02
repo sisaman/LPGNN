@@ -1,5 +1,5 @@
 REP=10
-DIR="./temp"
+DIR="./results"
 
 cd ..
 python train.py -d "$DB" -m mbm -e 1 -k 1 2 4 8 16 32 --lr "$LR" --wd "$WD" --dp "$DP" -r $REP -o $DIR
