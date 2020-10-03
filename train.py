@@ -12,14 +12,14 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from datasets import available_datasets, GraphDataModule
 from models import NodeClassifier
 from privacy import available_mechanisms
-from transforms import Privatize
+from transforms import Privatize, LabelRate
 from utils import TermColors
 
 
-def train_and_test(dataset, method, eps, K, aggregator, args, repeats, output_dir):
+def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, repeats, output_dir):
     experiment_dir = os.path.join(
         'task:node',
-        f'dataset:{dataset.name}',
+        f'dataset:{dataset.name}({label_rate})',
         f'method:{method}',
         f'eps:{eps}',
         f'step:{K}',
@@ -49,8 +49,8 @@ def train_and_test(dataset, method, eps, K, aggregator, args, repeats, output_di
             progress_bar_refresh_rate=10,
         )
 
-        privatize = Privatize(method=method, eps=eps)
-        dataset.add_transform(privatize)
+        dataset.add_transform(Privatize(method=method, eps=eps))
+        dataset.add_transform(LabelRate(rate=label_rate))
         trainer.fit(model=model, datamodule=dataset)
         trainer.test(datamodule=dataset, ckpt_path='best', verbose=True)
 
@@ -59,12 +59,13 @@ def batch_train_and_test(args):
     dataset = GraphDataModule(name=args.dataset, normalize=(0, 1), sparse=True, device=args.device)
     non_priv_methods = {'raw', 'rnd'} & set(args.methods)
     priv_methods = set(args.methods) - non_priv_methods
-    configs = list(product(non_priv_methods, [0.0], args.steps, args.aggs))
-    configs += list(product(priv_methods, args.epsilons, args.steps, args.aggs))
+    configs = list(product(non_priv_methods, args.label_rates, [0.0], args.steps, args.aggs))
+    configs += list(product(priv_methods, args.label_rates, args.epsilons, args.steps, args.aggs))
 
-    for method, eps, steps, aggr in configs:
+    for method, lr, eps, steps, aggr in configs:
         train_and_test(
             dataset=dataset,
+            label_rate=lr,
             method=method,
             eps=eps,
             K=steps,
@@ -82,6 +83,7 @@ def main():
 
     parser = ArgumentParser()
     parser.add_argument('-d', '--dataset', type=str, choices=available_datasets(), required=True)
+    parser.add_argument('-l', '--label-rates', type=float, nargs='*', default=[1.0])
     parser.add_argument('-m', '--methods', nargs='+', choices=available_mechanisms() + ['raw', 'rnd'], required=True)
     parser.add_argument('-e', '--epsilons', nargs='*', type=float, default=[1])
     parser.add_argument('-k', '--steps', nargs='*', type=int, default=[1])
@@ -92,7 +94,6 @@ def main():
     parser = NodeClassifier.add_module_specific_args(parser)
     args = parser.parse_args()
 
-    # check if eps > 0 for LDP methods
     if len(set(args.methods) & set(available_mechanisms())) > 0:
         if min(args.epsilons) <= 0:
             parser.error('LDP methods require eps > 0.')
