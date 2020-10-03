@@ -22,6 +22,15 @@ class Mechanism:
         return self.transform(x)
 
 
+class Laplace(Mechanism):
+    def transform(self, x):
+        d = x.size(1)
+        sensitivity = (self.beta - self.alpha) * d
+        scale = torch.ones_like(x) * (sensitivity / self.eps)
+        y_star = torch.distributions.Laplace(x, scale).sample()
+        return y_star
+
+
 class Gaussian(Mechanism):
     def __init__(self, *args, delta=0.0001, **kwargs):
         super().__init__(*args, **kwargs)
@@ -79,7 +88,7 @@ class AnalyticGaussian(Gaussian):
 
     @staticmethod
     def _phi(t):
-        return 0.5 * (1.0 + erf(float(t) / math.sqrt(2.0)))
+        return 0.5 * (1.0 + erf(t / math.sqrt(2.0)))
 
     def _case_a(self, s):
         return self._phi(math.sqrt(self.eps * s)) - math.exp(self.eps) * self._phi(-math.sqrt(self.eps * (s + 2.0)))
@@ -121,9 +130,9 @@ class MultiBit(Mechanism):
             m = self.m
 
         # sample features for perturbation
-        rand_mat = torch.rand(n, d)
-        m_th_quant = torch.topk(rand_mat, m, largest=False)[0][:, -1:]
-        s = rand_mat <= m_th_quant
+        BigS = torch.rand(n, d).topk(m, dim=1).indices
+        s = torch.zeros(n, d, dtype=torch.bool)
+        s.scatter_(dim=1, index=BigS, value=True)
 
         # perturb sampled features
         em = math.exp(self.eps / m)
@@ -139,72 +148,17 @@ class MultiBit(Mechanism):
         return x_prime
 
 
-class Piecewise(Mechanism):
-    def transform(self, x):
-        # normalize x between -1,1
-        t = (x - self.alpha) / (self.beta - self.alpha)
-        t = 2 * t - 1
-
-        # piecewise mechanism's variables
-        P = (math.exp(self.eps) - math.exp(self.eps / 2)) / (2 * math.exp(self.eps / 2) + 2)
-        C = (math.exp(self.eps / 2) + 1) / (math.exp(self.eps / 2) - 1)
-        L = t * (C + 1) / 2 - (C - 1) / 2
-        R = L + C - 1
-
-        # thresholds for random sampling
-        threshold_left = P * (L + C) / math.exp(self.eps)
-        threshold_right = threshold_left + P * (R - L)
-
-        # masks for piecewise random sampling
-        x = torch.rand_like(t)
-        mask_left = x < threshold_left
-        mask_middle = (threshold_left < x) & (x < threshold_right)
-        mask_right = threshold_right < x
-
-        # random sampling
-        t = mask_left * (torch.rand_like(t) * (L + C) - C)
-        t += mask_middle * (torch.rand_like(t) * (R - L) + L)
-        t += mask_right * (torch.rand_like(t) * (C - R) + R)
-
-        # unbias data
-        y_star = (self.beta - self.alpha) * (t + 1) / 2 + self.alpha
-        return y_star
-
-
-class MultiDimPiecewise(Piecewise):
-    def transform(self, x):
-        n, d = x.size()
-        k = int(max(1, min(d, math.floor(self.eps / 2.5))))
-        sample = torch.cat([torch.randperm(d, device=x.device)[:k] for _ in range(n)]).view(n, k)
-        mask = torch.zeros_like(x, dtype=torch.bool)
-        mask.scatter_(dim=1, index=sample, value=True)
-        self.eps /= k
-        y = super().transform(x)
-        z = mask * y * d / k
-        return z
-
-
 class OneBit(MultiBit):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, m='max', **kwargs)
 
 
-class Laplace(Mechanism):
-    def transform(self, x):
-        d = x.size(1)
-        sensitivity = (self.beta - self.alpha) * d
-        scale = torch.ones_like(x) * (sensitivity / self.eps)
-        y_star = torch.distributions.Laplace(x, scale).sample()
-        return y_star
-
-
 _available_mechanisms = {
+    'cgm': Gaussian,
     'agm': AnalyticGaussian,
     'mbm': MultiBit,
-    'pwm': MultiDimPiecewise,
     'obm': OneBit,
     'lpm': Laplace,
-    'cgm': Gaussian
 }
 
 
