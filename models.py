@@ -118,7 +118,7 @@ class NodeClassifier(LightningModule):
         acc = accuracy(pred=pred[data.train_mask], target=data.y[data.train_mask]) * 100
         self.log_dict(
             dictionary={'train_loss': loss, 'train_acc': acc},
-            prog_bar=True, logger=True, on_step=True, on_epoch=False
+            prog_bar=True, logger=True, on_step=False, on_epoch=True
         )
         return loss
 
@@ -129,7 +129,7 @@ class NodeClassifier(LightningModule):
         acc = accuracy(pred=pred[data.val_mask], target=data.y[data.val_mask]) * 100
         self.log_dict(
             dictionary={'val_loss': loss, 'val_acc': acc},
-            prog_bar=True, logger=True, on_step=True, on_epoch=False
+            prog_bar=True, logger=True, on_step=False, on_epoch=True
         )
 
     def test_step(self, data, index):

@@ -1,18 +1,20 @@
 import logging
 import os
 import time
+from tabulate import tabulate
 from argparse import ArgumentParser
 from itertools import product
 import pandas as pd
+import numpy as np
 import torch
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
-
+from tqdm.auto import tqdm
 from datasets import available_datasets, GraphDataModule
 from models import NodeClassifier
 from privacy import available_mechanisms
 from transforms import Privatize, LabelRate
-from utils import colored_print
+from utils import ProgressBar, colored_text
 
 
 def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, repeats, output_dir):
@@ -26,12 +28,10 @@ def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, repeat
         f'agg:{aggregator}',
         f'selfloops:{args.self_loops}'
     )
-    colored_print(experiment_dir, color='green')
 
     results = []
-    for run in range(repeats):
-        colored_print(f'Run {run}:', color='lightblue')
-
+    progbar = tqdm(range(repeats), desc=colored_text(experiment_dir.replace('/', ', '), color='green'))
+    for run in progbar:
         checkpoint_callback = ModelCheckpoint(
             monitor='val_loss',
             filepath=os.path.join('checkpoints', experiment_dir)
@@ -47,20 +47,23 @@ def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, repeat
             args=args,
             precision=32,
             gpus=int(args.device == 'cuda' and torch.cuda.is_available()),
-            max_epochs=500,
+            max_epochs=50,
+            callbacks=[ProgressBar(process_position=1, refresh_rate=50)],
             checkpoint_callback=checkpoint_callback,
             weights_summary=None,
             deterministic=True,
-            progress_bar_refresh_rate=10,
             logger=False,
+            num_sanity_val_steps=int(run == 0)
             # logger=TensorBoardLogger(save_dir=os.path.join(output_dir, experiment_dir), name=None),
         )
 
         dataset.add_transform(Privatize(method=method, eps=eps))
         dataset.add_transform(LabelRate(rate=label_rate))
         trainer.fit(model=model, datamodule=dataset)
-        result = trainer.test(datamodule=dataset, ckpt_path='best', verbose=True)
-        results.append(result)
+        result = trainer.test(datamodule=dataset, ckpt_path='best', verbose=False)
+        results.append(result[0]['test_acc'])
+
+        progbar.set_postfix({'last_test_acc': results[-1], 'avg_test_acc': np.mean(results)})
 
     # save results
     save_dir = os.path.join(output_dir, experiment_dir)
@@ -112,7 +115,8 @@ def main():
         if min(args.epsilons) <= 0:
             parser.error('LDP methods require eps > 0.')
 
-    print(args)
+    df_args = pd.DataFrame(vars(args), index=['']).T
+    print(tabulate(df_args, tablefmt='fancy_grid'), '\n')
     start = time.time()
     batch_train_and_test(args)
     end = time.time()
