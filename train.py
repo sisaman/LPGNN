@@ -13,7 +13,7 @@ from datasets import available_datasets, GraphDataModule
 from models import NodeClassifier
 from privacy import available_mechanisms
 from transforms import Privatize, LabelRate
-from utils import TermColors
+from utils import colored_print
 
 
 def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, repeats, output_dir):
@@ -26,10 +26,11 @@ def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, repeat
         f'agg:{aggregator}',
         f'loops:{args.self_loops}'
     )
-    print(TermColors.FG.green + experiment_dir + TermColors.reset)
+    colored_print(experiment_dir, color='green')
 
     for run in range(repeats):
-        print(TermColors.FG.lightblue + f'Run {run}:' + TermColors.reset)
+        colored_print(f'Run {run}:', color='lightblue')
+
         logger = TensorBoardLogger(save_dir=os.path.join(output_dir, experiment_dir), name=None)
         checkpoint_callback = ModelCheckpoint(monitor='val_loss', filepath=os.path.join('checkpoints', experiment_dir))
 

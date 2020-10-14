@@ -1,3 +1,9 @@
+def colored_print(msg, color):
+    if isinstance(color, str):
+        color = TermColors.FG.__dict__[color]
+    print(color + msg + TermColors.reset)
+
+
 class TermColors:
     reset = '\033[0m'
     bold = '\033[01m'

@@ -11,7 +11,7 @@ from datasets import available_datasets, GraphDataModule
 from models import KProp
 from privacy import available_mechanisms
 from transforms import Privatize
-from utils import TermColors
+from utils import colored_print
 
 
 class GConv(KProp):
@@ -75,7 +75,7 @@ def error_estimation(task, dataset, method, eps, aggr, repeats, output_dir, devi
         f'eps:{eps}',
         f'agg:{aggr}',
     )
-    print(TermColors.FG.green + experiment_dir + TermColors.reset)
+    colored_print(experiment_dir, color='green')
 
     for run in range(repeats):
         output_dir = os.path.join(output_dir, experiment_dir)
