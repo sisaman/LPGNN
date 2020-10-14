@@ -88,7 +88,7 @@ def error_estimation(task, dataset, method, eps, aggr, repeats, output_dir, devi
 @torch.no_grad()
 def batch_error_estimation(args):
     for dataset_name in args.datasets:
-        dataset = GraphDataModule(name=dataset_name, normalize=(0, 1), sparse=True, device=args.device)
+        dataset = GraphDataModule(name=dataset_name, feature_range=(0, 1), sparse=True, device=args.device)
         configs = product(args.methods, args.epsilons, args.aggs)
         for method, eps, agg in configs:
             error_estimation(

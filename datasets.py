@@ -88,15 +88,15 @@ class GraphDataModule(LightningDataModule):
         'lastfm': partial(KarateClub, name='lastfm', pre_transform=NodeSplit()),
     }
 
-    def __init__(self, name, root='datasets', normalize=False, sparse=False, transform=None, device='cpu'):
+    def __init__(self, name, root='datasets', feature_range=None, sparse=False, transform=None, device='cpu'):
         super().__init__()
         self.name = name
         self.dataset = self.available_datasets[name](root=os.path.join(root, name), transform=transform)
         self.device = 'cpu' if not torch.cuda.is_available() else device
         self.data_list = None
 
-        if normalize:
-            low, high = normalize
+        if feature_range is not None:
+            low, high = feature_range
             self.add_transform(Normalize(low, high))
 
         if sparse:
