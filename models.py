@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 
 import torch
 import torch.nn.functional as F
-from pytorch_lightning import LightningModule, TrainResult, EvalResult
+from pytorch_lightning import LightningModule
 from pytorch_lightning.metrics.functional import accuracy
 from torch.nn import Linear, Dropout
 from torch.optim import Adam
@@ -80,7 +80,7 @@ class NodeClassifier(LightningModule):
         return parser
 
     def __init__(self, hidden_dim=16, dropout=0.5, learning_rate=0.001, weight_decay=0, K=1, aggregator='gcn',
-                 self_loops=True, log_learning_curve=False, **kwargs):
+                 self_loops=True, **kwargs):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.dropout = dropout
@@ -90,7 +90,6 @@ class NodeClassifier(LightningModule):
         self.aggregator = aggregator
         self.self_loops = self_loops
         self.save_hyperparameters()
-        self.log_learning_curve = log_learning_curve
         self.gcn = None
 
     def setup(self, stage):
@@ -117,29 +116,24 @@ class NodeClassifier(LightningModule):
         loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask], ignore_index=-1)
         pred = out.argmax(dim=1)
         acc = accuracy(pred=pred[data.train_mask], target=data.y[data.train_mask]) * 100
-        result = TrainResult(minimize=loss)
-        result.log_dict(
+        self.log_dict(
             dictionary={'train_loss': loss, 'train_acc': acc},
-            prog_bar=True, logger=self.log_learning_curve, on_step=False, on_epoch=True
+            prog_bar=True, logger=True, on_step=True, on_epoch=False
         )
-        return result
+        return loss
 
     def validation_step(self, data, index):
         out = self(data)
         loss = F.nll_loss(out[data.val_mask], data.y[data.val_mask], ignore_index=-1)
         pred = out.argmax(dim=1)
         acc = accuracy(pred=pred[data.val_mask], target=data.y[data.val_mask]) * 100
-        result = EvalResult(early_stop_on=loss, checkpoint_on=loss)
-        result.log_dict(
+        self.log_dict(
             dictionary={'val_loss': loss, 'val_acc': acc},
-            prog_bar=True, logger=self.log_learning_curve, on_step=False, on_epoch=True
+            prog_bar=True, logger=True, on_step=True, on_epoch=False
         )
-        return result
 
     def test_step(self, data, index):
         out = self(data)
         pred = out.argmax(dim=1)
         acc = accuracy(pred=pred[data.test_mask], target=data.y[data.test_mask]) * 100
-        result = EvalResult()
-        result.log('test_acc', acc, prog_bar=False, logger=True, on_step=False, on_epoch=True)
-        return result
+        return {'test_acc': acc}

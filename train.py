@@ -3,11 +3,10 @@ import os
 import time
 from argparse import ArgumentParser
 from itertools import product
-
+import pandas as pd
 import torch
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
-from pytorch_lightning.loggers import TensorBoardLogger
 
 from datasets import available_datasets, GraphDataModule
 from models import NodeClassifier
@@ -19,23 +18,30 @@ from utils import colored_print
 def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, repeats, output_dir):
     experiment_dir = os.path.join(
         'task:node',
-        f'dataset:{dataset.name}({label_rate})',
+        f'dataset:{dataset.name}',
+        f'labelrate:{label_rate}',
         f'method:{method}',
         f'eps:{eps}',
         f'step:{K}',
         f'agg:{aggregator}',
-        f'loops:{args.self_loops}'
+        f'selfloops:{args.self_loops}'
     )
     colored_print(experiment_dir, color='green')
 
+    results = []
     for run in range(repeats):
         colored_print(f'Run {run}:', color='lightblue')
 
-        logger = TensorBoardLogger(save_dir=os.path.join(output_dir, experiment_dir), name=None)
-        checkpoint_callback = ModelCheckpoint(monitor='val_loss', filepath=os.path.join('checkpoints', experiment_dir))
+        checkpoint_callback = ModelCheckpoint(
+            monitor='val_loss',
+            filepath=os.path.join('checkpoints', experiment_dir)
+        )
 
-        log_learning_curve = run == 0 and (method == 'raw' or method == 'mbm')
-        model = NodeClassifier(aggregator=aggregator, K=K, log_learning_curve=log_learning_curve, **vars(args))
+        model = NodeClassifier(
+            aggregator=aggregator,
+            K=K,
+            **vars(args)
+        )
 
         trainer = Trainer.from_argparse_args(
             args=args,
@@ -43,17 +49,24 @@ def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, repeat
             gpus=int(args.device == 'cuda' and torch.cuda.is_available()),
             max_epochs=500,
             checkpoint_callback=checkpoint_callback,
-            logger=logger,
-            log_save_interval=500,
             weights_summary=None,
             deterministic=True,
             progress_bar_refresh_rate=10,
+            logger=False,
+            # logger=TensorBoardLogger(save_dir=os.path.join(output_dir, experiment_dir), name=None),
         )
 
         dataset.add_transform(Privatize(method=method, eps=eps))
         dataset.add_transform(LabelRate(rate=label_rate))
         trainer.fit(model=model, datamodule=dataset)
-        trainer.test(datamodule=dataset, ckpt_path='best', verbose=True)
+        result = trainer.test(datamodule=dataset, ckpt_path='best', verbose=True)
+        results.append(result)
+
+    # save results
+    save_dir = os.path.join(output_dir, experiment_dir)
+    os.makedirs(save_dir, exist_ok=True)
+    df_results = pd.DataFrame(results, columns=['test_acc']).rename_axis('version').reset_index()
+    df_results.to_csv(os.path.join(save_dir, 'metrics.csv'), index=False)
 
 
 def batch_train_and_test(args):
