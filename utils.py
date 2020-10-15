@@ -1,4 +1,6 @@
+import pandas as pd
 from pytorch_lightning.callbacks import ProgressBar as PLProgBar
+from tabulate import tabulate
 
 
 class ProgressBar(PLProgBar):
@@ -14,6 +16,11 @@ class ProgressBar(PLProgBar):
         bar = super(ProgressBar, self).init_test_tqdm()
         bar.leave = False
         return bar
+
+
+def print_args(args):
+    df_args = pd.DataFrame(vars(args), index=['']).T
+    print(tabulate(df_args, tablefmt='fancy_grid'), '\n')
 
 
 def colored_text(msg, color):

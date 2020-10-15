@@ -1,7 +1,6 @@
 import logging
 import os
 import time
-from tabulate import tabulate
 from argparse import ArgumentParser
 from itertools import product
 import pandas as pd
@@ -14,7 +13,7 @@ from datasets import available_datasets, GraphDataModule
 from models import NodeClassifier
 from privacy import available_mechanisms
 from transforms import Privatize, LabelRate
-from utils import ProgressBar, colored_text
+from utils import ProgressBar, colored_text, print_args
 
 
 def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, repeats, output_dir):
@@ -115,8 +114,7 @@ def main():
         if min(args.epsilons) <= 0:
             parser.error('LDP methods require eps > 0.')
 
-    df_args = pd.DataFrame(vars(args), index=['']).T
-    print(tabulate(df_args, tablefmt='fancy_grid'), '\n')
+    print_args(args)
     start = time.time()
     batch_train_and_test(args)
     end = time.time()
