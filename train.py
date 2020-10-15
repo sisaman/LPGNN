@@ -19,7 +19,7 @@ from utils import ProgressBar, colored_text
 
 def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, repeats, output_dir):
     experiment_dir = os.path.join(
-        'task:node',
+        f'task:train',
         f'dataset:{dataset.name}',
         f'labelrate:{label_rate}',
         f'method:{method}',
@@ -47,7 +47,7 @@ def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, repeat
             args=args,
             precision=32,
             gpus=int(args.device == 'cuda' and torch.cuda.is_available()),
-            max_epochs=50,
+            max_epochs=500,
             callbacks=[ProgressBar(process_position=1, refresh_rate=50)],
             checkpoint_callback=checkpoint_callback,
             weights_summary=None,
