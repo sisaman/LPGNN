@@ -12,7 +12,7 @@ from datasets import available_datasets, GraphDataModule
 from models import KProp
 from privacy import available_mechanisms
 from transforms import Privatize
-from utils import colored_text
+from utils import colored_text, print_args
 
 
 class GConv(KProp):
@@ -45,7 +45,7 @@ class ErrorEstimation:
         privatize = Privatize(method=self.method, eps=self.eps)
         data = privatize(data)
         errors = self.calculate_error(data, norm=1)
-        self.logger.log_metrics(metrics={'error': errors.mean(), 'std': errors.std()})
+        return errors.mean(), errors.std()
 
 
 def error_estimation(dataset, method, eps, aggr, repeats, output_dir, device):
@@ -57,13 +57,20 @@ def error_estimation(dataset, method, eps, aggr, repeats, output_dir, device):
         f'agg:{aggr}',
     )
 
+    results = []
     progbar = tqdm(range(repeats), desc=colored_text(experiment_dir.replace('/', ', '), color='green'))
-    for run in progbar:
+    for _ in progbar:
         output_dir = os.path.join(output_dir, experiment_dir)
         logger = CSVLogger(save_dir=output_dir, name=None)
         task = ErrorEstimation(method=method, eps=eps, aggr=aggr, logger=logger, device=device)
-        task.run(dataset[0])
-        logger.save()
+        result = task.run(dataset[0])
+        results.append(result)
+
+    # save results
+    save_dir = os.path.join(output_dir, experiment_dir)
+    os.makedirs(save_dir, exist_ok=True)
+    df_results = pd.DataFrame(results, columns=['error', 'std']).rename_axis('version').reset_index()
+    df_results.to_csv(os.path.join(save_dir, 'metrics.csv'), index=False)
 
 
 @torch.no_grad()
@@ -101,7 +108,7 @@ def main():
     if min(args.epsilons) <= 0:
         parser.error('LDP methods require eps > 0.')
 
-    print(args)
+    print_args(args)
     batch_error_estimation(args)
 
 
