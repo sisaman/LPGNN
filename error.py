@@ -5,7 +5,6 @@ from itertools import product
 import pandas as pd
 import torch
 from pytorch_lightning import seed_everything
-from pytorch_lightning.loggers import CSVLogger
 from tqdm.auto import tqdm
 
 from datasets import available_datasets, GraphDataModule
@@ -27,10 +26,9 @@ class GConv(KProp):
 
 
 class ErrorEstimation:
-    def __init__(self, method, eps, aggr, logger, device='cuda'):
+    def __init__(self, method, eps, aggr, device='cuda'):
         self.method = method
         self.eps = eps
-        self.logger = logger
         device = 'cpu' if not torch.cuda.is_available() else device
         self.model = GConv(aggregator=aggr).to(device)
 
@@ -45,7 +43,7 @@ class ErrorEstimation:
         privatize = Privatize(method=self.method, eps=self.eps)
         data = privatize(data)
         errors = self.calculate_error(data, norm=1)
-        return errors.mean(), errors.std()
+        return errors.mean().item(), errors.std().item()
 
 
 def error_estimation(dataset, method, eps, aggr, repeats, output_dir, device):
@@ -60,9 +58,7 @@ def error_estimation(dataset, method, eps, aggr, repeats, output_dir, device):
     results = []
     progbar = tqdm(range(repeats), desc=colored_text(experiment_dir.replace('/', ', '), color='green'))
     for _ in progbar:
-        output_dir = os.path.join(output_dir, experiment_dir)
-        logger = CSVLogger(save_dir=output_dir, name=None)
-        task = ErrorEstimation(method=method, eps=eps, aggr=aggr, logger=logger, device=device)
+        task = ErrorEstimation(method=method, eps=eps, aggr=aggr, device=device)
         result = task.run(dataset[0])
         results.append(result)
 
