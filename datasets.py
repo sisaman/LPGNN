@@ -4,7 +4,7 @@ from functools import partial
 import pandas as pd
 import torch
 from pytorch_lightning import LightningDataModule
-from torch_geometric.data import Data, InMemoryDataset, download_url, DataLoader
+from torch_geometric.data import Data, InMemoryDataset, download_url
 from torch_geometric.datasets import Planetoid
 from torch_geometric.transforms import Compose, ToSparseTensor
 from torch_geometric.utils import to_undirected
@@ -115,13 +115,13 @@ class GraphDataModule(LightningDataModule):
             self.dataset.transform = new_transform
 
     def train_dataloader(self):
-        return DataLoader(self.data_list, pin_memory=True)
+        return self.data_list
 
     def val_dataloader(self):
-        return DataLoader(self.data_list, pin_memory=True)
+        return [self.data_list]
 
     def test_dataloader(self):
-        return DataLoader(self.data_list, pin_memory=True)
+        return [self.data_list]
 
     def __getattr__(self, attr):
         return getattr(self.dataset, attr)
