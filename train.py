@@ -9,88 +9,80 @@ import torch
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 from tqdm.auto import tqdm
-from datasets import available_datasets, GraphDataModule
+from datasets import available_datasets, load_dataset
 from models import NodeClassifier
 from privacy import available_mechanisms
 from transforms import Privatize, LabelRate
 from utils import ProgressBar, colored_text, print_args
 
 
-def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, repeats, output_dir):
-    experiment_dir = os.path.join(
-        f'task:train',
-        f'dataset:{dataset.name}',
-        f'labelrate:{label_rate}',
-        f'method:{method}',
-        f'eps:{eps}',
-        f'step:{K}',
-        f'agg:{aggregator}',
-        f'selfloops:{args.self_loops}'
+def train_and_test(dataset, label_rate, method, eps, K, aggregator, args):
+    # define model
+    model = NodeClassifier(
+        input_dim=dataset.num_features,
+        num_classes=dataset.num_classes,
+        aggregator=aggregator,
+        K=K,
+        **vars(args)
     )
 
-    results = []
-    progbar = tqdm(range(repeats), desc=colored_text(experiment_dir.replace('/', ', '), color='green'))
-    for run in progbar:
-        checkpoint_callback = ModelCheckpoint(
-            monitor='val_loss',
-            filepath=os.path.join('checkpoints', experiment_dir)
-        )
+    # define trainer
+    trainer = Trainer.from_argparse_args(
+        args=args,
+        precision=32,
+        gpus=int(args.device == 'cuda' and torch.cuda.is_available()),
+        max_epochs=10,
+        callbacks=[ProgressBar(process_position=1, refresh_rate=50)],
+        checkpoint_callback=ModelCheckpoint(monitor='val_loss', filepath='checkpoints'),
+        weights_summary=None,
+        deterministic=True,
+        logger=False,
+        num_sanity_val_steps=0
+        # logger=TensorBoardLogger(save_dir=os.path.join(output_dir, experiment_dir), name=None),
+    )
 
-        model = NodeClassifier(
-            aggregator=aggregator,
-            K=K,
-            **vars(args)
-        )
+    # apply transforms
+    dataset = LabelRate(rate=label_rate)(dataset)
+    dataset = Privatize(method=method, eps=eps)(dataset)
 
-        trainer = Trainer.from_argparse_args(
-            args=args,
-            precision=32,
-            gpus=int(args.device == 'cuda' and torch.cuda.is_available()),
-            max_epochs=500,
-            callbacks=[ProgressBar(process_position=1, refresh_rate=50)],
-            checkpoint_callback=checkpoint_callback,
-            weights_summary=None,
-            deterministic=True,
-            logger=False,
-            num_sanity_val_steps=int(run == 0)
-            # logger=TensorBoardLogger(save_dir=os.path.join(output_dir, experiment_dir), name=None),
-        )
-
-        dataset.add_transform(Privatize(method=method, eps=eps))
-        dataset.add_transform(LabelRate(rate=label_rate))
-        trainer.fit(model=model, datamodule=dataset)
-        result = trainer.test(datamodule=dataset, ckpt_path='best', verbose=False)
-        results.append(result[0]['test_acc'])
-
-        progbar.set_postfix({'last_test_acc': results[-1], 'avg_test_acc': np.mean(results)})
-
-    # save results
-    save_dir = os.path.join(output_dir, experiment_dir)
-    os.makedirs(save_dir, exist_ok=True)
-    df_results = pd.DataFrame(results, columns=['test_acc']).rename_axis('version').reset_index()
-    df_results.to_csv(os.path.join(save_dir, 'metrics.csv'), index=False)
+    # train and test
+    dataloader = {dataset}
+    trainer.fit(model=model, train_dataloader=dataloader, val_dataloaders=dataloader)
+    result = trainer.test(test_dataloaders=dataloader, ckpt_path='best', verbose=False)
+    return result[0]['test_acc']
 
 
 def batch_train_and_test(args):
-    dataset = GraphDataModule(name=args.dataset, feature_range=(0, 1), sparse=True,
-                              device=args.device, random_state=12345)
+    dataset = load_dataset(name=args.dataset, feature_range=(0, 1), sparse=True,
+                           device=args.device, random_state=12345)
+
     non_priv_methods = {'raw', 'rnd'} & set(args.methods)
     priv_methods = set(args.methods) - non_priv_methods
     configs = list(product(non_priv_methods, args.label_rates, [0.0], args.steps, args.aggs))
     configs += list(product(priv_methods, args.label_rates, args.epsilons, args.steps, args.aggs))
 
-    for method, lr, eps, steps, aggr in configs:
-        train_and_test(
-            dataset=dataset,
-            label_rate=lr,
-            method=method,
-            eps=eps,
-            K=steps,
-            aggregator=aggr,
-            args=args,
-            repeats=args.repeats,
-            output_dir=args.output_dir
+    for method, lr, eps, k, aggr in configs:
+        experiment_dir = os.path.join(
+            f'task:train', f'dataset:{dataset.name}', f'labelrate:{lr}', f'method:{method}',
+            f'eps:{eps}', f'step:{k}', f'agg:{aggr}', f'selfloops:{args.self_loops}'
         )
+
+        results = []
+        progbar = tqdm(range(args.repeats), desc=colored_text(experiment_dir.replace('/', ', '), color='green'))
+        for _ in progbar:
+            result = train_and_test(
+                dataset=dataset, label_rate=lr, method=method,
+                eps=eps, K=k, aggregator=aggr, args=args,
+            )
+
+            results.append(result)
+            progbar.set_postfix({'last_test_acc': results[-1], 'avg_test_acc': np.mean(results)})
+
+        # save results
+        save_dir = os.path.join(args.output_dir, experiment_dir)
+        os.makedirs(save_dir, exist_ok=True)
+        df_results = pd.DataFrame(results, columns=['test_acc']).rename_axis('version').reset_index()
+        df_results.to_csv(os.path.join(save_dir, 'metrics.csv'), index=False)
 
 
 def main():
