@@ -1,14 +1,17 @@
 import logging
 import os
+import sys
 import time
 from argparse import ArgumentParser
 from itertools import product
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 import torch
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 from tqdm.auto import tqdm
+
 from datasets import available_datasets, load_dataset
 from models import NodeClassifier
 from privacy import available_mechanisms
@@ -68,7 +71,8 @@ def batch_train_and_test(args):
         )
 
         results = []
-        progbar = tqdm(range(args.repeats), desc=colored_text(experiment_dir.replace('/', ', '), color='green'))
+        run_desc = colored_text(experiment_dir.replace('/', ', '), color='green')
+        progbar = tqdm(range(args.repeats), desc=run_desc, file=sys.stdout)
         for _ in progbar:
             result = train_and_test(
                 dataset=dataset, label_rate=lr, method=method,
