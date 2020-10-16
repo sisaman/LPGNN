@@ -7,7 +7,7 @@ import torch
 from pytorch_lightning import seed_everything
 from tqdm.auto import tqdm
 
-from datasets import available_datasets, GraphDataModule
+from datasets import available_datasets, load_dataset
 from models import KProp
 from privacy import available_mechanisms
 from transforms import Privatize
@@ -59,7 +59,7 @@ def error_estimation(dataset, method, eps, aggr, repeats, output_dir, device):
     progbar = tqdm(range(repeats), desc=colored_text(experiment_dir.replace('/', ', '), color='green'))
     for _ in progbar:
         task = ErrorEstimation(method=method, eps=eps, aggr=aggr, device=device)
-        result = task.run(dataset[0])
+        result = task.run(dataset)
         results.append(result)
 
     # save results
@@ -72,8 +72,8 @@ def error_estimation(dataset, method, eps, aggr, repeats, output_dir, device):
 @torch.no_grad()
 def batch_error_estimation(args):
     for dataset_name in args.datasets:
-        dataset = GraphDataModule(name=dataset_name, feature_range=(0, 1), sparse=True,
-                                  device=args.device, random_state=12345)
+        dataset = load_dataset(name=dataset_name, feature_range=(0, 1), sparse=True,
+                               device=args.device, random_state=12345)
         configs = product(args.methods, args.epsilons, args.aggs)
         for method, eps, agg in configs:
             error_estimation(
