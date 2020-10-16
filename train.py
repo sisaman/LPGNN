@@ -15,7 +15,7 @@ from tqdm.auto import tqdm
 from datasets import available_datasets, load_dataset
 from models import NodeClassifier
 from privacy import available_mechanisms
-from transforms import Privatize, LabelRate
+from transforms import Privatize, LabelRate, NodeSplit
 from utils import ProgressBar, colored_text, print_args
 
 
@@ -45,6 +45,7 @@ def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, experi
     )
 
     # apply transforms
+    dataset = NodeSplit(val_ratio=0.25, test_ratio=0.25)(dataset)
     dataset = LabelRate(rate=label_rate)(dataset)
     dataset = Privatize(method=method, eps=eps)(dataset)
 
