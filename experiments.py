@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 from utils import print_args, colored_text
 
 parser = ArgumentParser()
-parser.add_argument('-r', '--repeats', type=int, default=1)
+parser.add_argument('-r', '--repeats', type=int, default=10)
 parser.add_argument('-o', '--output-dir', type=str, default='./results')
 parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'])
 subparser = parser.add_subparsers()
@@ -54,7 +54,7 @@ if 'queue' in args:
             f'#$ -N job-{i}\n',
             f'#$ -S /bin/bash\n',
             f'#$ -P socialcomputing\n',
-            f'#$ -l buster,{args.queue},gpumem={args.gpumem}\n',
+            f'#$ -l buster,pytorch,{args.queue},gpumem={args.gpumem}\n',
             f'#$ -cwd\n',
             f'## Task\n',
             f'cd ..\n',
