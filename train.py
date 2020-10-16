@@ -16,7 +16,7 @@ from transforms import Privatize, LabelRate
 from utils import ProgressBar, colored_text, print_args
 
 
-def train_and_test(dataset, label_rate, method, eps, K, aggregator, args):
+def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, experiment_dir):
     # define model
     model = NodeClassifier(
         input_dim=dataset.num_features,
@@ -33,7 +33,7 @@ def train_and_test(dataset, label_rate, method, eps, K, aggregator, args):
         gpus=int(args.device == 'cuda' and torch.cuda.is_available()),
         max_epochs=500,
         callbacks=[ProgressBar(process_position=1, refresh_rate=50)],
-        checkpoint_callback=ModelCheckpoint(monitor='val_loss'),
+        checkpoint_callback=ModelCheckpoint(monitor='val_loss', filepath=os.path.join('checkpoints', experiment_dir)),
         weights_summary=None,
         deterministic=True,
         logger=False,
@@ -72,7 +72,7 @@ def batch_train_and_test(args):
         for _ in progbar:
             result = train_and_test(
                 dataset=dataset, label_rate=lr, method=method,
-                eps=eps, K=k, aggregator=aggr, args=args,
+                eps=eps, K=k, aggregator=aggr, args=args, experiment_dir=experiment_dir
             )
 
             results.append(result)
