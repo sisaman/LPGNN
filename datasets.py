@@ -78,12 +78,12 @@ class KarateClub(InMemoryDataset):
 
 
 _available_datasets = {
-        'cora': partial(Planetoid, name='cora', pre_transform=NodeSplit()),
-        'citeseer': partial(Planetoid, name='citeseer', pre_transform=NodeSplit()),
-        'pubmed': partial(Planetoid, name='pubmed', pre_transform=NodeSplit()),
-        'facebook': partial(KarateClub, name='facebook', pre_transform=NodeSplit()),
-        'github': partial(KarateClub, name='github', pre_transform=NodeSplit()),
-        'lastfm': partial(KarateClub, name='lastfm', pre_transform=NodeSplit()),
+        'cora': partial(Planetoid, name='cora'),
+        'citeseer': partial(Planetoid, name='citeseer'),
+        'pubmed': partial(Planetoid, name='pubmed'),
+        'facebook': partial(KarateClub, name='facebook'),
+        'github': partial(KarateClub, name='github'),
+        'lastfm': partial(KarateClub, name='lastfm'),
     }
 
 
