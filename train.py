@@ -72,7 +72,8 @@ def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, repeat
 
 
 def batch_train_and_test(args):
-    dataset = GraphDataModule(name=args.dataset, feature_range=(0, 1), sparse=True, device=args.device)
+    dataset = GraphDataModule(name=args.dataset, feature_range=(0, 1), sparse=True,
+                              device=args.device, random_state=12345)
     non_priv_methods = {'raw', 'rnd'} & set(args.methods)
     priv_methods = set(args.methods) - non_priv_methods
     configs = list(product(non_priv_methods, args.label_rates, [0.0], args.steps, args.aggs))

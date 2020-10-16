@@ -27,10 +27,12 @@ class Privatize:
 
 
 class NodeSplit:
-    def __init__(self, val_ratio=.25, test_ratio=.25, rng=None):
+    def __init__(self, val_ratio=.25, test_ratio=.25, random_state=None):
         self.val_ratio = val_ratio
         self.test_ratio = test_ratio
-        self.rng = rng
+        self.rng = None
+        if random_state is not None:
+            self.rng = torch.Generator().manual_seed(random_state)
 
     def __call__(self, data):
         num_nodes_with_class = data.num_nodes
