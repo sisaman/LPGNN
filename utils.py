@@ -19,7 +19,8 @@ class ProgressBar(PLProgBar):
 
 
 def print_args(args):
-    df_args = pd.DataFrame.from_dict(vars(args), orient='index')
+    args = {key: str(value) for key, value in vars(args).items()}
+    df_args = pd.DataFrame.from_dict(args, orient='index')
     print(tabulate(df_args, tablefmt='fancy_grid'), '\n')
 
 
