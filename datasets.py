@@ -3,10 +3,9 @@ from functools import partial
 
 import pandas as pd
 import torch
-from pytorch_lightning import LightningDataModule
 from torch_geometric.data import Data, InMemoryDataset, download_url
 from torch_geometric.datasets import Planetoid
-from torch_geometric.transforms import Compose, ToSparseTensor
+from torch_geometric.transforms import ToSparseTensor
 from torch_geometric.utils import to_undirected
 
 from transforms import NodeSplit, Normalize
@@ -78,8 +77,7 @@ class KarateClub(InMemoryDataset):
         return f'KarateClub-{self.name}()'
 
 
-class GraphDataModule(LightningDataModule):
-    available_datasets = {
+_available_datasets = {
         'cora': partial(Planetoid, name='cora', pre_transform=NodeSplit()),
         'citeseer': partial(Planetoid, name='citeseer', pre_transform=NodeSplit()),
         'pubmed': partial(Planetoid, name='pubmed', pre_transform=NodeSplit()),
@@ -88,57 +86,28 @@ class GraphDataModule(LightningDataModule):
         'lastfm': partial(KarateClub, name='lastfm', pre_transform=NodeSplit()),
     }
 
-    def __init__(self, name, root='datasets', feature_range=None, sparse=False,
-                 transform=None, device='cpu', random_state=None):
-        super().__init__()
-        self.name = name
-        self.dataset = self.available_datasets[name](
-            root=os.path.join(root, name),
-            transform=transform,
-            pre_transform=NodeSplit(random_state=random_state)
-        )
-        self.device = 'cpu' if not torch.cuda.is_available() else device
-        self.data_list = None
 
-        if feature_range is not None:
-            low, high = feature_range
-            self.add_transform(Normalize(low, high))
+def load_dataset(name, root='datasets', feature_range=None, sparse=False, device='cpu', random_state=None):
+    dataset = _available_datasets[name](
+        root=os.path.join(root, name),
+        pre_transform=NodeSplit(random_state=random_state)
+    )
+    data = dataset[0]
 
-        if sparse:
-            self.add_transform(ToSparseTensor())
+    if feature_range is not None:
+        low, high = feature_range
+        data = Normalize(low, high)(data)
 
-    def prepare_data(self):
-        assert self.data_list is None
-        self.data_list = [data.to(self.device) for data in self.dataset]
+    if sparse:
+        data = ToSparseTensor()(data)
 
-    def add_transform(self, transform):
-        if self.has_prepared_data:
-            self.data_list = [transform(data) for data in self.data_list]
-        else:
-            current_transform = self.dataset.transform
-            new_transform = transform if current_transform is None else Compose([current_transform, transform])
-            self.dataset.transform = new_transform
+    device = 'cpu' if not torch.cuda.is_available() else device
+    data = data.to(device)
 
-    def train_dataloader(self):
-        return self.data_list
-
-    def val_dataloader(self):
-        return [self.data_list]
-
-    def test_dataloader(self):
-        return [self.data_list]
-
-    def __getattr__(self, attr):
-        return getattr(self.dataset, attr)
-
-    def __getitem__(self, item):
-        if not self.has_prepared_data:
-            self.prepare_data()
-        return self.data_list[item]
-
-    def __str__(self):
-        return self.dataset.__str__()
+    data.name = name
+    data.num_classes = dataset.num_classes
+    return data
 
 
 def available_datasets():
-    return list(GraphDataModule.available_datasets.keys())
+    return list(_available_datasets.keys())
