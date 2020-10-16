@@ -79,8 +79,9 @@ class NodeClassifier(LightningModule):
         parser.add_argument('--no-loops', action='store_false', default=True, dest='self_loops')
         return parser
 
-    def __init__(self, hidden_dim=16, dropout=0.5, learning_rate=0.001, weight_decay=0, K=1, aggregator='gcn',
-                 self_loops=True, **kwargs):
+    def __init__(self, input_dim, num_classes, hidden_dim=16,
+                 dropout=0.5, learning_rate=0.001, weight_decay=0,
+                 K=1, aggregator='gcn', self_loops=True, **kwargs):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.dropout = dropout
@@ -90,26 +91,19 @@ class NodeClassifier(LightningModule):
         self.aggregator = aggregator
         self.self_loops = self_loops
         self.save_hyperparameters()
-        self.gcn = None
 
-    def setup(self, stage):
-        if stage == 'fit':
-            dataset = self.trainer.datamodule
-            self.gcn = GNN(
-                input_dim=dataset.num_features,
-                hidden_dim=self.hidden_dim,
-                output_dim=dataset.num_classes,
-                dropout=self.dropout,
-                K=self.steps,
-                aggregator=self.aggregator,
-                self_loops=self.self_loops
-            )
+        self.gcn = GNN(
+            input_dim=input_dim,
+            hidden_dim=self.hidden_dim,
+            output_dim=num_classes,
+            dropout=self.dropout,
+            K=self.steps,
+            aggregator=self.aggregator,
+            self_loops=self.self_loops
+        )
 
     def forward(self, data):
         return self.gcn(data.x, data.adj_t)
-
-    def configure_optimizers(self):
-        return Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
 
     def training_step(self, data, index):
         out = self(data)
@@ -137,3 +131,6 @@ class NodeClassifier(LightningModule):
         pred = out.argmax(dim=1)
         acc = accuracy(pred=pred[data.test_mask], target=data.y[data.test_mask]) * 100
         return {'test_acc': acc}
+
+    def configure_optimizers(self):
+        return Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
