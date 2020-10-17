@@ -12,7 +12,6 @@ from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 from torch_geometric.data import DataLoader
 from tqdm.auto import tqdm
-
 from datasets import available_datasets, load_dataset
 from models import NodeClassifier
 from privacy import available_mechanisms
@@ -31,8 +30,7 @@ def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, checkp
     )
 
     # define trainer
-    trainer = Trainer.from_argparse_args(
-        args=args,
+    trainer = Trainer(
         precision=32,
         gpus=int(args.device == 'cuda' and torch.cuda.is_available()),
         max_epochs=500,
@@ -41,8 +39,8 @@ def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, checkp
         weights_summary=None,
         deterministic=True,
         logger=False,
-        num_sanity_val_steps=0
-        # logger=TensorBoardLogger(save_dir=os.path.join(output_dir, experiment_dir), name=None),
+        num_sanity_val_steps=0,
+        # logger=TensorBoardLogger(save_dir='gpu'),
     )
 
     # apply transforms
@@ -53,6 +51,7 @@ def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, checkp
     dataloader = DataLoader([dataset])
     trainer.fit(model=model, train_dataloader=dataloader, val_dataloaders=dataloader)
     result = trainer.test(test_dataloaders=dataloader, ckpt_path='best', verbose=False)
+
     return result[0]['test_acc']
 
 
@@ -66,7 +65,7 @@ def batch_train_and_test(args):
 
     for method, lr, eps, k, aggr in configs:
         experiment_dir = os.path.join(
-            f'task:train', f'dataset:{dataset.name}', f'labelrate:{lr}', f'method:{method}',
+            f'task:train', f'dataset:{args.dataset}', f'labelrate:{lr}', f'method:{method}',
             f'eps:{eps}', f'step:{k}', f'agg:{aggr}', f'selfloops:{args.self_loops}'
         )
 
