@@ -19,7 +19,7 @@ from transforms import Privatize, LabelRate
 from utils import ProgressBar, colored_text, print_args
 
 
-def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, experiment_dir):
+def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, checkpoint_path):
     # define model
     model = NodeClassifier(
         input_dim=dataset.num_features,
@@ -36,7 +36,7 @@ def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, experi
         gpus=int(args.device == 'cuda' and torch.cuda.is_available()),
         max_epochs=500,
         callbacks=[ProgressBar(process_position=1, refresh_rate=50)],
-        checkpoint_callback=ModelCheckpoint(monitor='val_loss', filepath=os.path.join('checkpoints', experiment_dir)),
+        checkpoint_callback=ModelCheckpoint(monitor='val_loss', filepath=checkpoint_path),
         weights_summary=None,
         deterministic=True,
         logger=False,
@@ -72,10 +72,11 @@ def batch_train_and_test(args):
         results = []
         run_desc = colored_text(experiment_dir.replace('/', ', '), color='green')
         progbar = tqdm(range(args.repeats), desc=run_desc, file=sys.stdout)
-        for _ in progbar:
+        for run in progbar:
             result = train_and_test(
                 dataset=dataset, label_rate=lr, method=method,
-                eps=eps, K=k, aggregator=aggr, args=args, experiment_dir=experiment_dir
+                eps=eps, K=k, aggregator=aggr, args=args,
+                checkpoint_path=os.path.join('checkpoints', experiment_dir, run)
             )
 
             results.append(result)
