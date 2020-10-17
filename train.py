@@ -10,6 +10,7 @@ import pandas as pd
 import torch
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
+from torch_geometric.data import DataLoader
 from tqdm.auto import tqdm
 
 from datasets import available_datasets, load_dataset
@@ -49,7 +50,7 @@ def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, checkp
     dataset = Privatize(method=method, eps=eps)(dataset)
 
     # train and test
-    dataloader = {dataset}
+    dataloader = DataLoader([dataset])
     trainer.fit(model=model, train_dataloader=dataloader, val_dataloaders=dataloader)
     result = trainer.test(test_dataloaders=dataloader, ckpt_path='best', verbose=False)
     return result[0]['test_acc']
