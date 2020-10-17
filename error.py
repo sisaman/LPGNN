@@ -72,8 +72,7 @@ def error_estimation(dataset, method, eps, aggr, repeats, output_dir, device):
 @torch.no_grad()
 def batch_error_estimation(args):
     for dataset_name in args.datasets:
-        dataset = load_dataset(name=dataset_name, feature_range=(0, 1), sparse=True,
-                               device=args.device, random_state=12345)
+        dataset = load_dataset(name=dataset_name, feature_range=(0, 1), sparse=True, device=args.device)
         configs = product(args.methods, args.epsilons, args.aggs)
         for method, eps, agg in configs:
             error_estimation(

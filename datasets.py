@@ -78,20 +78,17 @@ class KarateClub(InMemoryDataset):
 
 
 _available_datasets = {
-        'cora': partial(Planetoid, name='cora'),
-        'citeseer': partial(Planetoid, name='citeseer'),
-        'pubmed': partial(Planetoid, name='pubmed'),
-        'facebook': partial(KarateClub, name='facebook'),
-        'github': partial(KarateClub, name='github'),
-        'lastfm': partial(KarateClub, name='lastfm'),
+        'cora': partial(Planetoid, name='cora', pre_transform=NodeSplit()),
+        'citeseer': partial(Planetoid, name='citeseer', pre_transform=NodeSplit()),
+        'pubmed': partial(Planetoid, name='pubmed', pre_transform=NodeSplit()),
+        'facebook': partial(KarateClub, name='facebook', pre_transform=NodeSplit()),
+        'github': partial(KarateClub, name='github', pre_transform=NodeSplit()),
+        'lastfm': partial(KarateClub, name='lastfm', pre_transform=NodeSplit()),
     }
 
 
-def load_dataset(name, root='datasets', feature_range=None, sparse=False, device='cpu', random_state=None):
-    dataset = _available_datasets[name](
-        root=os.path.join(root, name),
-        pre_transform=NodeSplit(random_state=random_state)
-    )
+def load_dataset(name, root='datasets', feature_range=None, sparse=False, device='cpu'):
+    dataset = _available_datasets[name](root=os.path.join(root, name))
     data = dataset[0]
 
     if feature_range is not None:

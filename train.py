@@ -56,8 +56,7 @@ def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, experi
 
 
 def batch_train_and_test(args):
-    dataset = load_dataset(name=args.dataset, feature_range=(0, 1), sparse=True,
-                           device=args.device, random_state=12345)
+    dataset = load_dataset(name=args.dataset, feature_range=(0, 1), sparse=True, device=args.device)
 
     non_priv_methods = {'raw', 'rnd'} & set(args.methods)
     priv_methods = set(args.methods) - non_priv_methods
