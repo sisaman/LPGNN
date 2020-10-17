@@ -76,18 +76,20 @@ class NodeClassifier(LightningModule):
         parser.add_argument('--dropout', '--dp', type=float, default=0)
         parser.add_argument('--learning-rate', '--lr', type=float, default=0.001)
         parser.add_argument('--weight-decay', '--wd', type=float, default=0)
+        parser.add_argument('-k', '--step', type=int, default=1)
+        parser.add_argument('-a', '--aggregator', type=str, default='gcn')
         parser.add_argument('--no-loops', action='store_false', default=True, dest='self_loops')
         return parser
 
     def __init__(self, input_dim, num_classes, hidden_dim=16,
                  dropout=0.5, learning_rate=0.001, weight_decay=0,
-                 K=1, aggregator='gcn', self_loops=True, **kwargs):
+                 step=1, aggregator='gcn', self_loops=True, **kwargs):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.dropout = dropout
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
-        self.steps = K
+        self.step = step
         self.aggregator = aggregator
         self.self_loops = self_loops
         self.save_hyperparameters()
@@ -97,7 +99,7 @@ class NodeClassifier(LightningModule):
             hidden_dim=self.hidden_dim,
             output_dim=num_classes,
             dropout=self.dropout,
-            K=self.steps,
+            K=self.step,
             aggregator=self.aggregator,
             self_loops=self.self_loops
         )

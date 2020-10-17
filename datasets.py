@@ -90,7 +90,7 @@ _available_datasets = {
 def load_dataset(name, root='datasets', feature_range=None, sparse=False, device='cpu', random_state=None):
     dataset = _available_datasets[name](
         root=os.path.join(root, name),
-        pre_transform=NodeSplit(random_state=random_state)
+        transform=NodeSplit(random_state=random_state)
     )
     data = dataset[0]
 
