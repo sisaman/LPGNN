@@ -12,7 +12,8 @@ class Privatize:
     def __call__(self, data):
         if self.method == 'raw':
             if hasattr(data, 'x_raw'):
-                data.x = data.x_raw  # bring back x_raw
+                data.x = data.x_raw     # bring back x_raw
+                del data.x_raw          # delete x_raw
         elif self.method == 'rnd':
             if hasattr(data, 'x_raw'):
                 data.x = data.x_raw  # bring back x_raw
@@ -105,4 +106,5 @@ class LabelRate:
         else:
             if hasattr(data, 'train_mask_full'):
                 data.train_mask = data.train_mask_full
+                del data.train_mask_full
         return data
