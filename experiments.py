@@ -1,5 +1,6 @@
 import os
 from argparse import ArgumentParser
+from itertools import product
 
 from utils import print_args, colored_text
 
@@ -24,15 +25,45 @@ datasets = {
     'lastfm':   {'--learning-rate': 0.01, '--weight-decay': 0.001, '--dropout': 0.75},
 }
 
-configs = [
-    f' -m mbm -e 1 -k 1 2 4 8 16 32 ',
-    f' -m mbm -e 0.1 0.5 1 2 4 -k 1 2 4 8 16 32 --no-loops ',
-    f' -l 0.2 0.4 0.6 0.8 1.0 -m mbm -e 1 -k 2 4 8 --no-loops ',
-    f' -l 0.2 0.4 0.6 0.8 1.0 -m mbm -e 0.5 2.0 -k 8 --no-loops ',
-    f' -m raw -k 1 ',
-    f' -m raw -k 1 2 4 8 16 32 --no-loops',
-    f' -m rnd -k 1 ',
-]
+# EFFECT OF MULTI-BIT MECHANISM
+error_run = f"python error.py -d {' '.join(datasets.keys())} -m agm obm mbm -e 0.1 0.5 1 2 -a mean gcn"
+print(colored_text(error_run, color='lightcyan'))
+os.system(error_run)
+
+configs = set()
+
+# PRIVACY-UTILITY EXPERIMENTS
+eps_range = [0.01, 0.1, 0.5, 1, 2]
+step_range = [1, 2, 4, 8, 16, 32]
+
+configs |= {'-l 1 -m raw -e 0 -k 1 -a gcn --self-loops'}  # GCN+Raw
+configs |= {'-l 1 -m rnd -e 0 -k 1 -a gcn --self-loops'}  # GCN+Rnd
+
+for eps, k in product(eps_range, step_range):
+    configs |= {f'-l 1 -m mbm -e {eps} -k {k} -a gcn --no-self-loops'}  # LPGNN
+
+# EFFECT OF KPROP
+eps_range = [0.01, 0.1, 1]
+step_range = [1, 2, 4, 8, 16, 32]
+
+for k in step_range:
+    configs |= {f'-l 1 -m raw -e 0 -k {k} -a gcn --no-self-loops'}  # Raw
+
+for eps, k in product(eps_range, step_range, ):
+    configs |= {f'-l 1 -m mbm -e {eps} -k {k} -a gcn --no-self-loops'}  # without self loops
+    configs |= {f'-l 1 -m mbm -e {eps} -k {k} -a gcn --self-loops'}     # with self loops
+
+# EFFECT OF LABEL RATE
+lr_range = [0.1, 0.2, 0.3, 0.4, 0.5]
+eps_range = [0.01, 0.1, 1]
+step_range = [2, 4, 8]
+
+for lr in lr_range:
+    for eps in eps_range:
+        configs |= {f'-l {lr} -m mbm -e {eps} -k 4 -a gcn --no-self-loops'}
+    for k in step_range:
+        configs |= {f'-l {lr} -m mbm -e 1 -k {k} -a gcn --no-self-loops'}
+
 
 train_runs = []
 for dataset, hparams in datasets.items():
@@ -41,10 +72,6 @@ for dataset, hparams in datasets.items():
     command += f' -r {args.repeats} -o "{args.output_dir}" --device {args.device} '
     for config in configs:
         train_runs.append(command + config)
-
-error_run = f"python error.py -d {' '.join(datasets.keys())} -m agm obm mbm -e 0.5 1 2 4 -a mean gcn"
-print(colored_text(error_run, color='lightcyan'))
-os.system(error_run)
 
 
 if 'queue' in args:
