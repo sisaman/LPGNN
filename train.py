@@ -76,7 +76,7 @@ def batch_train_and_test(args):
             result = train_and_test(
                 dataset=dataset, label_rate=lr, method=method,
                 eps=eps, K=k, aggregator=aggr, args=args,
-                checkpoint_path=os.path.join('checkpoints', experiment_dir, run)
+                checkpoint_path=os.path.join('checkpoints', experiment_dir, str(run))
             )
 
             results.append(result)
