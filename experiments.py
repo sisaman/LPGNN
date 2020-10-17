@@ -24,6 +24,10 @@ datasets = {
     'lastfm':   {'--learning-rate': 0.01, '--weight-decay': 0.001, '--dropout': 0.75},
 }
 
+error_run = f"python error.py -d {' '.join(datasets.keys())} -m agm obm mbm -e 0.5 1 2 4 -a mean gcn"
+print(colored_text(error_run, color='lightcyan'))
+os.system(error_run)
+
 configs = [
     f' -m mbm -e 1 -k 1 2 4 8 16 32 ',
     f' -m mbm -e 0.1 0.5 1 2 4 -k 1 2 4 8 16 32 --no-loops ',
@@ -41,11 +45,6 @@ for dataset, hparams in datasets.items():
     command += f' -r {args.repeats} -o "{args.output_dir}" --device {args.device} '
     for config in configs:
         train_runs.append(command + config)
-
-error_run = f"python error.py -d {' '.join(datasets.keys())} -m agm obm mbm -e 0.5 1 2 4 -a mean gcn"
-print(colored_text(error_run, color='lightcyan'))
-os.system(error_run)
-
 
 if 'queue' in args:
     os.makedirs(args.jobs_dir, exist_ok=True)
