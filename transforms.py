@@ -92,13 +92,17 @@ class LabelRate:
         self.rate = rate
 
     def __call__(self, data):
-        if not hasattr(data, 'train_mask_full'):
-            data.train_mask_full = data.train_mask
+        if self.rate < 1:
+            if not hasattr(data, 'train_mask_full'):
+                data.train_mask_full = data.train_mask
 
-        train_idx = data.train_mask_full.nonzero(as_tuple=False).squeeze()
-        num_train_nodes = train_idx.size(0)
-        train_idx_shuffled = train_idx[torch.randperm(num_train_nodes)]
-        train_idx_selected = train_idx_shuffled[:int(self.rate * num_train_nodes)]
-        train_mask = torch.zeros_like(data.train_mask_full).scatter(0, train_idx_selected, True)
-        data.train_mask = train_mask
+            train_idx = data.train_mask_full.nonzero(as_tuple=False).squeeze()
+            num_train_nodes = train_idx.size(0)
+            train_idx_shuffled = train_idx[torch.randperm(num_train_nodes)]
+            train_idx_selected = train_idx_shuffled[:int(self.rate * num_train_nodes)]
+            train_mask = torch.zeros_like(data.train_mask_full).scatter(0, train_idx_selected, True)
+            data.train_mask = train_mask
+        else:
+            if hasattr(data, 'train_mask_full'):
+                data.train_mask = data.train_mask_full
         return data
