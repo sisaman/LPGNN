@@ -56,11 +56,8 @@ def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, experi
 
 
 def batch_train_and_test(args):
-    if args.random_seed is not None:
-        seed_everything(args.random_seed)
-
     dataset = load_dataset(name=args.dataset, feature_range=(0, 1), sparse=True,
-                           device=args.device, random_state=args.random_seed)
+                           device=args.device, random_state=12345)
 
     non_priv_methods = {'raw', 'rnd'} & set(args.methods)
     priv_methods = set(args.methods) - non_priv_methods
@@ -93,19 +90,19 @@ def batch_train_and_test(args):
 
 
 def main():
+    seed_everything(12345)
     logging.getLogger("lightning").setLevel(logging.ERROR)
     logging.captureWarnings(True)
 
     parser = ArgumentParser()
     parser.add_argument('-d', '--dataset', type=str, choices=available_datasets(), required=True)
-    parser.add_argument('-l', '--label-rate', type=float, default=1)
-    parser.add_argument('-m', '--method', choices=available_mechanisms() + ['raw', 'rnd'], default='raw')
-    parser.add_argument('-e', '--epsilon', type=float, default=0)
-    parser.add_argument('-k', '--step', type=int, default=1)
-    parser.add_argument('-a', '--aggregator', type=str, default='gcn')
+    parser.add_argument('-l', '--label-rates', type=float, nargs='*', default=[1.0])
+    parser.add_argument('-m', '--methods', nargs='+', choices=available_mechanisms() + ['raw', 'rnd'], required=True)
+    parser.add_argument('-e', '--epsilons', nargs='*', type=float, default=[1])
+    parser.add_argument('-k', '--steps', nargs='*', type=int, default=[1])
+    parser.add_argument('-a', '--aggs', nargs='*', type=str, default=['gcn'])
     parser.add_argument('-r', '--repeats', type=int, default=1)
     parser.add_argument('-o', '--output-dir', type=str, default='./results')
-    parser.add_argument('-s', '--random-seed', type=int, default=None)
     parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'])
     parser = NodeClassifier.add_module_specific_args(parser)
     args = parser.parse_args()
