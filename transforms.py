@@ -1,5 +1,4 @@
 import torch
-from torch_geometric.transforms import OneHotDegree
 from privacy import _available_mechanisms
 
 
@@ -21,7 +20,7 @@ class FeatureTransform:
         if self.method == 'rnd':
             data.x = torch.rand_like(data.x_raw)
         elif self.method == 'ohd':
-            data = OneHotDegree(max_degree=data.num_features, cat=False)(data)
+            data = OneHotDegree(max_degree=data.num_features - 1)(data)
         elif self.method in self.private_methods:
             data.x = _available_mechanisms[self.method](**self.kwargs)(data.x_raw)
 
@@ -43,6 +42,17 @@ class FeatureTransform:
     @classmethod
     def available_methods(cls):
         return cls.non_private_methods + cls.private_methods
+
+
+class OneHotDegree:
+    def __init__(self, max_degree):
+        self.max_degree = max_degree
+
+    def __call__(self, data):
+        degree = data.adj_t.sum(dim=0).long()
+        degree.clamp_(max=self.max_degree)
+        data.x = torch.nn.functional.one_hot(degree, num_classes=self.max_degree + 1).float()  # add 1 for zero degree
+        return data
 
 
 class NodeSplit:
