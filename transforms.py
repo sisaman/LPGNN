@@ -21,7 +21,7 @@ class FeatureTransform:
         if self.method == 'rnd':
             data.x = torch.rand_like(data.x_raw)
         elif self.method == 'ohd':
-            data = OneHotDegree(max_degree=data.num_features, cat=False)
+            data = OneHotDegree(max_degree=data.num_features, cat=False)(data)
         elif self.method in self.private_methods:
             data.x = _available_mechanisms[self.method](**self.kwargs)(data.x_raw)
 
