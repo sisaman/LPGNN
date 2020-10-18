@@ -10,7 +10,7 @@ parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'
 subparser = parser.add_subparsers()
 parser_grid = subparser.add_parser('grid')
 parser_grid.add_argument('-q', '--queue', type=str, default='sgpu', choices=['sgpu', 'gpu', 'lgpu'])
-parser_grid.add_argument('-m', '--gpumem', type=int, default=12)
+parser_grid.add_argument('-m', '--gpumem', type=int, default=20)
 parser_grid.add_argument('-j', '--jobs-dir', type=str, default='./jobs')
 args = parser.parse_args()
 print_args(args)
