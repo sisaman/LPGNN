@@ -5,17 +5,66 @@ import time
 from argparse import ArgumentParser
 from itertools import product
 
+import torch
 import numpy as np
 import pandas as pd
-import torch
-from pytorch_lightning import Trainer, seed_everything
-from pytorch_lightning.callbacks import ModelCheckpoint
-from torch_geometric.data import DataLoader
+from pytorch_lightning import seed_everything
 from tqdm.auto import tqdm
 from datasets import available_datasets, load_dataset
 from models import NodeClassifier
 from transforms import FeatureTransform, LabelRate
-from utils import ProgressBar, colored_text, print_args
+from utils import colored_text, print_args
+
+
+class Trainer:
+    def __init__(self, max_epochs=100, device='cuda', checkpoint_dir='checkpoints'):
+        self.max_epochs = max_epochs
+        self.device = 'cpu' if not torch.cuda.is_available() else device
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        self.checkpoint_path = os.path.join(checkpoint_dir, 'best_weights.pt')
+
+    def fit(self, model, data):
+        model = model.to(self.device)
+        data = data.to(self.device)
+        optimizer = model.configure_optimizers()
+
+        best_val_loss = float('inf')
+
+        epoch_progbar = tqdm(range(1, self.max_epochs + 1), desc='Epoch: ', leave=False, position=1)
+        for _ in epoch_progbar:
+            loss, metric = self.train(model, data, optimizer)
+            val_metrics = self.validation(model, data)
+            val_loss = val_metrics['val_loss']
+
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                torch.save(model.state_dict(), self.checkpoint_path)
+
+            # display metrics on progress bar
+            postfix = {'train_loss': loss.item(), **metric, **val_metrics}
+            epoch_progbar.set_postfix(postfix)
+
+        return model
+
+    @torch.no_grad()
+    def test(self, model, data):
+        model.load_state_dict(torch.load(self.checkpoint_path))
+        model.eval()
+        return model.test_step(data)
+
+    @torch.no_grad()
+    def validation(self, model, data):
+        model.eval()
+        return model.validation_step(data)
+
+    @staticmethod
+    def train(model, data, optimizer):
+        model.train()
+        optimizer.zero_grad()
+        loss, metrics = model.training_step(data)
+        loss.backward()
+        optimizer.step()
+        return loss, metrics
 
 
 def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, checkpoint_path):
@@ -28,30 +77,15 @@ def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, checkp
         **vars(args)
     )
 
-    # define trainer
-    trainer = Trainer(
-        precision=32,
-        gpus=int(args.device == 'cuda' and torch.cuda.is_available()),
-        max_epochs=500,
-        callbacks=[ProgressBar(process_position=1, refresh_rate=50)],
-        checkpoint_callback=ModelCheckpoint(monitor='val_loss', filepath=checkpoint_path),
-        weights_summary=None,
-        deterministic=True,
-        logger=False,
-        num_sanity_val_steps=0,
-        # logger=TensorBoardLogger(save_dir='gpu'),
-    )
-
     # apply transforms
     dataset = LabelRate(rate=label_rate)(dataset)
     dataset = FeatureTransform(method=method, eps=eps)(dataset)
 
-    # train and test
-    dataloader = DataLoader([dataset])
-    trainer.fit(model=model, train_dataloader=dataloader, val_dataloaders=dataloader)
-    result = trainer.test(test_dataloaders=dataloader, ckpt_path='best', verbose=False)
+    trainer = Trainer(max_epochs=500, device=args.device, checkpoint_dir=checkpoint_path)
+    model = trainer.fit(model, dataset)
+    result = trainer.test(model, dataset)
 
-    return result[0]['test_acc']
+    return result['test_acc']
 
 
 def batch_train_and_test(args):

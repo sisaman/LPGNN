@@ -2,8 +2,7 @@ from argparse import ArgumentParser
 
 import torch
 import torch.nn.functional as F
-from pytorch_lightning import LightningModule
-from pytorch_lightning.metrics.functional import accuracy
+from torch_geometric.utils import accuracy
 from torch.nn import Linear, Dropout
 from torch.optim import Adam
 from torch_geometric.nn import MessagePassing, BatchNorm
@@ -68,7 +67,7 @@ class GNN(torch.nn.Module):
         return x
 
 
-class NodeClassifier(LightningModule):
+class NodeClassifier(torch.nn.Module):
     @staticmethod
     def add_module_specific_args(parent_parser):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
@@ -90,7 +89,7 @@ class NodeClassifier(LightningModule):
         self.steps = K
         self.aggregator = aggregator
         self.self_loops = self_loops
-        self.save_hyperparameters()
+        # self.save_hyperparameters()
 
         self.gcn = GNN(
             input_dim=input_dim,
@@ -105,28 +104,21 @@ class NodeClassifier(LightningModule):
     def forward(self, data):
         return self.gcn(data.x, data.adj_t)
 
-    def training_step(self, data, index):
+    def training_step(self, data):
         out = self(data)
         loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask], ignore_index=-1)
         pred = out.argmax(dim=1)
         acc = accuracy(pred=pred[data.train_mask], target=data.y[data.train_mask]) * 100
-        self.log_dict(
-            dictionary={'train_loss': loss, 'train_acc': acc},
-            prog_bar=True, logger=True, on_step=False, on_epoch=True
-        )
-        return loss
+        return loss, {'train_acc': acc}
 
-    def validation_step(self, data, index):
+    def validation_step(self, data):
         out = self(data)
         loss = F.nll_loss(out[data.val_mask], data.y[data.val_mask], ignore_index=-1)
         pred = out.argmax(dim=1)
         acc = accuracy(pred=pred[data.val_mask], target=data.y[data.val_mask]) * 100
-        self.log_dict(
-            dictionary={'val_loss': loss, 'val_acc': acc},
-            prog_bar=True, logger=True, on_step=False, on_epoch=True
-        )
+        return {'val_loss': loss.item(), 'val_acc': acc}
 
-    def test_step(self, data, index):
+    def test_step(self, data):
         out = self(data)
         pred = out.argmax(dim=1)
         acc = accuracy(pred=pred[data.test_mask], target=data.y[data.test_mask]) * 100
