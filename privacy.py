@@ -133,6 +133,7 @@ class MultiBit(Mechanism):
         BigS = torch.rand_like(x).topk(m, dim=1).indices
         s = torch.zeros_like(x, dtype=torch.bool)
         s.scatter_(1, BigS, True)
+        del BigS
 
         # perturb sampled features
         em = math.exp(self.eps / m)
