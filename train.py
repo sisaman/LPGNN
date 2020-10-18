@@ -90,11 +90,7 @@ def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, checkp
 
 def batch_train_and_test(args):
     dataset = load_dataset(name=args.dataset, feature_range=(0, 1), sparse=True, device=args.device)
-
-    non_priv_methods = set(args.methods) & set(FeatureTransform.non_private_methods)
-    priv_methods = set(args.methods) - non_priv_methods
-    configs = list(product(non_priv_methods, args.label_rates, [0.0], args.steps, args.aggs))
-    configs += list(product(priv_methods, args.label_rates, args.epsilons, args.steps, args.aggs))
+    configs = list(product(args.methods, args.label_rates, args.epsilons, args.steps, args.aggregators))
 
     for method, lr, eps, k, aggr in configs:
         experiment_dir = os.path.join(
@@ -131,9 +127,9 @@ def main():
     parser.add_argument('-d', '--dataset', type=str, choices=available_datasets(), required=True)
     parser.add_argument('-l', '--label-rates', type=float, nargs='*', default=[1.0])
     parser.add_argument('-m', '--methods', nargs='+', choices=FeatureTransform.available_methods(), required=True)
-    parser.add_argument('-e', '--epsilons', nargs='*', type=float, default=[1])
+    parser.add_argument('-e', '--epsilons', nargs='*', type=float, default=[0.0])
     parser.add_argument('-k', '--steps', nargs='*', type=int, default=[1])
-    parser.add_argument('-a', '--aggs', nargs='*', type=str, default=['gcn'])
+    parser.add_argument('-a', '--aggregators', nargs='*', type=str, default=['gcn'])
     parser.add_argument('-r', '--repeats', type=int, default=1)
     parser.add_argument('-o', '--output-dir', type=str, default='./results')
     parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'])
