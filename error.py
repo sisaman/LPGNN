@@ -10,7 +10,7 @@ from tqdm.auto import tqdm
 from datasets import available_datasets, load_dataset
 from models import KProp
 from privacy import available_mechanisms
-from transforms import Privatize
+from transforms import FeatureTransform
 from utils import colored_text, print_args
 
 
@@ -40,7 +40,7 @@ class ErrorEstimation:
         return errors
 
     def run(self, data):
-        privatize = Privatize(method=self.method, eps=self.eps)
+        privatize = FeatureTransform(method=self.method, eps=self.eps)
         data = privatize(data)
         errors = self.calculate_error(data, norm=1)
         return errors.mean().item(), errors.std().item()

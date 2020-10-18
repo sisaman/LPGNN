@@ -1,30 +1,48 @@
 import torch
-
+from torch_geometric.transforms import OneHotDegree
 from privacy import _available_mechanisms
 
 
-class Privatize:
-    def __init__(self, method, eps, **kwargs):
+class FeatureTransform:
+    non_private_methods = ['raw', 'rnd', 'ohd']
+    private_methods = list(_available_mechanisms.keys())
+
+    def __init__(self, method, **kwargs):
         self.method = method
-        self.eps = eps
         self.kwargs = kwargs
 
     def __call__(self, data):
         if self.method == 'raw':
-            if hasattr(data, 'x_raw'):
-                data.x = data.x_raw     # bring back x_raw
-                del data.x_raw          # delete x_raw
-        elif self.method == 'rnd':
-            if hasattr(data, 'x_raw'):
-                data.x = data.x_raw  # bring back x_raw
-            else:
-                data.x_raw = data.x  # save original x to x_raw
-            data.x = torch.rand_like(data.x)
-        else:
-            if not hasattr(data, 'x_raw'):
-                data.x_raw = data.x  # save original x to x_raw
-            data.x = _available_mechanisms[self.method](eps=self.eps, **self.kwargs)(data.x_raw)
+            return self.restore_features(data)
+
+        # backup original features for later use
+        data = self.backup_features(data)
+
+        if self.method == 'rnd':
+            data.x = torch.rand_like(data.x_raw)
+        elif self.method == 'ohd':
+            data = OneHotDegree(max_degree=data.num_features, cat=False)
+        elif self.method in self.private_methods:
+            data.x = _available_mechanisms[self.method](**self.kwargs)(data.x_raw)
+
         return data
+
+    @staticmethod
+    def backup_features(data):
+        if not hasattr(data, 'x_raw'):
+            data.x_raw = data.x
+        return data
+
+    @staticmethod
+    def restore_features(data):
+        if hasattr(data, 'x_raw'):
+            del data.x              # delete x to free up memory
+            data.x = data.x_raw     # bring back original features
+        return data
+
+    @classmethod
+    def available_methods(cls):
+        return cls.non_private_methods + cls.private_methods
 
 
 class NodeSplit:
