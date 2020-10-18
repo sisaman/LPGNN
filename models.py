@@ -75,7 +75,6 @@ class NodeClassifier(torch.nn.Module):
         parser.add_argument('--dropout', '--dp', type=float, default=0)
         parser.add_argument('--learning-rate', '--lr', type=float, default=0.001)
         parser.add_argument('--weight-decay', '--wd', type=float, default=0)
-        parser.add_argument('-a', '--aggregator', type=str, default='gcn')
         parser.add_argument('--no-loops', action='store_false', default=True, dest='self_loops')
         return parser
 
