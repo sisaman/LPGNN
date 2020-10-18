@@ -30,7 +30,7 @@ class Trainer:
 
         best_val_loss = float('inf')
 
-        epoch_progbar = tqdm(range(1, self.max_epochs + 1), desc='Epoch: ', leave=False, position=1)
+        epoch_progbar = tqdm(range(1, self.max_epochs + 1), desc='Epoch: ', leave=False, position=1, file=sys.stdout)
         for _ in epoch_progbar:
             loss, metric = self.train(model, data, optimizer)
             val_metrics = self.validation(model, data)
