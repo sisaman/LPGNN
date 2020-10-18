@@ -33,9 +33,8 @@ configs = [
     f' -m mbm -e 0.1 0.5 1 2 4 -k 1 2 4 8 16 32 --no-loops ',
     f' -l 0.2 0.4 0.6 0.8 1.0 -m mbm -e 1 -k 2 4 8 --no-loops ',
     f' -l 0.2 0.4 0.6 0.8 1.0 -m mbm -e 0.5 2.0 -k 8 --no-loops ',
-    f' -m raw -k 1 ',
+    f' -m raw rnd ohd -k 1 ',
     f' -m raw -k 1 2 4 8 16 32 --no-loops',
-    f' -m rnd -k 1 ',
 ]
 
 train_runs = []
