@@ -1,21 +1,5 @@
 import pandas as pd
-from pytorch_lightning.callbacks import ProgressBar as PLProgBar
 from tabulate import tabulate
-
-
-class ProgressBar(PLProgBar):
-    def __init__(self, refresh_rate=1, process_position=0):
-        super().__init__(refresh_rate, process_position)
-
-    def init_train_tqdm(self):
-        bar = super(ProgressBar, self).init_train_tqdm()
-        bar.leave = False
-        return bar
-
-    def init_test_tqdm(self):
-        bar = super(ProgressBar, self).init_test_tqdm()
-        bar.leave = False
-        return bar
 
 
 def print_args(args):
