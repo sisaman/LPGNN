@@ -9,9 +9,9 @@ By **Sina Sajadmanesh** and **Daniel Gatica-Perez**, Idiap Research Institute, E
 This code is implemented in Python 3.8, and relies on the following packages:  
 - [PyTorch](https://pytorch.org/get-started/locally/) >= 1.6.0
 - [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html) >= 1.6.1
-- [PyTorch Lightning](https://github.com/PytorchLightning/pytorch-lightning) >= 1.0.2
 - [Pandas](https://pandas.pydata.org/pandas-docs/stable/getting_started/install.html) >= 1.1.3
 - [Numpy](https://numpy.org/install/) >= 1.19.1
+- [Seaborn](https://seaborn.pydata.org/) >= 0.11.0
 See requirements.txt for more details.
 
 
