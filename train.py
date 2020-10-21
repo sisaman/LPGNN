@@ -8,12 +8,11 @@ from itertools import product
 import torch
 import numpy as np
 import pandas as pd
-from pytorch_lightning import seed_everything
 from tqdm.auto import tqdm
 from datasets import available_datasets, load_dataset
 from models import NodeClassifier
 from transforms import FeatureTransform, LabelRate
-from utils import colored_text, print_args
+from utils import colored_text, print_args, seed_everything
 
 
 class Trainer:
@@ -67,19 +66,18 @@ class Trainer:
         return loss, metrics
 
 
-def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, checkpoint_path):
+def train_and_test(dataset, label_rate, eps, K, checkpoint_path, args):
     # define model
     model = NodeClassifier(
         input_dim=dataset.num_features,
         num_classes=dataset.num_classes,
-        aggregator=aggregator,
         K=K,
         **vars(args)
     )
 
     # apply transforms
     dataset = LabelRate(rate=label_rate)(dataset)
-    dataset = FeatureTransform(method=method, eps=eps)(dataset)
+    dataset = FeatureTransform(method=args.method, eps=eps)(dataset)
 
     trainer = Trainer(max_epochs=500, device=args.device, checkpoint_dir=checkpoint_path)
     model = trainer.fit(model, dataset)
@@ -90,12 +88,12 @@ def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, checkp
 
 def batch_train_and_test(args):
     dataset = load_dataset(name=args.dataset, feature_range=(0, 1), sparse=True, device=args.device)
-    configs = list(product(args.methods, args.label_rates, args.epsilons, args.steps, args.aggregators))
+    configs = list(product(args.label_rates, args.epsilons, args.steps))
 
-    for method, lr, eps, k, aggr in configs:
+    for lr, eps, k in configs:
         experiment_dir = os.path.join(
-            f'task:train', f'dataset:{args.dataset}', f'labelrate:{lr}', f'method:{method}',
-            f'eps:{eps}', f'step:{k}', f'agg:{aggr}', f'selfloops:{args.self_loops}'
+            f'task:train', f'dataset:{args.dataset}', f'labelrate:{lr}', f'method:{args.method}',
+            f'eps:{eps}', f'step:{k}', f'agg:{args.aggregator}', f'selfloops:{args.self_loops}'
         )
 
         results = []
@@ -103,8 +101,8 @@ def batch_train_and_test(args):
         progbar = tqdm(range(args.repeats), desc=run_desc, file=sys.stdout)
         for run in progbar:
             result = train_and_test(
-                dataset=dataset, label_rate=lr, method=method,
-                eps=eps, K=k, aggregator=aggr, args=args,
+                dataset=dataset, label_rate=lr,
+                eps=eps, K=k, args=args,
                 checkpoint_path=os.path.join('checkpoints', experiment_dir, str(run))
             )
 
@@ -125,20 +123,18 @@ def main():
 
     parser = ArgumentParser()
     parser.add_argument('-d', '--dataset', type=str, choices=available_datasets(), required=True)
-    parser.add_argument('-l', '--label-rates', type=float, nargs='*', default=[1.0])
-    parser.add_argument('-m', '--methods', nargs='+', choices=FeatureTransform.available_methods(), required=True)
+    parser.add_argument('-m', '--method', type=str, choices=FeatureTransform.available_methods(), required=True)
     parser.add_argument('-e', '--epsilons', nargs='*', type=float, default=[0.0])
     parser.add_argument('-k', '--steps', nargs='*', type=int, default=[1])
-    parser.add_argument('-a', '--aggregators', nargs='*', type=str, default=['gcn'])
+    parser.add_argument('-l', '--label-rates', nargs='*', type=float, default=[1.0])
     parser.add_argument('-r', '--repeats', type=int, default=1)
     parser.add_argument('-o', '--output-dir', type=str, default='./results')
     parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'])
     parser = NodeClassifier.add_module_specific_args(parser)
     args = parser.parse_args()
 
-    if len(set(args.methods) & set(FeatureTransform.private_methods)) > 0:
-        if min(args.epsilons) <= 0:
-            parser.error('LDP methods require eps > 0.')
+    if args.method in FeatureTransform.private_methods and min(args.epsilons) <= 0:
+        parser.error('LDP method requires eps > 0.')
 
     print_args(args)
     start = time.time()
