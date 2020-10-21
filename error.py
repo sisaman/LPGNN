@@ -4,14 +4,13 @@ from itertools import product
 
 import pandas as pd
 import torch
-from pytorch_lightning import seed_everything
 from tqdm.auto import tqdm
 
 from datasets import available_datasets, load_dataset
 from models import KProp
 from privacy import available_mechanisms
 from transforms import FeatureTransform
-from utils import colored_text, print_args
+from utils import colored_text, print_args, seed_everything
 
 
 class GConv(KProp):

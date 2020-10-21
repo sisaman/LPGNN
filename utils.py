@@ -1,5 +1,15 @@
+import torch
+import numpy as np
 import pandas as pd
+import random
 from tabulate import tabulate
+
+
+def seed_everything(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 
 def print_args(args):
