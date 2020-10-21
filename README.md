@@ -12,6 +12,7 @@ This code is implemented in Python 3.8, and relies on the following packages:
 - [Pandas](https://pandas.pydata.org/pandas-docs/stable/getting_started/install.html) >= 1.1.3
 - [Numpy](https://numpy.org/install/) >= 1.19.1
 - [Seaborn](https://seaborn.pydata.org/) >= 0.11.0  
+
 See requirements.txt for more details.
 
 
