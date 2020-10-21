@@ -1,153 +1,150 @@
 import logging
-
-logging.captureWarnings(True)
-
-from argparse import ArgumentParser
-
+import os
+import sys
 import time
+from argparse import ArgumentParser
+from itertools import product
+
 import torch
-from pytorch_lightning import Trainer, seed_everything
-from pytorch_lightning.callbacks import EarlyStopping
-from torch_geometric.data import DataLoader
-from datasets import load_dataset, get_available_datasets
-from privacy import privatize, get_available_mechanisms
-from models import NodeClassifier, LinkPredictor
-from utils import TrainOnlyProgressBar, PandasLogger, TermColors
+import numpy as np
+import pandas as pd
+from pytorch_lightning import seed_everything
+from tqdm.auto import tqdm
+from datasets import available_datasets, load_dataset
+from models import NodeClassifier
+from transforms import FeatureTransform, LabelRate
+from utils import colored_text, print_args
 
 
-class GraphTask:
-    task_models = {
-        'node': NodeClassifier,
-        'link': LinkPredictor
-    }
+class Trainer:
+    def __init__(self, max_epochs=100, device='cuda', checkpoint_dir='checkpoints'):
+        self.max_epochs = max_epochs
+        self.device = 'cpu' if not torch.cuda.is_available() else device
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        self.checkpoint_path = os.path.join(checkpoint_dir, 'best_weights.pt')
+
+    def fit(self, model, data):
+        model = model.to(self.device)
+        data = data.to(self.device)
+        optimizer = model.configure_optimizers()
+
+        best_val_loss = float('inf')
+
+        epoch_progbar = tqdm(range(1, self.max_epochs + 1), desc='Epoch: ', leave=False, position=1, file=sys.stdout)
+        for _ in epoch_progbar:
+            loss, metric = self.train(model, data, optimizer)
+            val_metrics = self.validation(model, data)
+            val_loss = val_metrics['val_loss']
+
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                torch.save(model.state_dict(), self.checkpoint_path)
+
+            # display metrics on progress bar
+            postfix = {'train_loss': loss.item(), **metric, **val_metrics}
+            epoch_progbar.set_postfix(postfix)
+
+        return model
+
+    @torch.no_grad()
+    def test(self, model, data):
+        model.load_state_dict(torch.load(self.checkpoint_path))
+        model.eval()
+        return model.test_step(data)
+
+    @torch.no_grad()
+    def validation(self, model, data):
+        model.eval()
+        return model.validation_step(data)
 
     @staticmethod
-    def get_available_tasks():
-        return list(GraphTask.task_models.keys())
-
-    @staticmethod
-    def add_task_specific_args(task_name, parent_parser):
-        return GraphTask.task_models[task_name].add_model_specific_args(parent_parser)
-
-    def __init__(self, logger, hparams):
-        self.hparams = hparams
-        self.trainer = Trainer.from_argparse_args(
-            args=self.hparams,
-            gpus=int(hparams.device == 'cuda' and torch.cuda.is_available()),
-            callbacks=[TrainOnlyProgressBar()],
-            checkpoint_callback=False,
-            logger=logger,
-            row_log_interval=1000,
-            log_save_interval=1000,
-            weights_summary=None,
-            deterministic=True,
-            progress_bar_refresh_rate=5,
-            early_stop_callback=EarlyStopping(min_delta=self.hparams.min_delta, patience=self.hparams.patience),
-        )
-
-    def train(self, data):
-        params = vars(self.hparams)
-        params['input_dim'] = data.num_features
-        if self.hparams.task == 'node':
-            params['num_classes'] = data.num_classes
-        model = self.task_models[self.hparams.task](**params)
-        dataloader = DataLoader([data])
-        self.trainer.fit(model, train_dataloader=dataloader, val_dataloaders=dataloader)
-
-    def test(self, data):
-        dataloader = DataLoader([data])
-        self.trainer.test(test_dataloaders=dataloader, ckpt_path=None)
+    def train(model, data, optimizer):
+        model.train()
+        optimizer.zero_grad()
+        loss, metrics = model.training_step(data)
+        loss.backward()
+        optimizer.step()
+        return loss, metrics
 
 
-def train_and_test(task, data, method, eps, hparams, logger, repeats):
-    for run in range(repeats):
-        params = {
-            'task': task,
-            'dataset': data.name,
-            'method': method,
-            'eps': eps,
-            'run': run
-        }
+def train_and_test(dataset, label_rate, method, eps, K, aggregator, args, checkpoint_path):
+    # define model
+    model = NodeClassifier(
+        input_dim=dataset.num_features,
+        num_classes=dataset.num_classes,
+        aggregator=aggregator,
+        K=K,
+        **vars(args)
+    )
 
-        params_str = ' | '.join([f'{key}={val}' for key, val in params.items()])
-        print(TermColors.FG.green + params_str + TermColors.reset)
-        logger.log_params(params)
+    # apply transforms
+    dataset = LabelRate(rate=label_rate)(dataset)
+    dataset = FeatureTransform(method=method, eps=eps)(dataset)
 
-        data_priv = privatize(data, method=method, eps=eps)
-        t = GraphTask(logger, hparams)
-        t.train(data_priv)
-        t.test(data_priv)
+    trainer = Trainer(max_epochs=500, device=args.device, checkpoint_dir=checkpoint_path)
+    model = trainer.fit(model, dataset)
+    result = trainer.test(model, dataset)
+
+    return result['test_acc']
 
 
 def batch_train_and_test(args):
-    data = load_dataset(args.dataset, split_edges=(args.task == 'link'), device=args.device)
-    for method in args.methods:
-        experiment_name = f'{args.task}_{args.dataset}_{method}'
-        with PandasLogger(
-                output_dir=args.output_dir,
-                experiment_name=experiment_name,
-                write_mode='replace'
-        ) as logger:
-            for eps in args.eps_list:
-                train_and_test(
-                    task=args.task,
-                    data=data,
-                    method=method,
-                    eps=eps,
-                    hparams=args,
-                    repeats=args.repeats,
-                    logger=logger,
-                )
+    dataset = load_dataset(name=args.dataset, feature_range=(0, 1), sparse=True, device=args.device)
+    configs = list(product(args.methods, args.label_rates, args.epsilons, args.steps, args.aggregators))
+
+    for method, lr, eps, k, aggr in configs:
+        experiment_dir = os.path.join(
+            f'task:train', f'dataset:{args.dataset}', f'labelrate:{lr}', f'method:{method}',
+            f'eps:{eps}', f'step:{k}', f'agg:{aggr}', f'selfloops:{args.self_loops}'
+        )
+
+        results = []
+        run_desc = colored_text(experiment_dir.replace('/', ', '), color='green')
+        progbar = tqdm(range(args.repeats), desc=run_desc, file=sys.stdout)
+        for run in progbar:
+            result = train_and_test(
+                dataset=dataset, label_rate=lr, method=method,
+                eps=eps, K=k, aggregator=aggr, args=args,
+                checkpoint_path=os.path.join('checkpoints', experiment_dir, str(run))
+            )
+
+            results.append(result)
+            progbar.set_postfix({'last_test_acc': results[-1], 'avg_test_acc': np.mean(results)})
+
+        # save results
+        save_dir = os.path.join(args.output_dir, experiment_dir)
+        os.makedirs(save_dir, exist_ok=True)
+        df_results = pd.DataFrame(results, columns=['test_acc']).rename_axis('version').reset_index()
+        df_results.to_csv(os.path.join(save_dir, 'metrics.csv'), index=False)
 
 
 def main():
     seed_everything(12345)
+    logging.getLogger("lightning").setLevel(logging.ERROR)
+    logging.captureWarnings(True)
+
     parser = ArgumentParser()
-
-    parser.add_argument('-t', '--task', type=str, choices=GraphTask.get_available_tasks(), required=True,
-                        help='The graph learning task. Either "node" for node classification, '
-                             'or "link" for link prediction.'
-                        )
-    parser.add_argument('-d', '--dataset', type=str, choices=get_available_datasets(), required=True,
-                        help='The dataset to train on. One of "citeseer", "cora", "elliptic", "flickr", and "twitch".'
-                        )
-    parser.add_argument('-m', '--methods', nargs='+', choices=get_available_mechanisms() + ['raw'], required=True,
-                        help='The list of mechanisms to perturb node features. '
-                             'Can choose "raw" to use original features, or "pgc" for Private Graph Convolution, '
-                             '"pm" for Piecewise Mechanism, and "lm" for Laplace Mechanism, '
-                             'as local differentially private algorithms.'
-                        )
-    parser.add_argument('-e', '--eps', nargs='*', type=float, dest='eps_list', default=[0],
-                        help='The list of epsilon values for LDP mechanisms. The values must be greater than zero. '
-                             'The "raw" method does not support this options.'
-                        )
-    parser.add_argument('-r', '--repeats', type=int, default=10,
-                        help='The number of repeating the experiment. Default is 10.'
-                        )
-    parser.add_argument('-o', '--output-dir', type=str, default='./results',
-                        help='The path to store the results. Default is "./results".'
-                        )
-    parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'],
-                        help='The device used for the training. Either "cpu" or "cuda". Default is "cuda".'
-                        )
-
-    # add args based on the task
-    temp_args, _ = parser.parse_known_args()
-    parser = GraphTask.add_task_specific_args(task_name=temp_args.task, parent_parser=parser)
-        
-    # check if eps > 0 for LDP methods
-    if len(set(temp_args.methods).intersection(get_available_mechanisms())) > 0:
-        for eps in temp_args.eps_list:
-            if eps <= 0:
-                parser.error('LDP methods require eps > 0.')
-
+    parser.add_argument('-d', '--dataset', type=str, choices=available_datasets(), required=True)
+    parser.add_argument('-l', '--label-rates', type=float, nargs='*', default=[1.0])
+    parser.add_argument('-m', '--methods', nargs='+', choices=FeatureTransform.available_methods(), required=True)
+    parser.add_argument('-e', '--epsilons', nargs='*', type=float, default=[0.0])
+    parser.add_argument('-k', '--steps', nargs='*', type=int, default=[1])
+    parser.add_argument('-a', '--aggregators', nargs='*', type=str, default=['gcn'])
+    parser.add_argument('-r', '--repeats', type=int, default=1)
+    parser.add_argument('-o', '--output-dir', type=str, default='./results')
+    parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'])
+    parser = NodeClassifier.add_module_specific_args(parser)
     args = parser.parse_args()
-    print(args)
 
+    if len(set(args.methods) & set(FeatureTransform.private_methods)) > 0:
+        if min(args.epsilons) <= 0:
+            parser.error('LDP methods require eps > 0.')
+
+    print_args(args)
     start = time.time()
     batch_train_and_test(args)
     end = time.time()
-    print('Total time spent:', end - start, 'seconds.\n\n')
+    print('\nTotal time spent:', end - start, 'seconds.\n\n')
 
 
 if __name__ == '__main__':

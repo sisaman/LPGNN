@@ -1,81 +1,89 @@
+import os
 from argparse import ArgumentParser
+from itertools import product
 
+import pandas as pd
 import torch
 from pytorch_lightning import seed_everything
-from torch_geometric.nn import GCNConv
-from torch_geometric.utils import degree
+from tqdm.auto import tqdm
 
-from datasets import load_dataset, get_available_datasets
-from utils import PandasLogger, TermColors
-from privacy import privatize, get_available_mechanisms
+from datasets import available_datasets, load_dataset
+from models import KProp
+from privacy import available_mechanisms
+from transforms import FeatureTransform
+from utils import colored_text, print_args
+
+
+class GConv(KProp):
+    def __init__(self, aggregator):
+        super().__init__(
+            in_channels=1, out_channels=1, K=1,
+            aggregator=aggregator, add_self_loops=True, cached=False
+        )
+
+    def forward(self, x, adj_t):
+        return self.neighborhood_aggregation(x, adj_t)
 
 
 class ErrorEstimation:
-    def __init__(self, data, raw_features, device='cuda'):
-        self.data = data
-        alpha = raw_features.min(dim=0)[0]
-        beta = raw_features.max(dim=0)[0]
-        self.delta = beta - alpha
+    def __init__(self, method, eps, aggr, device='cuda'):
+        self.method = method
+        self.eps = eps
+        device = 'cpu' if not torch.cuda.is_available() else device
+        self.model = GConv(aggregator=aggr).to(device)
 
-        self.model = GCNConv(data.num_features, data.num_features, cached=True)
-        if device == 'cuda' and torch.cuda.is_available():
-            self.model = self.model.cuda()
-        self.model.weight.data.copy_(torch.eye(data.num_features))  # identity transformation
-        self.gc = self.model(raw_features, data.edge_index)
+    def calculate_error(self, data_priv, norm):
+        hn = self.model(data_priv.x_raw, data_priv.adj_t)
+        hn_hat = self.model(data_priv.x, data_priv.adj_t)
+        diff = hn - hn_hat
+        errors = torch.norm(diff, p=norm, dim=1) / data_priv.num_features
+        return errors
 
-    @torch.no_grad()
-    def run(self, logger):
-        # calculate error
-        gc_hat = self.model(self.data.x, self.data.edge_index)
-        diff = (self.gc - gc_hat) / self.delta
-        diff[:, (self.delta == 0)] = 0  # avoid division by zero
-        error = torch.norm(diff, p=1, dim=1) / self.data.num_features
-
-        # obtain node degrees
-        row, col = self.data.edge_index
-        deg = degree(row, self.data.num_nodes)
-
-        # log results
-        logger.log_metrics({'test_result': list(zip(error.cpu().numpy(), deg.cpu().numpy()))})
+    def run(self, data):
+        privatize = FeatureTransform(method=self.method, eps=self.eps)
+        data = privatize(data)
+        errors = self.calculate_error(data, norm=1)
+        return errors.mean().item(), errors.std().item()
 
 
-def error_estimation(dataset, method, eps, repeats, logger, device):
-    for run in range(repeats):
-        params = {
-            'task': 'error',
-            'dataset': dataset.name,
-            'method': method,
-            'eps': eps,
-            'run': run
-        }
+def error_estimation(dataset, method, eps, aggr, repeats, output_dir, device):
+    experiment_dir = os.path.join(
+        f'task:error',
+        f'dataset:{dataset.name}',
+        f'method:{method}',
+        f'eps:{eps}',
+        f'agg:{aggr}',
+    )
 
-        params_str = ' | '.join([f'{key}={val}' for key, val in params.items()])
-        print(TermColors.FG.green + params_str + TermColors.reset)
-        logger.log_params(params)
+    results = []
+    progbar = tqdm(range(repeats), desc=colored_text(experiment_dir.replace('/', ', '), color='green'))
+    for _ in progbar:
+        task = ErrorEstimation(method=method, eps=eps, aggr=aggr, device=device)
+        result = task.run(dataset)
+        results.append(result)
 
-        data = privatize(dataset, method=method, eps=eps)
-        ErrorEstimation(data=data, raw_features=dataset.x, device=device).run(logger)
+    # save results
+    save_dir = os.path.join(output_dir, experiment_dir)
+    os.makedirs(save_dir, exist_ok=True)
+    df_results = pd.DataFrame(results, columns=['error', 'std']).rename_axis('version').reset_index()
+    df_results.to_csv(os.path.join(save_dir, 'metrics.csv'), index=False)
 
 
+@torch.no_grad()
 def batch_error_estimation(args):
     for dataset_name in args.datasets:
-        dataset = load_dataset(dataset_name, device=args.device)
-        for method in args.methods:
-            experiment_name = f'error_{dataset_name}_{method}'
-            with PandasLogger(
+        dataset = load_dataset(name=dataset_name, feature_range=(0, 1), sparse=True, device=args.device)
+        configs = product(args.methods, args.epsilons, args.aggs)
+        for method, eps, agg in configs:
+            error_estimation(
+                dataset=dataset,
+                method=method,
+                eps=eps,
+                aggr=agg,
+                repeats=args.repeats,
                 output_dir=args.output_dir,
-                experiment_name=experiment_name,
-                write_mode='truncate'
-            ) as logger:
-                for eps in args.eps_list:
-                    error_estimation(
-                        dataset=dataset,
-                        method=method,
-                        eps=eps,
-                        repeats=args.repeats,
-                        logger=logger,
-                        device=args.device
-                    )
+                device=args.device,
+            )
 
 
 def main():
@@ -83,15 +91,20 @@ def main():
 
     # parse arguments
     parser = ArgumentParser()
-    parser.add_argument('-d', '--datasets', nargs='+', choices=get_available_datasets(), required=True)
-    parser.add_argument('-m', '--methods',  nargs='+', choices=get_available_mechanisms(), required=True)
-    parser.add_argument('-e', '--eps',      nargs='+', type=float, dest='eps_list', required=True)
-    parser.add_argument('-r', '--repeats',      type=int, default=1)
-    parser.add_argument('-o', '--output-dir',   type=str, default='./results')
-    parser.add_argument('--device',             type=str, default='cuda', choices=['cpu', 'cuda'])
+    parser.add_argument('-d', '--datasets', nargs='+', choices=available_datasets(), default=available_datasets())
+    parser.add_argument('-m', '--methods', nargs='+', choices=available_mechanisms(), default=available_mechanisms())
+    parser.add_argument('-e', '--epsilons', nargs='+', type=float, dest='epsilons', required=True)
+    parser.add_argument('-a', '--aggs', nargs='*', type=str, default=['gcn'])
+    parser.add_argument('-r', '--repeats', type=int, default=1)
+    parser.add_argument('-o', '--output-dir', type=str, default='./results')
+    parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'])
     args = parser.parse_args()
-    print(args)
 
+    # check if eps > 0 for LDP methods
+    if min(args.epsilons) <= 0:
+        parser.error('LDP methods require eps > 0.')
+
+    print_args(args)
     batch_error_estimation(args)
 
 

@@ -134,3 +134,8 @@ dmypy.json
 datasets
 results
 
+# local files and directories
+checkpoints
+data.ipynb
+test.ipynb
+*.job
