@@ -11,12 +11,12 @@ from torch_sparse import matmul
 
 
 class KProp(MessagePassing):
-    def __init__(self, in_channels, out_channels, K, aggregator, add_self_loops, cached=False):
+    def __init__(self, in_channels, out_channels, step, aggregator, add_self_loops, cached=False):
         super().__init__(aggr='add' if aggregator == 'gcn' else aggregator)
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.fc = Linear(in_channels, out_channels)
-        self.K = K
+        self.K = step
         self.add_self_loops = add_self_loops
         self.cached = cached
         self._cached_x = None
@@ -50,10 +50,12 @@ class KProp(MessagePassing):
 
 
 class GNN(torch.nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, dropout, K, aggregator, self_loops):
+    def __init__(self, input_dim, hidden_dim, output_dim, dropout, step, aggregator, self_loops):
         super().__init__()
-        self.conv1 = KProp(input_dim, hidden_dim, K=K, aggregator=aggregator, add_self_loops=self_loops, cached=True)
-        self.conv2 = KProp(hidden_dim, output_dim, K=1, aggregator=aggregator, add_self_loops=True, cached=False)
+        self.conv1 = KProp(input_dim, hidden_dim, step=step, aggregator=aggregator,
+                           add_self_loops=self_loops, cached=True)
+        self.conv2 = KProp(hidden_dim, output_dim, step=1, aggregator=aggregator,
+                           add_self_loops=True, cached=False)
         self.bn = BatchNorm(hidden_dim)
         self.dropout = Dropout(p=dropout)
 
@@ -81,13 +83,13 @@ class NodeClassifier(torch.nn.Module):
 
     def __init__(self, input_dim, num_classes, hidden_dim=16,
                  dropout=0.5, learning_rate=0.001, weight_decay=0,
-                 K=1, aggregator='gcn', self_loops=True, **kwargs):
+                 step=1, aggregator='gcn', self_loops=True, **kwargs):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.dropout = dropout
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
-        self.steps = K
+        self.steps = step
         self.aggregator = aggregator
         self.self_loops = self_loops
         # self.save_hyperparameters()
@@ -97,7 +99,7 @@ class NodeClassifier(torch.nn.Module):
             hidden_dim=self.hidden_dim,
             output_dim=num_classes,
             dropout=self.dropout,
-            K=self.steps,
+            step=self.steps,
             aggregator=self.aggregator,
             self_loops=self.self_loops
         )

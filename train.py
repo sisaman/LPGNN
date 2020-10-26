@@ -66,12 +66,12 @@ class Trainer:
         return loss, metrics
 
 
-def train_and_test(dataset, label_rate, eps, K, checkpoint_path, args):
+def train_and_test(dataset, label_rate, eps, step, checkpoint_path, args):
     # define model
     model = NodeClassifier(
         input_dim=dataset.num_features,
         num_classes=dataset.num_classes,
-        K=K,
+        step=step,
         **vars(args)
     )
 
@@ -102,7 +102,7 @@ def batch_train_and_test(args):
         for run in progbar:
             result = train_and_test(
                 dataset=dataset, label_rate=lr,
-                eps=eps, K=k, args=args,
+                eps=eps, step=k, args=args,
                 checkpoint_path=os.path.join('checkpoints', experiment_dir, str(run))
             )
 
