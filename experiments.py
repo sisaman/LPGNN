@@ -54,7 +54,7 @@ if 'queue' in args:
             f'#$ -N job-{i}\n',
             f'#$ -S /bin/bash\n',
             f'#$ -P socialcomputing\n',
-            f'#$ -l buster,pytorch,{args.queue},gpumem={args.gpumem}\n',
+            f'#$ -l {args.queue},gpumem={args.gpumem}\n',
             f'#$ -cwd\n',
             f'## Task\n',
             f'cd ..\n',
