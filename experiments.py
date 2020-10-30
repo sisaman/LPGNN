@@ -10,7 +10,7 @@ parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'
 subparser = parser.add_subparsers()
 parser_grid = subparser.add_parser('grid')
 parser_grid.add_argument('-q', '--queue', type=str, default='sgpu', choices=['sgpu', 'gpu', 'lgpu'])
-parser_grid.add_argument('-m', '--gpumem', type=int, default=20)
+parser_grid.add_argument('-m', '--gpumem', type=int, default=10)
 parser_grid.add_argument('-j', '--jobs-dir', type=str, default='./jobs')
 args = parser.parse_args()
 print_args(args)
@@ -24,19 +24,21 @@ datasets = {
     'lastfm':   {'--learning-rate': 0.01, '--weight-decay': 0.001, '--dropout': 0.75},
 }
 
-error_run = f"python error.py -d {' '.join(datasets.keys())} -m agm obm mbm -e 0.1 0.5 1 2 -a mean gcn"
-print(colored_text(error_run, color='lightcyan'))
-os.system(error_run)
+# error_run = f"python error.py -d {' '.join(datasets.keys())} -m agm obm mbm -e 0.1 0.5 1 2 -a mean gcn"
+# print(colored_text(error_run, color='lightcyan'))
+# os.system(error_run)
 
 configs = [
     # privacy-accuracy trade-off
-    f' -m raw rnd ohd -k 1 ',
-    f' -m mbm -e 0.01 0.1 0.5 1 2 4 -k 1 2 4 8 16 32 --no-loops ',
+    ' -m raw',
+    ' -m rnd',
+    ' -m ohd',
+    *[f' -m mbm -e 0.01 0.1 0.5 1 2 4 -k {2**k} --no-loops ' for k in range(6)],
     # effect of Kprop
-    f' -m mbm -e 0.01 0.1 1 -k 1 2 4 8 16 32 ',
-    f' -m raw -k 1 2 4 8 16 32 --no-loops',
+    *[f' -m mbm -e 0.01 0.1 1 -k {2**k} ' for k in range(6)],
+    *[f' -m raw -k {2**k} --no-loops' for k in range(6)],
     # effect of label-rate
-    f' -l 0.2 0.4 0.6 0.8 -m mbm -e 0.01 0.1 1 -k 1 2 4 8 --no-loops ',
+    *[f' -l 0.2 0.4 0.6 0.8 -m mbm -e 0.01 0.1 1 -k {2**k} --no-loops ' for k in range(4)],
 ]
 
 train_runs = []
@@ -54,7 +56,7 @@ if 'queue' in args:
             f'#$ -N job-{i}\n',
             f'#$ -S /bin/bash\n',
             f'#$ -P socialcomputing\n',
-            f'#$ -l {args.queue},gpumem={args.gpumem}\n',
+            f'#$ -l pytorch,{args.queue},gpumem={args.gpumem}\n',
             f'#$ -cwd\n',
             f'## Task\n',
             f'cd ..\n',

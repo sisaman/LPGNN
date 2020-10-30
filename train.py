@@ -66,12 +66,11 @@ class Trainer:
         return loss, metrics
 
 
-def train_and_test(dataset, label_rate, eps, step, checkpoint_path, args):
+def train_and_test(dataset, label_rate, eps, checkpoint_path, args):
     # define model
     model = NodeClassifier(
         input_dim=dataset.num_features,
         num_classes=dataset.num_classes,
-        step=step,
         **vars(args)
     )
 
@@ -88,12 +87,12 @@ def train_and_test(dataset, label_rate, eps, step, checkpoint_path, args):
 
 def batch_train_and_test(args):
     dataset = load_dataset(name=args.dataset, feature_range=(0, 1), sparse=True, device=args.device)
-    configs = list(product(args.label_rates, args.epsilons, args.steps))
+    configs = list(product(args.label_rates, args.epsilons))
 
-    for lr, eps, k in configs:
+    for lr, eps in configs:
         experiment_dir = os.path.join(
             f'task:train', f'dataset:{args.dataset}', f'labelrate:{lr}', f'method:{args.method}',
-            f'eps:{eps}', f'step:{k}', f'agg:{args.aggregator}', f'selfloops:{args.self_loops}'
+            f'eps:{eps}', f'step:{args.step}', f'agg:{args.aggregator}', f'selfloops:{args.self_loops}'
         )
 
         results = []
@@ -101,8 +100,7 @@ def batch_train_and_test(args):
         progbar = tqdm(range(args.repeats), desc=run_desc, file=sys.stdout)
         for run in progbar:
             result = train_and_test(
-                dataset=dataset, label_rate=lr,
-                eps=eps, step=k, args=args,
+                dataset=dataset, label_rate=lr, eps=eps, args=args,
                 checkpoint_path=os.path.join('checkpoints', experiment_dir, str(run))
             )
 
@@ -125,7 +123,6 @@ def main():
     parser.add_argument('-d', '--dataset', type=str, choices=available_datasets(), required=True)
     parser.add_argument('-m', '--method', type=str, choices=FeatureTransform.available_methods(), required=True)
     parser.add_argument('-e', '--epsilons', nargs='*', type=float, default=[0.0])
-    parser.add_argument('-k', '--steps', nargs='*', type=int, default=[1])
     parser.add_argument('-l', '--label-rates', nargs='*', type=float, default=[1.0])
     parser.add_argument('-r', '--repeats', type=int, default=1)
     parser.add_argument('-o', '--output-dir', type=str, default='./results')
