@@ -27,8 +27,7 @@ class Laplace(Mechanism):
         d = x.size(1)
         sensitivity = (self.beta - self.alpha) * d
         scale = torch.ones_like(x) * (sensitivity / self.eps)
-        y_star = torch.distributions.Laplace(x, scale).sample()
-        return y_star
+        return torch.distributions.Laplace(x, scale).sample()
 
 
 class Gaussian(Mechanism):
@@ -182,8 +181,8 @@ class Piecewise(Mechanism):
         t += mask_right * (torch.rand_like(t) * (C - R) + R)
 
         # unbias data
-        y_star = (self.beta - self.alpha) * (t + 1) / 2 + self.alpha
-        return y_star
+        x_prime = (self.beta - self.alpha) * (t + 1) / 2 + self.alpha
+        return x_prime
 
 
 class MultiDimPiecewise(Piecewise):
