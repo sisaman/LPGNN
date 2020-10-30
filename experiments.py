@@ -30,13 +30,15 @@ os.system(error_run)
 
 configs = [
     # privacy-accuracy trade-off
-    f' -m raw rnd ohd -k 1 ',
-    f' -m mbm -e 0.01 0.1 0.5 1 2 4 -k 1 2 4 8 16 32 --no-loops ',
+    ' -m raw',
+    ' -m rnd',
+    ' -m ohd',
+    ' -m mbm -e 0.01 0.1 0.5 1 2 4 -k 1 2 4 8 16 32 --no-loops ',
     # effect of Kprop
-    f' -m mbm -e 0.01 0.1 1 -k 1 2 4 8 16 32 ',
-    f' -m raw -k 1 2 4 8 16 32 --no-loops',
+    ' -m mbm -e 0.01 0.1 1 -k 1 2 4 8 16 32 ',
+    ' -m raw -k 1 2 4 8 16 32 --no-loops',
     # effect of label-rate
-    f' -l 0.2 0.4 0.6 0.8 -m mbm -e 0.01 0.1 1 -k 1 2 4 8 --no-loops ',
+    ' -l 0.2 0.4 0.6 0.8 -m mbm -e 0.01 0.1 1 -k 1 2 4 8 --no-loops ',
 ]
 
 train_runs = []
@@ -54,7 +56,7 @@ if 'queue' in args:
             f'#$ -N job-{i}\n',
             f'#$ -S /bin/bash\n',
             f'#$ -P socialcomputing\n',
-            f'#$ -l buster,pytorch,{args.queue},gpumem={args.gpumem}\n',
+            f'#$ -l pytorch,{args.queue},gpumem={args.gpumem}\n',
             f'#$ -cwd\n',
             f'## Task\n',
             f'cd ..\n',
