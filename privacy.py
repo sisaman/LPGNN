@@ -130,8 +130,7 @@ class MultiBit(Mechanism):
 
         # sample features for perturbation
         BigS = torch.rand_like(x).topk(m, dim=1).indices
-        s = torch.zeros_like(x, dtype=torch.bool)
-        s.scatter_(1, BigS, True)
+        s = torch.zeros_like(x, dtype=torch.bool).scatter(1, BigS, True)
         del BigS
 
         # perturb sampled features
@@ -140,6 +139,7 @@ class MultiBit(Mechanism):
         p = (p * (em - 1) + 1) / (em + 1)
         t = torch.bernoulli(p)
         x_star = s * (2 * t - 1)
+        del p, t, s
 
         # unbiase the result
         x_prime = d * (self.beta - self.alpha) / (2 * m)
