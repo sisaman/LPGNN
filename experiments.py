@@ -33,12 +33,13 @@ configs = [
     ' -m raw',
     ' -m rnd',
     ' -m ohd',
-    *[f' -m mbm -e 0.01 0.1 0.5 1 2 4 -k {2**k} --no-loops ' for k in range(6)],
+    *[f' -m mbm -e {e} -k {2 ** k} --no-loops ' for e in [0.01, 0.1, 0.5, 1, 2, 4] for k in range(6)],
     # effect of Kprop
-    *[f' -m mbm -e 0.01 0.1 1 -k {2**k} ' for k in range(6)],
-    *[f' -m raw -k {2**k} --no-loops' for k in range(6)],
+    *[f' -m mbm -e {e} -k {2 ** k} ' for e in [0.01, 0.1, 1] for k in range(6)],
+    *[f' -m raw -k {2 ** k} --no-loops' for k in range(6)],
     # effect of label-rate
-    *[f' -l 0.2 0.4 0.6 0.8 -m mbm -e 0.01 0.1 1 -k {2**k} --no-loops ' for k in range(4)],
+    *[f' -l {l} -m mbm -e {e} -k {2 ** k} --no-loops ' for l in [0.2, 0.4, 0.6, 0.8] for e in [0.01, 0.1, 1] for k in
+      range(4)],
 ]
 
 train_runs = []
@@ -53,7 +54,7 @@ if 'queue' in args:
     os.makedirs(args.jobs_dir, exist_ok=True)
     for i, run in enumerate(train_runs):
         job_file_content = [
-            f'#$ -N job-{i}\n',
+            f'#$ -N job-{i + 1}\n',
             f'#$ -S /bin/bash\n',
             f'#$ -P socialcomputing\n',
             f'#$ -l pytorch,{args.queue},gpumem={args.gpumem}\n',
@@ -62,7 +63,7 @@ if 'queue' in args:
             f'cd ..\n',
             f'{run}\n'
         ]
-        with open(os.path.join(args.jobs_dir, f'job-{i}.job'), 'w') as file:
+        with open(os.path.join(args.jobs_dir, f'job-{i + 1}.job'), 'w') as file:
             file.writelines(job_file_content)
             file.flush()
 
