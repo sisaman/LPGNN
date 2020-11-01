@@ -87,7 +87,7 @@ _available_datasets = {
     }
 
 
-def load_dataset(name, root='datasets', feature_range=None, sparse=False, device='cpu'):
+def load_dataset(name, root='datasets', feature_range=None, sparse=False):
     dataset = _available_datasets[name](root=os.path.join(root, name))
     data = dataset[0]
 
@@ -97,9 +97,6 @@ def load_dataset(name, root='datasets', feature_range=None, sparse=False, device
 
     if sparse:
         data = ToSparseTensor()(data)
-
-    device = 'cpu' if not torch.cuda.is_available() else device
-    data = data.to(device)
 
     data.name = name
     data.num_classes = dataset.num_classes

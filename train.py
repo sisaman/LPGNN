@@ -1,4 +1,3 @@
-import logging
 import os
 import sys
 import time
@@ -18,7 +17,7 @@ from utils import colored_text, print_args, seed_everything
 class Trainer:
     def __init__(self, max_epochs=100, device='cuda', checkpoint_dir='checkpoints'):
         self.max_epochs = max_epochs
-        self.device = 'cpu' if not torch.cuda.is_available() else device
+        self.device = device
         os.makedirs(checkpoint_dir, exist_ok=True)
         self.checkpoint_path = os.path.join(checkpoint_dir, 'best_weights.pt')
 
@@ -86,7 +85,7 @@ def train_and_test(dataset, label_rate, eps, checkpoint_path, args):
 
 
 def batch_train_and_test(args):
-    dataset = load_dataset(name=args.dataset, feature_range=(0, 1), sparse=True, device=args.device)
+    dataset = load_dataset(name=args.dataset, feature_range=(0, 1), sparse=True).to(args.device)
     configs = list(product(args.label_rates, args.epsilons))
 
     for lr, eps in configs:
@@ -116,9 +115,6 @@ def batch_train_and_test(args):
 
 def main():
     seed_everything(12345)
-    logging.getLogger("lightning").setLevel(logging.ERROR)
-    logging.captureWarnings(True)
-
     parser = ArgumentParser()
     parser.add_argument('-d', '--dataset', type=str, choices=available_datasets(), required=True)
     parser.add_argument('-m', '--method', type=str, choices=FeatureTransform.available_methods(), required=True)
@@ -132,6 +128,9 @@ def main():
 
     if args.method in FeatureTransform.private_methods and min(args.epsilons) <= 0:
         parser.error('LDP method requires eps > 0.')
+
+    if not torch.cuda.is_available():
+        args.device = 'cpu'
 
     print_args(args)
     start = time.time()
