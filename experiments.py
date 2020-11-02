@@ -24,9 +24,9 @@ datasets = {
     'lastfm':   {'--learning-rate': 0.01, '--weight-decay': 0.001, '--dropout': 0.75},
 }
 
-# error_run = f"python error.py -d {' '.join(datasets.keys())} -m agm obm mbm -e 0.1 0.5 1 2 -a mean gcn"
-# print(colored_text(error_run, color='lightcyan'))
-# os.system(error_run)
+error_run = f"python error.py -d {' '.join(datasets.keys())} -m agm obm mbm -e 0.1 0.5 1 2 -a mean gcn"
+print(colored_text(error_run, color='lightcyan'))
+os.system(error_run)
 
 configs = [
     # privacy-accuracy trade-off
@@ -53,11 +53,12 @@ for dataset, hparams in datasets.items():
 if 'queue' in args:
     os.makedirs(args.jobs_dir, exist_ok=True)
     for i, run in enumerate(train_runs):
+        gpumem = 20 if '-d facebook' in run or '-d github' in run else args.gpumem
         job_file_content = [
             f'#$ -N job-{i + 1}\n',
             f'#$ -S /bin/bash\n',
             f'#$ -P socialcomputing\n',
-            f'#$ -l pytorch,{args.queue},gpumem={args.gpumem}\n',
+            f'#$ -l pytorch,{args.queue},gpumem={gpumem}\n',
             f'#$ -cwd\n',
             f'## Task\n',
             f'cd ..\n',
