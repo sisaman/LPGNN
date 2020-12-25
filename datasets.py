@@ -5,7 +5,7 @@ import pandas as pd
 import torch
 from torch_geometric.data import Data, InMemoryDataset, download_url
 from torch_geometric.datasets import Planetoid
-from torch_geometric.transforms import ToSparseTensor
+from torch_geometric.transforms import ToSparseTensor, RemoveIsolatedNodes
 from torch_geometric.utils import to_undirected
 
 from transforms import NodeSplit, Normalize
@@ -78,18 +78,21 @@ class KarateClub(InMemoryDataset):
 
 
 _available_datasets = {
-        'cora': partial(Planetoid, name='cora', pre_transform=NodeSplit()),
-        'citeseer': partial(Planetoid, name='citeseer', pre_transform=NodeSplit()),
-        'pubmed': partial(Planetoid, name='pubmed', pre_transform=NodeSplit()),
-        'facebook': partial(KarateClub, name='facebook', pre_transform=NodeSplit()),
-        'github': partial(KarateClub, name='github', pre_transform=NodeSplit()),
-        'lastfm': partial(KarateClub, name='lastfm', pre_transform=NodeSplit()),
-    }
+    'cora': partial(Planetoid, name='cora', pre_transform=NodeSplit()),
+    'citeseer': partial(Planetoid, name='citeseer', pre_transform=NodeSplit()),
+    'pubmed': partial(Planetoid, name='pubmed', pre_transform=NodeSplit()),
+    'facebook': partial(KarateClub, name='facebook', pre_transform=NodeSplit()),
+    'github': partial(KarateClub, name='github', pre_transform=NodeSplit()),
+    'lastfm': partial(KarateClub, name='lastfm', pre_transform=NodeSplit()),
+}
 
 
-def load_dataset(name, root='datasets', feature_range=None, sparse=False):
+def load_dataset(name, root='datasets', feature_range=None, sparse=False, remove_isolated_nodes=True):
     dataset = _available_datasets[name](root=os.path.join(root, name))
     data = dataset[0]
+
+    if remove_isolated_nodes:
+        data = RemoveIsolatedNodes()(data)
 
     if feature_range is not None:
         low, high = feature_range
