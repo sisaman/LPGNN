@@ -35,7 +35,6 @@ configs = [
     ' -m ohd',
     *[f' -m mbm -e {e} -k {2 ** k} --no-loops ' for e in [0.01, 0.1, 0.5, 1, 2, 4] for k in range(6)],
     # effect of Kprop
-    *[f' -m mbm -e {e} -k {2 ** k} ' for e in [0.01, 0.1, 1] for k in range(6)],
     *[f' -m raw -k {2 ** k} --no-loops' for k in range(6)],
     # effect of label-rate
     *[f' -l {l} -m mbm -e {e} -k {2 ** k} --no-loops ' for l in [0.2, 0.4, 0.6, 0.8] for e in [0.01, 0.1, 1] for k in
