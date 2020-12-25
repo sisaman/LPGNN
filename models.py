@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch_geometric.utils import accuracy
 from torch.nn import Linear, Dropout
 from torch.optim import Adam
-from torch_geometric.nn import MessagePassing, BatchNorm
+from torch_geometric.nn import MessagePassing
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
 from torch_sparse import matmul
 
@@ -56,13 +56,11 @@ class GNN(torch.nn.Module):
                            add_self_loops=self_loops, cached=True)
         self.conv2 = KProp(hidden_dim, output_dim, step=1, aggregator=aggregator,
                            add_self_loops=True, cached=False)
-        # self.bn = BatchNorm(hidden_dim)
         self.dropout = Dropout(p=dropout)
 
     def forward(self, x, adj_t):
         x = self.conv1(x, adj_t)
         x = torch.selu(x)
-        # x = self.bn(x)
         x = self.dropout(x)
         x = self.conv2(x, adj_t)
         x = F.log_softmax(x, dim=1)
@@ -93,7 +91,6 @@ class NodeClassifier(torch.nn.Module):
         self.steps = step
         self.aggregator = aggregator
         self.self_loops = self_loops
-        # self.save_hyperparameters()
 
         self.gcn = GNN(
             input_dim=input_dim,
