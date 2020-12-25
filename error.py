@@ -95,7 +95,7 @@ def main():
     parser.add_argument('-e', '--epsilons', nargs='+', type=float, dest='epsilons', required=True)
     parser.add_argument('-a', '--aggs', nargs='*', type=str, default=['gcn'])
     parser.add_argument('-r', '--repeats', type=int, default=1)
-    parser.add_argument('-o', '--output-dir', type=str, default='./results')
+    parser.add_argument('-o', '--output-dir', type=str, default='./output')
     parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'])
     args = parser.parse_args()
 
