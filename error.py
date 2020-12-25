@@ -103,6 +103,10 @@ def main():
     if min(args.epsilons) <= 0:
         parser.error('LDP methods require eps > 0.')
 
+    if not torch.cuda.is_available():
+        print(colored_text('CUDA is not available, falling back to CPU', color='red'))
+        args.device = 'cpu'
+
     print_args(args)
     batch_error_estimation(args)
 
