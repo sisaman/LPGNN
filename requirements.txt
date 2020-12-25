@@ -6,3 +6,4 @@ torch_sparse>=0.6.7
 tabulate>=0.8.7
 pandas>=1.1.3
 tqdm>=4.50.2
+seaborn>=0.11.0
