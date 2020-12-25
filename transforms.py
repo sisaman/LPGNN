@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 from privacy import _available_mechanisms
 
 
@@ -51,7 +52,7 @@ class OneHotDegree:
     def __call__(self, data):
         degree = data.adj_t.sum(dim=0).long()
         degree.clamp_(max=self.max_degree)
-        data.x = torch.nn.functional.one_hot(degree, num_classes=self.max_degree + 1).float()  # add 1 for zero degree
+        data.x = F.one_hot(degree, num_classes=self.max_degree + 1).float()  # add 1 for zero degree
         return data
 
 
