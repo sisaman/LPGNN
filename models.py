@@ -73,7 +73,7 @@ class NodeClassifier(torch.nn.Module):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
         parser.add_argument('--hidden-dim', type=int, default=16)
         parser.add_argument('--dropout', '--dp', type=float, default=0)
-        parser.add_argument('--learning-rate', '--lr', type=float, default=0.001)
+        parser.add_argument('--learning-rate', '--lr', type=float, default=0.01)
         parser.add_argument('--weight-decay', '--wd', type=float, default=0)
         parser.add_argument('-k', '--step', type=int, default=1)
         parser.add_argument('-a', '--aggregator', type=str, default='gcn')
