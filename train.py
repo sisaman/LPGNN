@@ -8,6 +8,7 @@ import torch
 import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
+from pytorch_lightning.loggers import TensorBoardLogger
 from datasets import available_datasets, load_dataset
 from models import NodeClassifier
 from transforms import FeatureTransform, LabelRate
@@ -15,33 +16,46 @@ from utils import colored_text, print_args, seed_everything
 
 
 class Trainer:
-    def __init__(self, max_epochs=100, device='cuda', checkpoint_dir='checkpoints'):
+    def __init__(self, max_epochs=100, device='cuda', checkpoint_dir='checkpoints', logger=None):
         self.max_epochs = max_epochs
         self.device = device
         os.makedirs(checkpoint_dir, exist_ok=True)
         self.checkpoint_path = os.path.join(checkpoint_dir, 'best_weights.pt')
+        self.logger = logger
+
+    def log(self, metrics, step=None):
+        if self.logger is not None:
+            self.logger.log_metrics(metrics, step=step)
 
     def fit(self, model, data):
         model = model.to(self.device)
         data = data.to(self.device)
         optimizer = model.configure_optimizers()
-
         best_val_loss = float('inf')
-
         epoch_progbar = tqdm(range(1, self.max_epochs + 1), desc='Epoch: ', leave=False, position=1, file=sys.stdout)
-        for _ in epoch_progbar:
-            loss, metric = self.train(model, data, optimizer)
-            val_metrics = self.validation(model, data)
-            val_loss = val_metrics['val_loss']
 
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                torch.save(model.state_dict(), self.checkpoint_path)
+        try:
+            for epoch in epoch_progbar:
+                train_metrics = self.__train(model, data, optimizer)
+                train_metrics['train_loss'] = train_metrics['train_loss'].item()
+                self.log(train_metrics, step=epoch)
 
-            # display metrics on progress bar
-            postfix = {'train_loss': loss.item(), **metric, **val_metrics}
-            epoch_progbar.set_postfix(postfix)
+                val_metrics = self.__validation(model, data)
+                val_loss = val_metrics['val_loss']
+                self.log(val_metrics, step=epoch)
 
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    torch.save(model.state_dict(), self.checkpoint_path)
+
+                # display metrics on progress bar
+                postfix = {**train_metrics, **val_metrics}
+                epoch_progbar.set_postfix(postfix)
+        except KeyboardInterrupt:
+            pass
+
+        if self.logger is not None:
+            self.logger.save()
         return model
 
     @torch.no_grad()
@@ -51,21 +65,22 @@ class Trainer:
         return model.test_step(data)
 
     @torch.no_grad()
-    def validation(self, model, data):
+    def __validation(self, model, data):
         model.eval()
         return model.validation_step(data)
 
     @staticmethod
-    def train(model, data, optimizer):
+    def __train(model, data, optimizer):
         model.train()
         optimizer.zero_grad()
-        loss, metrics = model.training_step(data)
+        metrics = model.training_step(data)
+        loss = metrics['train_loss']
         loss.backward()
         optimizer.step()
-        return loss, metrics
+        return metrics
 
 
-def train_and_test(dataset, label_rate, eps, checkpoint_path, args):
+def train_and_test(dataset, label_rate, eps, experiment_dir, args):
     # define model
     model = NodeClassifier(
         input_dim=dataset.num_features,
@@ -77,7 +92,12 @@ def train_and_test(dataset, label_rate, eps, checkpoint_path, args):
     dataset = LabelRate(rate=label_rate)(dataset)
     dataset = FeatureTransform(method=args.method, eps=eps)(dataset)
 
-    trainer = Trainer(max_epochs=500, device=args.device, checkpoint_dir=checkpoint_path)
+    trainer = Trainer(
+        max_epochs=500,
+        device=args.device,
+        checkpoint_dir=os.path.join('checkpoints', experiment_dir),
+        logger=TensorBoardLogger(save_dir=os.path.join('logs', experiment_dir)) if args.log else None
+    )
     model = trainer.fit(model, dataset)
     result = trainer.test(model, dataset)
 
@@ -100,7 +120,7 @@ def batch_train_and_test(args):
         for run in progbar:
             result = train_and_test(
                 dataset=dataset, label_rate=lr, eps=eps, args=args,
-                checkpoint_path=os.path.join('checkpoints', experiment_dir, str(run))
+                experiment_dir=os.path.join(experiment_dir, str(run))
             )
 
             results.append(result)
@@ -122,6 +142,7 @@ def main():
     parser.add_argument('-l', '--label-rates', nargs='*', type=float, default=[1.0])
     parser.add_argument('-r', '--repeats', type=int, default=1)
     parser.add_argument('-o', '--output-dir', type=str, default='./output')
+    parser.add_argument('--log', action='store_true', default=False)
     parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'])
     parser = NodeClassifier.add_module_specific_args(parser)
     args = parser.parse_args()

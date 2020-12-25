@@ -110,7 +110,7 @@ class NodeClassifier(torch.nn.Module):
         loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask], ignore_index=-1)
         pred = out.argmax(dim=1)
         acc = accuracy(pred=pred[data.train_mask], target=data.y[data.train_mask]) * 100
-        return loss, {'train_acc': acc}
+        return {'train_loss': loss, 'train_acc': acc}
 
     def validation_step(self, data):
         out = self(data)
