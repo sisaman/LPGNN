@@ -9,9 +9,10 @@ from torch.utils.tensorboard import SummaryWriter
 
 class TensorBoardLogger:
     def __init__(self, save_dir, **kwargs):
-        self.save_dir = save_dir
         os.makedirs(save_dir, exist_ok=True)
-        self.writer = SummaryWriter(log_dir=save_dir, **kwargs)
+        num_files = len(os.listdir(save_dir))
+        self.save_dir = os.path.join(save_dir, str(num_files))
+        self.writer = SummaryWriter(log_dir=self.save_dir, **kwargs)
 
     def log_metrics(self, metrics, step=None):
         for k, v in metrics.items():
