@@ -8,11 +8,10 @@ import torch
 import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
-from pytorch_lightning.loggers import TensorBoardLogger
 from datasets import available_datasets, load_dataset
 from models import NodeClassifier
 from transforms import FeatureTransform, LabelRate
-from utils import colored_text, print_args, seed_everything
+from utils import colored_text, print_args, seed_everything, TensorBoardLogger
 
 
 class Trainer:

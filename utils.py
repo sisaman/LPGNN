@@ -1,8 +1,30 @@
+import os
 import torch
 import numpy as np
 import pandas as pd
 import random
 from tabulate import tabulate
+from torch.utils.tensorboard import SummaryWriter
+
+
+class TensorBoardLogger:
+    def __init__(self, save_dir, **kwargs):
+        self.save_dir = save_dir
+        os.makedirs(save_dir, exist_ok=True)
+        self.writer = SummaryWriter(log_dir=save_dir, **kwargs)
+
+    def log_metrics(self, metrics, step=None):
+        for k, v in metrics.items():
+            if isinstance(v, torch.Tensor):
+                v = v.item()
+
+            if isinstance(v, dict):
+                self.writer.add_scalars(k, v, step)
+            else:
+                self.writer.add_scalar(k, v, step)
+
+    def save(self):
+        self.writer.close()
 
 
 def seed_everything(seed):
