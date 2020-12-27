@@ -92,7 +92,7 @@ def train_and_test(dataset, label_rate, eps, experiment_dir, args):
     dataset = FeatureTransform(method=args.method, eps=eps)(dataset)
 
     trainer = Trainer(
-        max_epochs=500,
+        max_epochs=args.max_epochs,
         device=args.device,
         checkpoint_dir=os.path.join('checkpoints', experiment_dir),
         logger=TensorBoardLogger(save_dir=os.path.join('logs', experiment_dir)) if args.log else None
@@ -141,6 +141,7 @@ def main():
     parser.add_argument('-l', '--label-rates', nargs='*', type=float, default=[1.0])
     parser.add_argument('-r', '--repeats', type=int, default=1)
     parser.add_argument('-o', '--output-dir', type=str, default='./output')
+    parser.add_argument('--max-epochs', type=int, default=500)
     parser.add_argument('--log', action='store_true', default=False)
     parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'])
     parser = NodeClassifier.add_module_specific_args(parser)
