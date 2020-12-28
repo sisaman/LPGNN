@@ -30,28 +30,28 @@ python train.py [OPTIONS...]
 ```
 Required arguments:  
 ```
--d, --dataset   <string>    Dataset to train on. One of "citeseer", "cora", "pubmed", "facebook", "github", or "lastfm".
--m, --method    <string>    The method to perturb node features. Choices are "raw" (to use original features), "rnd" (for random features), "ohd" (for one-hot degree), or "mbm" for perturbation with multi-bit mechanism.
+--dataset, -d   <string>    Dataset to train on. One of "citeseer", "cora", "pubmed", "facebook", "github", or "lastfm".
+--method, -m    <string>    The method to perturb node features. Choices are "raw" (to use original features), "rnd" (for random features), "ohd" (for one-hot degree), or "mbm" for perturbation with multi-bit mechanism.
 ```
 Optional arguments:
 ```
--e, --epsilons      <float sequence>    List of epsilon values to try for the the LDP mechanism. The values must be greater than zero. This is required if method is "mbm", and will be ignored for other non-private methods. Default is 0.
--l, --label-rates   <float sequence>    List of label rates to try as the fraction of training node (not the total nodes in the graph). Default is 1.0 (all the training nodes are used).
--r, --repeats       <integer>           Number of times the experiment is repeated. Default is 10.  
--o, --output-dir    <path>              Path to store the results. Default is "./results".  
-    --max-epochs    <integer>           Maximum number of training epochs. Default is 500.
-    --log                               Enables logging the learning curves (train/validation loss and accuracy per epoch). The log files are saved in "./log" folder and can be viewed using TensorBoard. Disabled by default.
-    --device        <string>            Device used for the training. Either "cpu" or "cuda". Default is "cuda". If "cuda" is selected but is not available, falls back to "cpu" automatically.
+--epsilons, -e      <float sequence>    List of epsilon values to try for the the LDP mechanism. The values must be greater than zero. This is required if method is "mbm", and will be ignored for other non-private methods. Default is 0.
+--label-rates, -l   <float sequence>    List of label rates to try as the fraction of training node (not the total nodes in the graph). Default is 1.0 (all the training nodes are used).
+--repeats, -r       <integer>           Number of times the experiment is repeated. Default is 10.  
+--output-dir, -o    <path>              Path to store the results. Default is "./results".  
+--max-epochs        <integer>           Maximum number of training epochs. Default is 500.
+--log                                   Enables logging the learning curves (train/validation loss and accuracy per epoch). The log files are saved in "./log" folder and can be viewed using TensorBoard. Disabled by default.
+--device            <string>            Device used for the training. Either "cpu" or "cuda". Default is "cuda". If "cuda" is selected but is not available, falls back to "cpu" automatically.
     
 ```
 GNN Optional arguments:
 ```
 --hidden-dim          <integer>             Dimension of the hidden layer of the GCN. Default is 16.
---dp, --dropout       <float>               Rate of dropout between zero and one. Default is 0.
---lr, --learning-rate <float>               Initial learning rate for the Adam optimizer. Default is 0.001.
---wd, --weight-decay  <float>               Weight decay (L2 penalty) for the Adam optimizer. Default is 0.
--k, --steps           <integer sequence>    List of KProp step parameters to try. Default is 1.
--a, --aggregator      <string>              Neighborhood aggregator function. Either "gcn" or "mean". Default is "gcn".
+--dropout, --dp       <float>               Rate of dropout between zero and one. Default is 0.
+--learning-rate, --lr <float>               Initial learning rate for the Adam optimizer. Default is 0.001.
+--weight-decay, --wd  <float>               Weight decay (L2 penalty) for the Adam optimizer. Default is 0.
+--steps, -k           <integer sequence>    List of KProp step parameters to try. Default is 1.
+--aggregator, -a      <string>              Neighborhood aggregator function. Either "gcn" or "mean". Default is "gcn".
 --no-loops                                  Removes self loops from the input graph. Self loops are added by default.
 ```
 
