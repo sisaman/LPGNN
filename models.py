@@ -61,8 +61,8 @@ class GNN(torch.nn.Module):
 
     def forward(self, x, adj_t):
         x = self.conv1(x, adj_t)
-        x = torch.selu(x)
         x = self.bn(x)
+        x = torch.selu(x)
         x = self.dropout(x)
         x = self.conv2(x, adj_t)
         x = F.log_softmax(x, dim=1)
