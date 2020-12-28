@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 from utils import print_args, colored_text
 
 parser = ArgumentParser()
-parser.add_argument('-r', '--repeats', type=int, default=10)
+parser.add_argument('-r', '--repeats', type=int, default=100)
 parser.add_argument('-o', '--output-dir', type=str, default='./results')
 parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'])
 subparser = parser.add_subparsers()
