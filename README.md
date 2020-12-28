@@ -7,11 +7,11 @@ By **Sina Sajadmanesh** and **Daniel Gatica-Perez**, Idiap Research Institute, E
 ## Requirements
 
 This code is implemented in Python 3.8, and relies on the following packages:  
-- [PyTorch](https://pytorch.org/get-started/locally/) >= 1.6.0
-- [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html) >= 1.6.1
-- [Pandas](https://pandas.pydata.org/pandas-docs/stable/getting_started/install.html) >= 1.1.3
-- [Numpy](https://numpy.org/install/) >= 1.19.1
-- [Seaborn](https://seaborn.pydata.org/) >= 0.11.0  
+- [PyTorch](https://pytorch.org/get-started/locally/) >= 1.7.1
+- [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html) >= 1.6.3
+- [Pandas](https://pandas.pydata.org/pandas-docs/stable/getting_started/install.html) >= 1.1.5
+- [Numpy](https://numpy.org/install/) >= 1.19.4
+- [Seaborn](https://seaborn.pydata.org/) >= 0.11.1  
 
 See requirements.txt for more details.
 
@@ -36,19 +36,23 @@ Required arguments:
 Optional arguments:
 ```
 -e, --epsilons      <float sequence>    List of epsilon values to try for the the LDP mechanism. The values must be greater than zero. This is required if method is "mbm", and will be ignored for other non-private methods. Default is 0.
--k, --steps         <integer sequence>  List of KProp step parameters to try. Default is 1.
 -l, --label-rates   <float sequence>    List of label rates to try as the fraction of training node (not the total nodes in the graph). Default is 1.0 (all the training nodes are used).
--r, --repeats       <integer>           Number of times the experiment is repeated. Default is 10.
--o, --output-dir    <path>              Path to store the results. Default is "./results".
-    --device        <string>            Device used for the training. Either "cpu" or "cuda". Default is "cuda".
+-r, --repeats       <integer>           Number of times the experiment is repeated. Default is 10.  
+-o, --output-dir    <path>              Path to store the results. Default is "./results".  
+    --max-epochs    <integer>           Maximum number of training epochs. Default is 500.
+    --log                               Enables logging the learning curves (train/validation loss and accuracy per epoch). The log files are saved in "./log" folder and can be viewed using TensorBoard. Disabled by default.
+    --device        <string>            Device used for the training. Either "cpu" or "cuda". Default is "cuda". If "cuda" is selected but is not available, falls back to "cpu" automatically.
+    
 ```
 GNN Optional arguments:
 ```
---hidden-dim    <integer>   Dimension of the hidden layer of the GCN. Default is 16.
---dropout       <float>     Rate of dropout between zero and one. Default is 0.
---learning-rate <float>     Initial learning rate for the Adam optimizer. Default is 0.001.
---weight-decay  <float>     Weight decay (L2 penalty) for the Adam optimizer. Default is 0.
---aggregator    <string>    Neighborhood aggregator function. Either "gcn" or "mean". Default is "gcn".
+--hidden-dim          <integer>             Dimension of the hidden layer of the GCN. Default is 16.
+--dp, --dropout       <float>               Rate of dropout between zero and one. Default is 0.
+--lr, --learning-rate <float>               Initial learning rate for the Adam optimizer. Default is 0.001.
+--wd, --weight-decay  <float>               Weight decay (L2 penalty) for the Adam optimizer. Default is 0.
+-k, --steps           <integer sequence>    List of KProp step parameters to try. Default is 1.
+-a, --aggregator      <string>              Neighborhood aggregator function. Either "gcn" or "mean". Default is "gcn".
+--no-loops                                  Removes self loops from the input graph. Self loops are added by default.
 ```
 
 The test result for each run will be saved as a csv file in ``<output-dir>`` directory.
