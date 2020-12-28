@@ -22,14 +22,6 @@ class Mechanism:
         return self.transform(x)
 
 
-class Laplace(Mechanism):
-    def transform(self, x):
-        d = x.size(1)
-        sensitivity = (self.beta - self.alpha) * d
-        scale = torch.ones_like(x) * (sensitivity / self.eps)
-        return torch.distributions.Laplace(x, scale).sample()
-
-
 class Gaussian(Mechanism):
     def __init__(self, *args, delta=0.0001, **kwargs):
         super().__init__(*args, **kwargs)
@@ -153,58 +145,11 @@ class OneBit(MultiBit):
         super().__init__(*args, m='max', **kwargs)
 
 
-class Piecewise(Mechanism):
-    def transform(self, x):
-        # normalize x between -1,1
-        t = (x - self.alpha) / (self.beta - self.alpha)
-        t = 2 * t - 1
-
-        # piecewise mechanism's variables
-        P = (math.exp(self.eps) - math.exp(self.eps / 2)) / (2 * math.exp(self.eps / 2) + 2)
-        C = (math.exp(self.eps / 2) + 1) / (math.exp(self.eps / 2) - 1)
-        L = t * (C + 1) / 2 - (C - 1) / 2
-        R = L + C - 1
-
-        # thresholds for random sampling
-        threshold_left = P * (L + C) / math.exp(self.eps)
-        threshold_right = threshold_left + P * (R - L)
-
-        # masks for piecewise random sampling
-        x = torch.rand_like(t)
-        mask_left = x < threshold_left
-        mask_middle = (threshold_left < x) & (x < threshold_right)
-        mask_right = threshold_right < x
-
-        # random sampling
-        t = mask_left * (torch.rand_like(t) * (L + C) - C)
-        t += mask_middle * (torch.rand_like(t) * (R - L) + L)
-        t += mask_right * (torch.rand_like(t) * (C - R) + R)
-
-        # unbias data
-        x_prime = (self.beta - self.alpha) * (t + 1) / 2 + self.alpha
-        return x_prime
-
-
-class MultiDimPiecewise(Piecewise):
-    def transform(self, x):
-        n, d = x.size()
-        k = int(max(1, min(d, math.floor(self.eps / 2.5))))
-        sample = torch.rand_like(x).topk(k, dim=1).indices
-        mask = torch.zeros_like(x, dtype=torch.bool)
-        mask.scatter_(1, sample, True)
-        self.eps /= k
-        y = super().transform(x)
-        z = mask * y * d / k
-        return z
-
-
 _available_mechanisms = {
     'cgm': Gaussian,
     'agm': AnalyticGaussian,
     'mbm': MultiBit,
     'obm': OneBit,
-    'lpm': Laplace,
-    'pwm': MultiDimPiecewise
 }
 
 
