@@ -21,7 +21,7 @@ def run(args):
 
     experiment_name = ', '.join([
         args.dataset_name, args.method, f'label:{args.train_ratio}',
-        f'e:{args.epsilon}', f'k:{args.step}', f'agg:{args.aggregator}', f'loop:{args.self_loops}'
+        f'e:{args.epsilon}', f'k:{args.step}', f'agg:{args.aggregator}', f'loop:{int(args.self_loops)}'
     ])
 
     results = []
