@@ -1,6 +1,5 @@
 import os
 import sys
-import time
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 import numpy as np
@@ -55,7 +54,6 @@ def run(args):
 
 
 def main():
-    seed_everything(12345)
     init_parser = ArgumentParser(add_help=False, conflict_handler='resolve')
 
     # dataset args
