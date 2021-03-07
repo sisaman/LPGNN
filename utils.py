@@ -3,7 +3,7 @@ import time
 from argparse import ArgumentParser
 
 import inspect
-
+import enum
 import functools
 import torch
 import numpy as np
@@ -77,27 +77,27 @@ def add_parameters_as_argument(function, parser: ArgumentParser):
 
 
 def print_args(args):
-    args = {key: str(value) for key, value in vars(args).items()}
-    df_args = pd.DataFrame.from_dict(args, orient='index')
-    print(tabulate(df_args, tablefmt='fancy_grid'), '\n')
+    message = [f'{name}: {colored_text(str(value), TermColors.FG.cyan)}' for name, value in vars(args).items()]
+    print(', '.join(message) + '\n')
 
 
 def colored_text(msg, color):
     if isinstance(color, str):
         color = TermColors.FG.__dict__[color]
-    return color + msg + TermColors.reset
+    return color.value + msg + TermColors.Control.reset.value
 
 
 class TermColors:
-    reset = '\033[0m'
-    bold = '\033[01m'
-    disable = '\033[02m'
-    underline = '\033[04m'
-    reverse = '\033[07m'
-    strikethrough = '\033[09m'
-    invisible = '\033[08m'
+    class Control(enum.Enum):
+        reset = '\033[0m'
+        bold = '\033[01m'
+        disable = '\033[02m'
+        underline = '\033[04m'
+        reverse = '\033[07m'
+        strikethrough = '\033[09m'
+        invisible = '\033[08m'
 
-    class FG:
+    class FG(enum.Enum):
         black = '\033[30m'
         red = '\033[31m'
         green = '\033[32m'
@@ -114,7 +114,7 @@ class TermColors:
         pink = '\033[95m'
         lightcyan = '\033[96m'
 
-    class BG:
+    class BG(enum.Enum):
         black = '\033[40m'
         red = '\033[41m'
         green = '\033[42m'
