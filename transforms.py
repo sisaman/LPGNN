@@ -7,9 +7,17 @@ class Privatize:
     non_private_methods = ['raw', 'rnd', 'ohd']
     private_methods = list(supported_mechanisms.keys())
 
-    def __init__(self, method, **kwargs):
+    def __init__(self,
+                 method: dict(help='feature perturbation method', choices=non_private_methods + private_methods,
+                              option=('-m', '--method')) = 'raw',
+                 epsilon: dict(help='privacy budget epsilon (ignored for non-DP methods)', type=float,
+                               option=('-e', '--epsilon')) = None,
+                 **kwargs):
         self.method = method
+        self.epsilon = epsilon
         self.kwargs = kwargs
+
+        assert method in self.non_private_methods or (epsilon is not None and epsilon > 0)
 
     def __call__(self, data):
         if self.method == 'raw':
@@ -23,7 +31,7 @@ class Privatize:
         elif self.method == 'ohd':
             data = OneHotDegree(max_degree=data.num_features - 1)(data)
         elif self.method in self.private_methods:
-            data.x = supported_mechanisms[self.method](**self.kwargs)(data.x_raw)
+            data.x = supported_mechanisms[self.method](eps=self.epsilon, **self.kwargs)(data.x_raw)
 
         return data
 
