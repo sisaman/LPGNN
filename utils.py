@@ -1,7 +1,10 @@
 import os
+import time
 from argparse import ArgumentParser
 
 import inspect
+
+import functools
 import torch
 import numpy as np
 import pandas as pd
@@ -36,6 +39,17 @@ def seed_everything(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+
+
+def measure_runtime(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        out = func(*args, **kwargs)
+        end = time.time()
+        print('\nTotal time spent:', end - start, 'seconds.\n\n')
+        return out
+    return wrapper
 
 
 def add_parameters_as_argument(function, parser: ArgumentParser):

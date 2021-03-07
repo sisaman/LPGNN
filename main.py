@@ -3,7 +3,6 @@ import sys
 import time
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-import torch
 import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
@@ -11,9 +10,10 @@ from datasets import load_dataset
 from models import NodeClassifier
 from trainer import Trainer
 from transforms import Privatize
-from utils import colored_text, print_args, seed_everything, TensorBoardLogger, add_parameters_as_argument
+from utils import colored_text, print_args, seed_everything, TensorBoardLogger, add_parameters_as_argument, measure_runtime
 
 
+@measure_runtime
 def run(args):
 
     dataset = load_dataset(**vars(args)).to(args.device)
@@ -76,18 +76,19 @@ def main():
 
     # experiment args
     group_expr = init_parser.add_argument_group('experiment arguments')
+    group_expr.add_argument('-s', '--seed', type=int, default=None, help='initial random seed')
     group_expr.add_argument('-r', '--repeats', type=int, default=1, help="number of times the experiment is repeated")
     group_expr.add_argument('-o', '--output-dir', type=str, default='./output', help="directory to store the results")
     group_expr.add_argument('--log', action='store_true', help='enable logging')
 
     parser = ArgumentParser(parents=[init_parser], formatter_class=ArgumentDefaultsHelpFormatter)
     args = parser.parse_args()
-
     print_args(args)
-    start = time.time()
+
+    if args.seed:
+        seed_everything(args.seed)
+
     run(args)
-    end = time.time()
-    print('\nTotal time spent:', end - start, 'seconds.\n\n')
 
 
 if __name__ == '__main__':
