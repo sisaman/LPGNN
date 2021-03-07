@@ -4,7 +4,6 @@ import torch
 import torch.nn.functional as F
 from torch_geometric.utils import accuracy
 from torch.nn import Linear, Dropout
-from torch.optim import Adam
 from torch_geometric.nn import MessagePassing, BatchNorm
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
 from torch_sparse import matmul
@@ -70,26 +69,20 @@ class GNN(torch.nn.Module):
 
 
 class NodeClassifier(torch.nn.Module):
-    @staticmethod
-    def add_module_specific_args(parent_parser):
-        parser = ArgumentParser(parents=[parent_parser], add_help=False)
-        parser.add_argument('--hidden-dim', type=int, default=16)
-        parser.add_argument('--dropout', '--dp', type=float, default=0)
-        parser.add_argument('--learning-rate', '--lr', type=float, default=0.01)
-        parser.add_argument('--weight-decay', '--wd', type=float, default=0)
-        parser.add_argument('-k', '--step', type=int, default=1)
-        parser.add_argument('-a', '--aggregator', type=str, default='gcn')
-        parser.add_argument('--no-loops', action='store_false', default=True, dest='self_loops')
-        return parser
-
-    def __init__(self, input_dim, num_classes, hidden_dim=16,
-                 dropout=0.5, learning_rate=0.001, weight_decay=0,
-                 step=1, aggregator='gcn', self_loops=True, **kwargs):
+    def __init__(self,
+                 input_dim,
+                 num_classes,
+                 hidden_dim: dict(help='dimension of the hidden layers') = 16,
+                 dropout:    dict(help='dropout rate (between zero and one)') = 0.0,
+                 step:       dict(help='KProp step parameter', option=('-k', '--step')) = 1,
+                 aggregator: dict(help='GNN aggregator function', choices=['gcn', 'mean'],
+                                  option=('-a', '--aggregator')) = 'gcn',
+                 self_loops: dict(help='remove self-loops from the graph', option='--no-self-loops',
+                                  action='store_false', dest='self_loops') = True,
+                 **kwargs):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.dropout = dropout
-        self.learning_rate = learning_rate
-        self.weight_decay = weight_decay
         self.steps = step
         self.aggregator = aggregator
         self.self_loops = self_loops
@@ -126,6 +119,3 @@ class NodeClassifier(torch.nn.Module):
         pred = out.argmax(dim=1)
         acc = accuracy(pred=pred[data.test_mask], target=data.y[data.test_mask]) * 100
         return {'test_acc': acc}
-
-    def configure_optimizers(self):
-        return Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
