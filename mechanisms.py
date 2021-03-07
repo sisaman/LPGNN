@@ -198,31 +198,6 @@ class MultiDimPiecewise(Piecewise):
         return z
 
 
-class SampledGaussian(AnalyticGaussian):
-    def __init__(self, m=1, **kwargs):
-        super(SampledGaussian, self).__init__(**kwargs)
-        self.m = m
-        self.eps /= m
-
-    def fit(self, x):
-        super().fit(x)
-        len_interval = self.beta - self.alpha
-        if torch.is_tensor(len_interval) and len(len_interval) > 1:
-            self.sensitivity = max(len_interval)
-        else:
-            self.sensitivity = len_interval
-        self.sigma = self.calibrate_gaussian_mechanism()
-
-    def transform(self, x):
-        n, d = x.size()
-        sample = torch.rand_like(x).topk(self.m, dim=1).indices
-        mask = torch.zeros_like(x, dtype=torch.bool)
-        mask.scatter_(1, sample, True)
-        y = super().transform(x)
-        z = mask * y * d / self.m
-        return z
-
-
 supported_mechanisms = {
     'cgm': Gaussian,
     'agm': AnalyticGaussian,
@@ -230,5 +205,4 @@ supported_mechanisms = {
     'obm': OneBit,
     'lpm': Laplace,
     'pwm': MultiDimPiecewise,
-    'sgm': SampledGaussian
 }
