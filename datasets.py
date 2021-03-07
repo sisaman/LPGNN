@@ -91,7 +91,7 @@ def load_dataset(
         dataset_name:   dict(help='name of the dataset', option=('-d', '--dataset'), dest='dataset_name',
                              choices=supported_datasets) = 'cora',
         data_dir:       dict(help='directory to store the dataset') = './datasets',
-        data_range:     dict(help='min and max feature value', nargs=2, type=int) = (0, 1),
+        data_range:     dict(help='min and max feature value', nargs=2, type=float) = (0, 1),
         train_ratio:    dict(help='Fraction of nodes used for training') = .50,
         val_ratio:      dict(help='Fraction of nodes used for validation') = .25,
         test_ratio:     dict(help='Fraction of nodes used for test') = .25,
