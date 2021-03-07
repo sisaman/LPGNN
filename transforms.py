@@ -1,11 +1,11 @@
 import torch
 import torch.nn.functional as F
-from privacy import _available_mechanisms
+from mechanisms import supported_mechanisms
 
 
-class FeatureTransform:
+class Privatize:
     non_private_methods = ['raw', 'rnd', 'ohd']
-    private_methods = list(_available_mechanisms.keys())
+    private_methods = list(supported_mechanisms.keys())
 
     def __init__(self, method, **kwargs):
         self.method = method
@@ -23,7 +23,7 @@ class FeatureTransform:
         elif self.method == 'ohd':
             data = OneHotDegree(max_degree=data.num_features - 1)(data)
         elif self.method in self.private_methods:
-            data.x = _available_mechanisms[self.method](**self.kwargs)(data.x_raw)
+            data.x = supported_mechanisms[self.method](**self.kwargs)(data.x_raw)
 
         return data
 
@@ -41,7 +41,7 @@ class FeatureTransform:
         return data
 
     @classmethod
-    def available_methods(cls):
+    def supported_methods(cls):
         return cls.non_private_methods + cls.private_methods
 
 
@@ -57,7 +57,9 @@ class OneHotDegree:
 
 
 class NodeSplit:
-    def __init__(self, val_ratio=.25, test_ratio=.25, random_state=None):
+    def __init__(self, train_ratio=None, val_ratio=.25, test_ratio=.25, random_state=None):
+        self.train_ratio = 1 - (val_ratio + test_ratio) if train_ratio is None else train_ratio
+        assert self.train_ratio > 0
         self.val_ratio = val_ratio
         self.test_ratio = test_ratio
         self.rng = None
@@ -72,13 +74,14 @@ class NodeSplit:
             nodes_with_class = data.y != -1
             num_nodes_with_class = nodes_with_class.sum().item()
 
+        n_train = int(self.train_ratio * num_nodes_with_class)
         n_val = int(self.val_ratio * num_nodes_with_class)
         n_test = int(self.test_ratio * num_nodes_with_class)
         perm = torch.randperm(num_nodes_with_class, generator=self.rng)
 
-        val_nodes = perm[:n_val]
-        test_nodes = perm[n_val:n_val + n_test]
-        train_nodes = perm[n_val + n_test:]
+        train_nodes = perm[:n_train]
+        val_nodes = perm[n_train: n_train + n_val]
+        test_nodes = perm[n_train + n_val: n_train + n_val + n_test]
 
         temp_val_mask = torch.zeros(num_nodes_with_class, dtype=torch.bool)
         temp_val_mask[val_nodes] = True
@@ -114,26 +117,4 @@ class Normalize:
         delta = beta - alpha
         data.x = (data.x - alpha) * (self.max - self.min) / delta + self.min
         data.x = data.x[:, torch.nonzero(delta, as_tuple=False).squeeze()]  # remove features with delta = 0
-        return data
-
-
-class LabelRate:
-    def __init__(self, rate):
-        self.rate = rate
-
-    def __call__(self, data):
-        if self.rate < 1:
-            if not hasattr(data, 'train_mask_full'):
-                data.train_mask_full = data.train_mask
-
-            train_idx = data.train_mask_full.nonzero(as_tuple=False).squeeze()
-            num_train_nodes = train_idx.size(0)
-            train_idx_shuffled = train_idx[torch.randperm(num_train_nodes)]
-            train_idx_selected = train_idx_shuffled[:int(self.rate * num_train_nodes)]
-            train_mask = torch.zeros_like(data.train_mask_full).scatter(0, train_idx_selected, True)
-            data.train_mask = train_mask
-        else:
-            if hasattr(data, 'train_mask_full'):
-                data.train_mask = data.train_mask_full
-                del data.train_mask_full
         return data

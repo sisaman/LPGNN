@@ -77,19 +77,20 @@ class KarateClub(InMemoryDataset):
         return f'KarateClub-{self.name}()'
 
 
-_available_datasets = {
-    'cora': partial(Planetoid, name='cora', pre_transform=NodeSplit()),
-    'citeseer': partial(Planetoid, name='citeseer', pre_transform=NodeSplit()),
-    'pubmed': partial(Planetoid, name='pubmed', pre_transform=NodeSplit()),
-    'facebook': partial(KarateClub, name='facebook', pre_transform=NodeSplit()),
-    'github': partial(KarateClub, name='github', pre_transform=NodeSplit()),
-    'lastfm': partial(KarateClub, name='lastfm', pre_transform=NodeSplit()),
+supported_datasets = {
+    'cora': partial(Planetoid, name='cora'),
+    'citeseer': partial(Planetoid, name='citeseer'),
+    'pubmed': partial(Planetoid, name='pubmed'),
+    'facebook': partial(KarateClub, name='facebook'),
+    'github': partial(KarateClub, name='github'),
+    'lastfm': partial(KarateClub, name='lastfm'),
 }
 
 
-def load_dataset(name, root='datasets', feature_range=None, sparse=False):
-    dataset = _available_datasets[name](root=os.path.join(root, name))
-    data = dataset[0]
+def load_dataset(name, root='datasets', feature_range=None, sparse=False,
+                 train_ratio=.50, val_ratio=.25, test_ratio=.25):
+    dataset = supported_datasets[name](root=os.path.join(root, name))
+    data = NodeSplit(train_ratio, val_ratio, test_ratio)(dataset[0])
 
     if feature_range is not None:
         low, high = feature_range
@@ -101,7 +102,3 @@ def load_dataset(name, root='datasets', feature_range=None, sparse=False):
     data.name = name
     data.num_classes = dataset.num_classes
     return data
-
-
-def available_datasets():
-    return list(_available_datasets.keys())
