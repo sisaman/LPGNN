@@ -63,8 +63,14 @@ def add_parameters_as_argument(function, parser: ArgumentParser):
         if param_obj.annotation is not inspect.Parameter.empty:
             arg_info = param_obj.annotation
             arg_info['default'] = param_obj.default
+
             if 'action' not in arg_info:
                 arg_info['type'] = arg_info.get('type', type(param_obj.default))
+
+            if 'choices' in arg_info:
+                arg_info['help'] = arg_info.get('help', '') + f" (choices: { ', '.join(arg_info['choices']) })"
+                arg_info['metavar'] = param_name.upper()
+
             option = arg_info.pop('option', [f'--{param_name.replace("_", "-")}'])
             option = [option] if isinstance(option, str) else option
             parser.add_argument(*option, **arg_info)

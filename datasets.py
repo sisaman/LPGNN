@@ -88,9 +88,8 @@ supported_datasets = {
 
 
 def load_dataset(
-        dataset_name:   dict(help=f'name of the dataset (one of {", ".join(supported_datasets)})',
-                             option=('-d', '--dataset'), dest='dataset_name',
-                             choices=supported_datasets, metavar='DATASET') = 'cora',
+        dataset_name:   dict(help='name of the dataset', option=('-d', '--dataset'), dest='dataset_name',
+                             choices=supported_datasets) = 'cora',
         data_dir:       dict(help='directory to store the dataset') = './datasets',
         data_range:     dict(help='min and max feature value', nargs=2, type=int) = (0, 1),
         train_ratio:    dict(help='Fraction of nodes used for training') = .50,
