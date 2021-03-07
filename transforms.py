@@ -4,7 +4,7 @@ from mechanisms import supported_mechanisms
 
 
 class Privatize:
-    non_private_methods = ['raw', 'rnd', 'ohd']
+    non_private_methods = ['raw', 'rnd', 'ohd', 'one']
     private_methods = list(supported_mechanisms.keys())
 
     def __init__(self,
@@ -31,6 +31,8 @@ class Privatize:
             data.x = torch.rand_like(data.x_raw)
         elif self.method == 'ohd':
             data = OneHotDegree(max_degree=data.num_features - 1)(data)
+        elif self.method == 'one':
+            data.x = torch.ones_like(data.x)
         elif self.method in self.private_methods:
             if self.input_range is None:
                 self.input_range = data.x_raw.min().item(), data.x_raw.max().item()
