@@ -39,7 +39,7 @@ class ErrorEstimation:
         return errors
 
     def run(self, data):
-        privatize = Privatize(method=self.method, eps=self.eps)
+        privatize = Privatize(method=self.method, epsilon=self.eps)
         data = privatize(data)
         errors = self.calculate_error(data, norm=1)
         return errors.mean().item(), errors.std().item()
@@ -90,8 +90,8 @@ def main():
 
     # parse arguments
     parser = ArgumentParser()
-    parser.add_argument('-d', '--datasets', nargs='+', choices=supported_datasets, default=supported_datasets)
-    parser.add_argument('-m', '--methods', nargs='+', choices=supported_mechanisms, default=supported_mechanisms)
+    parser.add_argument('-d', '--datasets', nargs='+', choices=supported_datasets, default=list(supported_datasets))
+    parser.add_argument('-m', '--methods', nargs='+', choices=supported_mechanisms, default=list(supported_mechanisms))
     parser.add_argument('-e', '--epsilons', nargs='+', type=float, dest='epsilons', required=True)
     parser.add_argument('-a', '--aggs', nargs='*', type=str, default=['gcn'])
     parser.add_argument('-r', '--repeats', type=int, default=1)
