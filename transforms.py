@@ -12,10 +12,11 @@ class Privatize:
                               option=('-m', '--method')) = 'raw',
                  epsilon: dict(help='privacy budget epsilon (ignored for non-DP methods)', type=float,
                                option=('-e', '--epsilon')) = None,
-                 **kwargs):
+                 input_range = None
+                 ):
         self.method = method
         self.epsilon = epsilon
-        self.kwargs = kwargs
+        self.input_range = input_range
 
         assert method in self.non_private_methods or (epsilon is not None and epsilon > 0)
 
@@ -31,7 +32,9 @@ class Privatize:
         elif self.method == 'ohd':
             data = OneHotDegree(max_degree=data.num_features - 1)(data)
         elif self.method in self.private_methods:
-            data.x = supported_mechanisms[self.method](eps=self.epsilon, **self.kwargs)(data.x_raw)
+            if self.input_range is None:
+                self.input_range = data.x_raw.min().item(), data.x_raw.max().item()
+            data.x = supported_mechanisms[self.method](eps=self.epsilon, input_range=self.input_range)(data.x_raw)
 
         return data
 
