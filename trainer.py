@@ -74,7 +74,8 @@ class Trainer:
         except KeyboardInterrupt:
             pass
 
-        self.logger.log({'train_epochs': epoch})
+        if self.logger:
+            self.logger.log({'train_epochs': epoch})
         return self.model
 
     def _train(self, data, optimizer):
