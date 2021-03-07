@@ -1,5 +1,3 @@
-from argparse import ArgumentParser
-
 import torch
 import torch.nn.functional as F
 from torch_geometric.utils import accuracy
@@ -48,26 +46,6 @@ class KProp(MessagePassing):
         return matmul(adj_t, x, reduce=self.aggr)
 
 
-class GNN(torch.nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, dropout, step, aggregator, self_loops):
-        super().__init__()
-        self.conv1 = KProp(input_dim, hidden_dim, step=step, aggregator=aggregator,
-                           add_self_loops=self_loops, cached=True)
-        self.conv2 = KProp(hidden_dim, output_dim, step=1, aggregator=aggregator,
-                           add_self_loops=True, cached=False)
-        self.bn = BatchNorm(hidden_dim)
-        self.dropout = Dropout(p=dropout)
-
-    def forward(self, x, adj_t):
-        x = self.conv1(x, adj_t)
-        x = self.bn(x)
-        x = torch.selu(x)
-        x = self.dropout(x)
-        x = self.conv2(x, adj_t)
-        x = F.log_softmax(x, dim=1)
-        return x
-
-
 class NodeClassifier(torch.nn.Module):
     def __init__(self,
                  input_dim,
@@ -77,28 +55,29 @@ class NodeClassifier(torch.nn.Module):
                  step:       dict(help='KProp step parameter', option=('-k', '--step')) = 1,
                  aggregator: dict(help='GNN aggregator function', choices=['gcn', 'mean'],
                                   option=('-a', '--aggregator')) = 'gcn',
+                 batch_norm: dict(help='use batch-normalization', action='store_true') = False,
                  self_loops: dict(help='remove self-loops from the graph', option='--no-self-loops',
                                   action='store_false', dest='self_loops') = True,
                  **kwargs):
         super().__init__()
-        self.hidden_dim = hidden_dim
-        self.dropout = dropout
-        self.steps = step
-        self.aggregator = aggregator
-        self.self_loops = self_loops
 
-        self.gcn = GNN(
-            input_dim=input_dim,
-            hidden_dim=self.hidden_dim,
-            output_dim=num_classes,
-            dropout=self.dropout,
-            step=self.steps,
-            aggregator=self.aggregator,
-            self_loops=self.self_loops
-        )
+        self.conv1 = KProp(input_dim, hidden_dim, step=step, aggregator=aggregator,
+                           add_self_loops=self_loops, cached=True)
+        self.conv2 = KProp(hidden_dim, num_classes, step=1, aggregator=aggregator,
+                           add_self_loops=True, cached=False)
+        self.bn = BatchNorm(hidden_dim) if batch_norm else None
+        self.dropout = Dropout(p=dropout)
 
     def forward(self, data):
-        return self.gcn(data.x, data.adj_t)
+        x, adj_t = data.x, data.adj_t
+        x = self.conv1(x, adj_t)
+        if self.bn:
+            x = self.bn(x)
+        x = torch.selu(x)
+        x = self.dropout(x)
+        x = self.conv2(x, adj_t)
+        x = F.log_softmax(x, dim=1)
+        return x
 
     def training_step(self, data):
         out = self(data)
