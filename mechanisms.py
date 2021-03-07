@@ -4,21 +4,14 @@ from scipy.special import erf
 
 
 class Mechanism:
-    def __init__(self, eps, input_range=(None, None), **kwargs):
+    def __init__(self, eps, input_range, **kwargs):
         self.eps = eps
         self.alpha, self.beta = input_range
-
-    def fit(self, x):
-        # set alpha and beta
-        if self.alpha is None:
-            self.alpha = x.min(dim=0)[0]
-            self.beta = x.max(dim=0)[0]
 
     def transform(self, x):
         raise NotImplementedError
 
     def __call__(self, x):
-        self.fit(x)
         return self.transform(x)
 
 
@@ -31,14 +24,13 @@ class Laplace(Mechanism):
 
 
 class Gaussian(Mechanism):
-    def __init__(self, *args, delta=0.0001, **kwargs):
+    def __init__(self, *args, delta=1e-7, **kwargs):
         super().__init__(*args, **kwargs)
         self.delta = delta
         self.sigma = None
         self.sensitivity = None
 
-    def fit(self, x):
-        super().fit(x)
+    def transform(self, x):
         len_interval = self.beta - self.alpha
         if torch.is_tensor(len_interval) and len(len_interval) > 1:
             self.sensitivity = torch.norm(len_interval, p=2)
@@ -47,8 +39,6 @@ class Gaussian(Mechanism):
             self.sensitivity = len_interval * math.sqrt(d)
 
         self.sigma = self.calibrate_gaussian_mechanism()
-
-    def transform(self, x):
         return torch.normal(mean=x, std=self.sigma)
 
     def calibrate_gaussian_mechanism(self):
@@ -199,10 +189,9 @@ class MultiDimPiecewise(Piecewise):
 
 
 supported_mechanisms = {
-    'cgm': Gaussian,
     'agm': AnalyticGaussian,
     'mbm': MultiBit,
-    'obm': OneBit,
+    '1bm': OneBit,
     'lpm': Laplace,
     'pwm': MultiDimPiecewise,
 }
