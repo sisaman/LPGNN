@@ -1,10 +1,11 @@
+import math
 import torch
 import torch.nn.functional as F
 from mechanisms import supported_mechanisms
 
 
 class Privatize:
-    non_private_methods = ['raw', 'rnd', 'ohd', 'one']
+    non_private_methods = ['raw', 'rnd', 'ohd', 'one', 'crnd']
     private_methods = list(supported_mechanisms.keys())
 
     def __init__(self,
@@ -29,6 +30,14 @@ class Privatize:
 
         if self.method == 'rnd':
             data.x = torch.rand_like(data.x_raw)
+        elif self.method == 'crnd':
+            n = data.x_raw.size(0)
+            d = data.x_raw.size(1)
+            m = int(max(1, min(d, math.floor(self.epsilon / 2.18))))
+            x = torch.rand(n, m, device=data.x_raw.device)
+            s = torch.rand_like(data.x_raw).topk(m, dim=1).indices
+            data.x = torch.zeros_like(data.x_raw).scatter(1, s, x)
+
         elif self.method == 'ohd':
             data = OneHotDegree(max_degree=data.num_features - 1)(data)
         elif self.method == 'one':
