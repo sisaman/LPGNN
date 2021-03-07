@@ -1,16 +1,16 @@
 import os
+import datetime
 from argparse import ArgumentParser
 from itertools import product
 
 import pandas as pd
 import torch
-from tqdm.auto import tqdm
 
 from datasets import supported_datasets, load_dataset
 from models import KProp
 from mechanisms import supported_mechanisms
 from transforms import Privatize
-from utils import colored_text, print_args, seed_everything
+from utils import colored_text, print_args, seed_everything, measure_runtime
 
 
 class GConv(KProp):
@@ -38,64 +38,43 @@ class ErrorEstimation:
         errors = torch.norm(diff, p=norm, dim=1) / data_priv.num_features
         return errors
 
-    def run(self, data):
+    def estimate(self, data):
         privatize = Privatize(method=self.method, epsilon=self.eps)
         data = privatize(data)
         errors = self.calculate_error(data, norm=1)
-        return errors.mean().item(), errors.std().item()
+        return {'error_mean': errors.mean().item(), 'error_std': errors.std().item()}
 
 
-def error_estimation(dataset, method, eps, aggr, repeats, output_dir, device):
-    experiment_dir = os.path.join(
-        f'task:error',
-        f'dataset:{dataset.name}',
-        f'method:{method}',
-        f'eps:{eps}',
-        f'agg:{aggr}',
-    )
-
+@measure_runtime
+@torch.no_grad()
+def run(args):
     results = []
-    progbar = tqdm(range(repeats), desc=colored_text(experiment_dir.replace('/', ', '), color='green'))
-    for _ in progbar:
-        task = ErrorEstimation(method=method, eps=eps, aggr=aggr, device=device)
-        result = task.run(dataset)
-        results.append(result)
+    for dataset_name in args.datasets:
+        dataset = load_dataset(dataset_name=dataset_name, data_range=(0, 1), sparse=True).to(args.device)
+        configs = product(args.methods, args.aggs, args.epsilons)
+        for method, agg, eps in configs:
+            experiment_name = ', '.join([f'dataset:{dataset.name}', f'method:{method}', f'eps:{eps}', f'agg:{agg}'])
+            print(experiment_name)
+            task = ErrorEstimation(method=method, eps=eps, aggr=agg, device=args.device)
+            result = task.estimate(dataset)
+            result.update(dataset_name=dataset.name, method=method, aggregator=agg, epsilon=eps)
+            results.append(result)
 
     # save results
-    save_dir = os.path.join(output_dir, experiment_dir)
-    os.makedirs(save_dir, exist_ok=True)
-    df_results = pd.DataFrame(results, columns=['error', 'std']).rename_axis('version').reset_index()
-    df_results.to_csv(os.path.join(save_dir, 'metrics.csv'), index=False)
-
-
-@torch.no_grad()
-def batch_error_estimation(args):
-    for dataset_name in args.datasets:
-        dataset = load_dataset(name=dataset_name, feature_range=(0, 1), sparse=True).to(args.device)
-        configs = product(args.methods, args.epsilons, args.aggs)
-        for method, eps, agg in configs:
-            error_estimation(
-                dataset=dataset,
-                method=method,
-                eps=eps,
-                aggr=agg,
-                repeats=args.repeats,
-                output_dir=args.output_dir,
-                device=args.device,
-            )
+    os.makedirs(args.output_dir, exist_ok=True)
+    df_results = pd.DataFrame(results)
+    df_results.to_csv(os.path.join(args.output_dir, f'{str(datetime.datetime.now())}.csv'), index=False)
 
 
 def main():
-    seed_everything(12345)
-
     # parse arguments
     parser = ArgumentParser()
     parser.add_argument('-d', '--datasets', nargs='+', choices=supported_datasets, default=list(supported_datasets))
     parser.add_argument('-m', '--methods', nargs='+', choices=supported_mechanisms, default=list(supported_mechanisms))
     parser.add_argument('-e', '--epsilons', nargs='+', type=float, dest='epsilons', required=True)
     parser.add_argument('-a', '--aggs', nargs='*', type=str, default=['gcn'])
-    parser.add_argument('-r', '--repeats', type=int, default=1)
-    parser.add_argument('-o', '--output-dir', type=str, default='./output')
+    parser.add_argument('-s', '--seed', type=int, default=None)
+    parser.add_argument('-o', '--output-dir', type=str, default='./output/error')
     parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'])
     args = parser.parse_args()
 
@@ -107,8 +86,11 @@ def main():
         print(colored_text('CUDA is not available, falling back to CPU', color='red'))
         args.device = 'cpu'
 
+    if args.seed:
+        seed_everything(args.seed)
+
     print_args(args)
-    batch_error_estimation(args)
+    run(args)
 
 
 if __name__ == '__main__':
