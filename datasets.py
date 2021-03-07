@@ -87,18 +87,25 @@ supported_datasets = {
 }
 
 
-def load_dataset(name, root='datasets', feature_range=None, sparse=False,
-                 train_ratio=.50, val_ratio=.25, test_ratio=.25):
-    dataset = supported_datasets[name](root=os.path.join(root, name))
+def load_dataset(
+        dataset_name:   dict(help=f'name of the dataset (one of {", ".join(supported_datasets)})',
+                             option=('-d', '--dataset'), dest='dataset_name',
+                             choices=supported_datasets, metavar='DATASET') = 'cora',
+        data_dir:       dict(help='directory to store the dataset') = './datasets',
+        data_range:     dict(help='min and max feature value', nargs=2, type=int) = (0, 1),
+        train_ratio:    dict(help='Fraction of nodes used for training') = .50,
+        val_ratio:      dict(help='Fraction of nodes used for validation') = .25,
+        test_ratio:     dict(help='Fraction of nodes used for test') = .25,
+        **kwargs
+):
+    dataset = supported_datasets[dataset_name](root=os.path.join(data_dir, dataset_name))
     data = NodeSplit(train_ratio, val_ratio, test_ratio)(dataset[0])
+    data = ToSparseTensor()(data)
 
-    if feature_range is not None:
-        low, high = feature_range
+    if data_range is not None:
+        low, high = data_range
         data = Normalize(low, high)(data)
 
-    if sparse:
-        data = ToSparseTensor()(data)
-
-    data.name = name
+    data.name = dataset_name
     data.num_classes = dataset.num_classes
     return data
