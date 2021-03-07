@@ -4,9 +4,9 @@ from scipy.special import erf
 
 
 class Mechanism:
-    def __init__(self, eps, interval=(None, None), **kwargs):
+    def __init__(self, eps, input_range=(None, None), **kwargs):
         self.eps = eps
-        self.alpha, self.beta = interval
+        self.alpha, self.beta = input_range
 
     def fit(self, x):
         # set alpha and beta
