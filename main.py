@@ -1,11 +1,13 @@
 import os
 import sys
+import traceback
+import uuid
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 import numpy as np
 import pandas as pd
-import traceback
 from tqdm.auto import tqdm
+
 from datasets import load_dataset
 from models import NodeClassifier
 from trainer import Trainer
@@ -15,20 +17,19 @@ from utils import colored_text, print_args, seed_everything, WandbLogger, add_pa
 
 @measure_runtime
 def run(args):
+    dataset = load_dataset(**vars(args))
 
-    dataset = load_dataset(**vars(args)).to(args.device)
-
-    experiment_dir = os.path.join(
-        f'task:train', f'dataset:{args.dataset_name}', f'labelrate:{args.train_ratio}', f'method:{args.method}',
-        f'eps:{args.epsilon}', f'step:{args.step}', f'agg:{args.aggregator}', f'selfloops:{args.self_loops}'
-    )
+    experiment_name = ', '.join([
+        args.dataset_name, args.method, f'label:{args.train_ratio}',
+        f'e:{args.epsilon}', f'k:{args.step}', f'agg:{args.aggregator}', f'loop:{args.self_loops}'
+    ])
 
     results = []
-    run_desc = colored_text(experiment_dir.replace('/', ', '), color='green')
+    run_desc = colored_text(experiment_name.replace('/', ', '), color='green')
     progbar = tqdm(range(args.repeats), desc=run_desc, file=sys.stdout)
     for run_id in progbar:
         args.version = run_id
-        logger = WandbLogger(enabled=args.log, project='LPGNN', name=experiment_dir, config=args)
+        logger = WandbLogger(project='LPGNN', name=experiment_name, config=args, enabled=args.log)
 
         try:
             # define model
@@ -38,12 +39,15 @@ def run(args):
                 **vars(args)
             )
 
-            # apply transforms
+            # perturb features
             dataset = Privatize(method=args.method, epsilon=args.epsilon, input_range=args.data_range)(dataset)
 
+            # train the model
             trainer = Trainer(**vars(args), logger=logger)
             trainer.fit(model, dataset)
             result = trainer.test(dataset)
+
+            # process results
             results.append(result['test_acc'])
             progbar.set_postfix({'last_test_acc': results[-1], 'avg_test_acc': np.mean(results)})
 
@@ -55,10 +59,11 @@ def run(args):
             logger.finish()
 
     # save results
-    save_dir = os.path.join(args.output_dir, experiment_dir)
-    os.makedirs(save_dir, exist_ok=True)
+    os.makedirs(args.output_dir, exist_ok=True)
     df_results = pd.DataFrame(results, columns=['test_acc']).rename_axis('version').reset_index()
-    df_results.to_csv(os.path.join(save_dir, 'metrics.csv'), index=False)
+    for arg_name, arg_val in vars(args).items():
+        df_results[arg_name] = [arg_val] * len(results)
+    df_results.to_csv(os.path.join(args.output_dir, f'{uuid.uuid1()}.csv'), index=False)
 
 
 def main():
@@ -90,6 +95,7 @@ def main():
     parser = ArgumentParser(parents=[init_parser], formatter_class=ArgumentDefaultsHelpFormatter)
     args = parser.parse_args()
     print_args(args)
+    args.cmd = ' '.join(sys.argv)  # store calling command
 
     if args.seed:
         seed_everything(args.seed)
