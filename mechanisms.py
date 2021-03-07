@@ -39,7 +39,9 @@ class Gaussian(Mechanism):
             self.sensitivity = len_interval * math.sqrt(d)
 
         self.sigma = self.calibrate_gaussian_mechanism()
-        return torch.normal(mean=x, std=self.sigma)
+        out = torch.normal(mean=x, std=self.sigma)
+        return out
+        # return torch.clip(out, min=self.alpha, max=self.beta)
 
     def calibrate_gaussian_mechanism(self):
         return self.sensitivity * math.sqrt(2 * math.log(1.25 / self.delta)) / self.eps
