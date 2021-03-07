@@ -20,7 +20,9 @@ class Laplace(Mechanism):
         d = x.size(1)
         sensitivity = (self.beta - self.alpha) * d
         scale = torch.ones_like(x) * (sensitivity / self.eps)
-        return torch.distributions.Laplace(x, scale).sample()
+        out = torch.distributions.Laplace(x, scale).sample()
+        # out = torch.clip(out, min=self.alpha, max=self.beta)
+        return out
 
 
 class Gaussian(Mechanism):
@@ -40,8 +42,8 @@ class Gaussian(Mechanism):
 
         self.sigma = self.calibrate_gaussian_mechanism()
         out = torch.normal(mean=x, std=self.sigma)
+        # out = torch.clip(out, min=self.alpha, max=self.beta)
         return out
-        # return torch.clip(out, min=self.alpha, max=self.beta)
 
     def calibrate_gaussian_mechanism(self):
         return self.sensitivity * math.sqrt(2 * math.log(1.25 / self.delta)) / self.eps
