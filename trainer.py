@@ -99,4 +99,8 @@ class Trainer:
 
         self.model.eval()
         metrics = self.model.test_step(data)
+
+        if self.logger:
+            self.logger.log(metrics)
+
         return metrics

@@ -10,28 +10,33 @@ import numpy as np
 import pandas as pd
 import random
 from tabulate import tabulate
-from torch.utils.tensorboard import SummaryWriter
+try:
+    import wandb
+except ImportError:
+    wandb = None
 
 
-class TensorBoardLogger:
-    def __init__(self, save_dir, **kwargs):
-        os.makedirs(save_dir, exist_ok=True)
-        num_files = len(os.listdir(save_dir))
-        self.save_dir = os.path.join(save_dir, str(num_files))
-        self.writer = SummaryWriter(log_dir=self.save_dir, **kwargs)
+class WandbLogger:
+    def __init__(self, project=None, name=None, config=None, save_code=True,
+                 reinit=True, enabled=True, **kwargs):
+        self.enabled = enabled
+        if enabled:
+            if wandb is None:
+                raise ImportError('wandb is not installed yet, install it with `pip install wandb`.')
 
-    def log_metrics(self, metrics, step=None):
-        for k, v in metrics.items():
-            if isinstance(v, torch.Tensor):
-                v = v.item()
+            os.environ["WANDB_SILENT"] = "true"
 
-            if isinstance(v, dict):
-                self.writer.add_scalars(k, v, step)
-            else:
-                self.writer.add_scalar(k, v, step)
+            self.experiment = wandb.init(
+                project=project, name=name, config=config, save_code=save_code, reinit=reinit, **kwargs
+            )
 
-    def save(self):
-        self.writer.close()
+    def log(self, metrics, step=None):
+        if self.enabled:
+            self.experiment.log(metrics, step=step)
+
+    def finish(self):
+        if self.enabled:
+            self.experiment.finish()
 
 
 def seed_everything(seed):

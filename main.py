@@ -4,12 +4,13 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 import numpy as np
 import pandas as pd
+import traceback
 from tqdm.auto import tqdm
 from datasets import load_dataset
 from models import NodeClassifier
 from trainer import Trainer
 from transforms import Privatize
-from utils import colored_text, print_args, seed_everything, TensorBoardLogger, add_parameters_as_argument, measure_runtime
+from utils import colored_text, print_args, seed_everything, WandbLogger, add_parameters_as_argument, measure_runtime
 
 
 @measure_runtime
@@ -26,25 +27,32 @@ def run(args):
     run_desc = colored_text(experiment_dir.replace('/', ', '), color='green')
     progbar = tqdm(range(args.repeats), desc=run_desc, file=sys.stdout)
     for run_id in progbar:
-        # define model
-        model = NodeClassifier(
-            input_dim=dataset.num_features,
-            num_classes=dataset.num_classes,
-            **vars(args)
-        )
+        args.version = run_id
+        logger = WandbLogger(enabled=args.log, project='LPGNN', name=experiment_dir, config=args)
 
-        # apply transforms
-        dataset = Privatize(method=args.method, epsilon=args.epsilon, input_range=args.data_range)(dataset)
+        try:
+            # define model
+            model = NodeClassifier(
+                input_dim=dataset.num_features,
+                num_classes=dataset.num_classes,
+                **vars(args)
+            )
 
-        trainer = Trainer(
-            **vars(args),
-            logger=TensorBoardLogger(save_dir=os.path.join('logs', experiment_dir, str(run_id))) if args.log else None
-        )
+            # apply transforms
+            dataset = Privatize(method=args.method, epsilon=args.epsilon, input_range=args.data_range)(dataset)
 
-        trainer.fit(model, dataset)
-        result = trainer.test(dataset)
-        results.append(result['test_acc'])
-        progbar.set_postfix({'last_test_acc': results[-1], 'avg_test_acc': np.mean(results)})
+            trainer = Trainer(**vars(args), logger=logger)
+            trainer.fit(model, dataset)
+            result = trainer.test(dataset)
+            results.append(result['test_acc'])
+            progbar.set_postfix({'last_test_acc': results[-1], 'avg_test_acc': np.mean(results)})
+
+        except Exception as e:
+            error = ''.join(traceback.format_exception(Exception, e, e.__traceback__))
+            logger.log({'error': error})
+            raise e
+        finally:
+            logger.finish()
 
     # save results
     save_dir = os.path.join(args.output_dir, experiment_dir)
