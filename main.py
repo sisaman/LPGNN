@@ -1,25 +1,25 @@
 import os
 import sys
 import time
-from argparse import ArgumentParser
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 import torch
 import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
-from datasets import supported_datasets, load_dataset
+from datasets import load_dataset
 from models import NodeClassifier
+from trainer import Trainer
 from transforms import Privatize
-from utils import colored_text, print_args, seed_everything, TensorBoardLogger
+from utils import colored_text, print_args, seed_everything, TensorBoardLogger, add_parameters_as_argument
 
 
 def run(args):
 
-    dataset = load_dataset(name=args.dataset, feature_range=(0, 1),
-                           sparse=True, train_ratio=args.label_rate).to(args.device)
+    dataset = load_dataset(**vars(args)).to(args.device)
 
     experiment_dir = os.path.join(
-        f'task:train', f'dataset:{args.dataset}', f'labelrate:{args.label_rate}', f'method:{args.method}',
+        f'task:train', f'dataset:{args.dataset_name}', f'labelrate:{args.train_ratio}', f'method:{args.method}',
         f'eps:{args.epsilon}', f'step:{args.step}', f'agg:{args.aggregator}', f'selfloops:{args.self_loops}'
     )
 
@@ -35,17 +35,15 @@ def run(args):
         )
 
         # apply transforms
-        dataset = Privatize(method=args.method, eps=args.epsilon)(dataset)
+        dataset = Privatize(method=args.method, epsilon=args.epsilon, input_range=args.data_range)(dataset)
 
         trainer = Trainer(
-            max_epochs=args.max_epochs,
-            device=args.device,
-            checkpoint_dir=os.path.join('checkpoints', experiment_dir, str(run_id)),
+            **vars(args),
             logger=TensorBoardLogger(save_dir=os.path.join('logs', experiment_dir, str(run_id))) if args.log else None
         )
 
-        model = trainer.fit(model, dataset)
-        result = trainer.test(model, dataset)
+        trainer.fit(model, dataset)
+        result = trainer.test(dataset)
         results.append(result['test_acc'])
         progbar.set_postfix({'last_test_acc': results[-1], 'avg_test_acc': np.mean(results)})
 
@@ -58,25 +56,32 @@ def run(args):
 
 def main():
     seed_everything(12345)
-    parser = ArgumentParser()
-    parser.add_argument('-d', '--dataset', type=str, choices=supported_datasets, required=True)
-    parser.add_argument('-m', '--method', type=str, choices=Privatize.supported_methods(), required=True)
-    parser.add_argument('-e', '--epsilon', type=float, default=0.0)
-    parser.add_argument('-l', '--label-rate', type=float, default=0.5)
-    parser.add_argument('-r', '--repeats', type=int, default=1)
-    parser.add_argument('-o', '--output-dir', type=str, default='./output')
-    parser.add_argument('--max-epochs', type=int, default=500)
-    parser.add_argument('--log', action='store_true', default=False)
-    parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'])
-    parser = NodeClassifier.add_module_specific_args(parser)
+    init_parser = ArgumentParser(add_help=False, conflict_handler='resolve')
+
+    # dataset args
+    group_dataset = init_parser.add_argument_group('dataset arguments')
+    add_parameters_as_argument(load_dataset, group_dataset)
+
+    # perturbation arguments
+    group_perturb = init_parser.add_argument_group(f'perturbation arguments')
+    add_parameters_as_argument(Privatize.__init__, group_perturb)
+
+    # model args
+    group_model = init_parser.add_argument_group(f'model arguments')
+    add_parameters_as_argument(NodeClassifier.__init__, group_model)
+
+    # trainer arguments (depends on perturbation)
+    group_trainer = init_parser.add_argument_group(f'trainer arguments')
+    add_parameters_as_argument(Trainer.__init__, group_trainer)
+
+    # experiment args
+    group_expr = init_parser.add_argument_group('experiment arguments')
+    group_expr.add_argument('-r', '--repeats', type=int, default=1, help="number of times the experiment is repeated")
+    group_expr.add_argument('-o', '--output-dir', type=str, default='./output', help="directory to store the results")
+    group_expr.add_argument('--log', action='store_true', help='enable logging')
+
+    parser = ArgumentParser(parents=[init_parser], formatter_class=ArgumentDefaultsHelpFormatter)
     args = parser.parse_args()
-
-    if args.method in Privatize.private_methods and args.epsilon <= 0:
-        parser.error('LDP method requires eps > 0.')
-
-    if not torch.cuda.is_available():
-        print(colored_text('CUDA is not available, falling back to CPU', color='red'))
-        args.device = 'cpu'
 
     print_args(args)
     start = time.time()
