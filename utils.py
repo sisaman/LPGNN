@@ -1,4 +1,7 @@
 import os
+from argparse import ArgumentParser
+
+import inspect
 import torch
 import numpy as np
 import pandas as pd
@@ -33,6 +36,19 @@ def seed_everything(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+
+
+def add_parameters_as_argument(function, parser: ArgumentParser):
+    parameters = inspect.signature(function).parameters
+    for param_name, param_obj in parameters.items():
+        if param_obj.annotation is not inspect.Parameter.empty:
+            arg_info = param_obj.annotation
+            arg_info['default'] = param_obj.default
+            if 'action' not in arg_info:
+                arg_info['type'] = arg_info.get('type', type(param_obj.default))
+            option = arg_info.pop('option', [f'--{param_name.replace("_", "-")}'])
+            option = [option] if isinstance(option, str) else option
+            parser.add_argument(*option, **arg_info)
 
 
 def print_args(args):
