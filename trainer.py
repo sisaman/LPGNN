@@ -3,7 +3,7 @@ import sys
 import uuid
 
 import torch
-from torch.optim import SGD, Adam
+from torch.optim import Adam
 from tqdm.auto import tqdm
 
 from utils import colored_text
@@ -12,7 +12,6 @@ from utils import colored_text
 class Trainer:
     def __init__(
             self,
-            optimizer:      dict(help='optimization algorithm', choices=['sgd', 'adam']) = 'adam',
             learning_rate:  dict(help='learning rate') = 0.01,
             weight_decay:   dict(help='weight decay (L2 penalty)') = 0.0,
             max_epochs:     dict(help='maximum number of training epochs') = 1000,
@@ -22,7 +21,6 @@ class Trainer:
             logger = None,
             **kwargs
     ):
-        self.optimizer = optimizer
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.max_epochs = max_epochs
@@ -39,15 +37,14 @@ class Trainer:
             print(colored_text('CUDA is not available, falling back to CPU', color='red'))
             self.device = 'cpu'
 
-    def configure_optimizer(self, model):
-        Optim = {'sgd': SGD, 'adam': Adam}[self.optimizer]
-        optimizer = Optim(model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+    def configure_optimizer(self):
+        optimizer = Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
         return optimizer
 
     def fit(self, model, data):
         self.model = model.to(self.device)
         data = data.to(self.device)
-        optimizer = self.configure_optimizer(model)
+        optimizer = self.configure_optimizer()
 
         best_val_loss = float('inf')
         epoch_progbar = tqdm(range(1, self.max_epochs + 1), desc='Epoch: ', leave=False, position=1, file=sys.stdout)
