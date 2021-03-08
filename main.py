@@ -75,15 +75,15 @@ def main():
 
     # perturbation arguments
     group_perturb = init_parser.add_argument_group(f'perturbation arguments')
-    add_parameters_as_argument(Privatize.__init__, group_perturb)
+    add_parameters_as_argument(Privatize, group_perturb)
 
     # model args
     group_model = init_parser.add_argument_group(f'model arguments')
-    add_parameters_as_argument(NodeClassifier.__init__, group_model)
+    add_parameters_as_argument(NodeClassifier, group_model)
 
     # trainer arguments (depends on perturbation)
     group_trainer = init_parser.add_argument_group(f'trainer arguments')
-    add_parameters_as_argument(Trainer.__init__, group_trainer)
+    add_parameters_as_argument(Trainer, group_trainer)
 
     # experiment args
     group_expr = init_parser.add_argument_group('experiment arguments')

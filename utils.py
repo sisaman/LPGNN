@@ -7,9 +7,7 @@ import enum
 import functools
 import torch
 import numpy as np
-import pandas as pd
 import random
-from tabulate import tabulate
 try:
     import wandb
 except ImportError:
@@ -58,6 +56,8 @@ def measure_runtime(func):
 
 
 def add_parameters_as_argument(function, parser: ArgumentParser):
+    if inspect.isclass(function):
+        function = function.__init__
     parameters = inspect.signature(function).parameters
     for param_name, param_obj in parameters.items():
         if param_obj.annotation is not inspect.Parameter.empty:
