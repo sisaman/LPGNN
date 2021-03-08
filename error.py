@@ -50,7 +50,7 @@ class ErrorEstimation:
 def run(args):
     results = []
     for dataset_name in args.datasets:
-        dataset = load_dataset(dataset_name=dataset_name, data_range=(0, 1), sparse=True).to(args.device)
+        dataset = load_dataset(dataset_name=dataset_name, data_range=(0, 1)).to(args.device)
         configs = product(args.methods, args.aggs, args.epsilons)
         for method, agg, eps in configs:
             experiment_name = ', '.join([f'dataset:{dataset.name}', f'method:{method}', f'eps:{eps}', f'agg:{agg}'])
