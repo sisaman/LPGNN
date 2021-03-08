@@ -9,8 +9,8 @@ class Privatize:
     private_methods = list(supported_mechanisms.keys())
 
     def __init__(self,
-                 method: dict(help='feature perturbation method', choices=non_private_methods + private_methods,
-                              option=('-m', '--method')) = 'raw',
+                 method:    dict(help='feature perturbation method', choices=non_private_methods + private_methods,
+                                 option=('-m', '--method')) = 'raw',
                  epsilon: dict(help='privacy budget epsilon (ignored for non-DP methods)', type=float,
                                option=('-e', '--epsilon')) = None,
                  input_range = None
