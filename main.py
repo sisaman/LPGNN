@@ -18,7 +18,6 @@ from utils import colored_text, print_args, seed_everything, WandbLogger, \
 
 @measure_runtime
 def run(args):
-    dataset = from_args(load_dataset, args)
 
     experiment_name = ', '.join([
         args.dataset_name, args.method, f'label:{args.train_ratio}',
@@ -33,16 +32,17 @@ def run(args):
         logger = WandbLogger(project='LPGNN', name=experiment_name, config=args, enabled=args.log)
 
         try:
+            data = from_args(load_dataset, args)
             # define model
-            model = from_args(NodeClassifier, args, input_dim=dataset.num_features, num_classes=dataset.num_classes)
+            model = from_args(NodeClassifier, args, input_dim=data.num_features, num_classes=data.num_classes)
 
             # perturb features
-            dataset = Privatize(method=args.method, epsilon=args.epsilon, input_range=args.data_range)(dataset)
+            data = Privatize(method=args.method, epsilon=args.epsilon, input_range=args.data_range)(data)
 
             # train the model
             trainer = from_args(Trainer, args, logger=logger)
-            trainer.fit(model, dataset)
-            result = trainer.test(dataset)
+            trainer.fit(model, data)
+            result = trainer.test(data)
 
             # process results
             results.append(result['test_acc'])
