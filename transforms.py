@@ -9,62 +9,66 @@ class Privatize:
     private_methods = list(supported_mechanisms.keys())
 
     def __init__(self,
-                 method:    dict(help='feature perturbation method', choices=non_private_methods + private_methods,
-                                 option=('-m', '--method')) = 'raw',
-                 epsilon: dict(help='privacy budget epsilon (ignored for non-DP methods)', type=float,
-                               option=('-e', '--epsilon')) = None,
+                 method:        dict(help='feature perturbation method', choices=non_private_methods + private_methods,
+                                     option=('-m', '--method')) = 'raw',
+                 epsilon:       dict(help='privacy budget epsilon (ignored for non-DP methods)', type=float,
+                                     option=('-e', '--epsilon')) = None,
+                 projection_dim:    dict(help='dimension of the random feature projection', type=int) = None,
                  input_range = None
                  ):
+
         self.method = method
         self.epsilon = epsilon
+        self.projection_dim = projection_dim
         self.input_range = input_range
 
         assert method in self.non_private_methods or (epsilon is not None and epsilon > 0)
 
     def __call__(self, data):
-        if self.method == 'raw':
-            return self.restore_features(data)
-
         # backup original features for later use
-        data = self.backup_features(data)
+        if not hasattr(data, 'x_raw'):
+            data.x_raw = data.x
+
+        # restore original features should they have changed
+        data.x = data.x_raw
 
         if self.method == 'rnd':
-            data.x = torch.rand_like(data.x_raw)
-        elif self.method == 'crnd':
-            n = data.x_raw.size(0)
-            d = data.x_raw.size(1)
-            m = int(max(1, min(d, math.floor(self.epsilon / 2.18))))
-            x = torch.rand(n, m, device=data.x_raw.device)
-            s = torch.rand_like(data.x_raw).topk(m, dim=1).indices
-            data.x = torch.zeros_like(data.x_raw).scatter(1, s, x)
+            data.x = torch.rand_like(data.x)
+            return data
 
-        elif self.method == 'ohd':
-            data = OneHotDegree(max_degree=data.num_features - 1)(data)
+        if self.method == 'crnd':
+            n = data.x.size(0)
+            d = data.x.size(1)
+            m = int(max(1, min(d, math.floor(self.epsilon / 2.18))))
+            x = torch.rand(n, m, device=data.x.device)
+            s = torch.rand_like(data.x).topk(m, dim=1).indices
+            data.x = torch.zeros_like(data.x).scatter(1, s, x)
+            return data
+
+        if self.method == 'ohd':
+            return OneHotDegree(max_degree=data.num_features - 1)(data)
+
         elif self.method == 'one':
             data.x = torch.ones_like(data.x)
         elif self.method in self.private_methods:
             if self.input_range is None:
-                self.input_range = data.x_raw.min().item(), data.x_raw.max().item()
-            data.x = supported_mechanisms[self.method](eps=self.epsilon, input_range=self.input_range)(data.x_raw)
+                self.input_range = data.x.min().item(), data.x.max().item()
+            data.x = supported_mechanisms[self.method](eps=self.epsilon, input_range=self.input_range)(data.x)
 
-        return data
-
-    @staticmethod
-    def backup_features(data):
-        if not hasattr(data, 'x_raw'):
-            data.x_raw = data.x
-        return data
-
-    @staticmethod
-    def restore_features(data):
-        if hasattr(data, 'x_raw'):
-            del data.x              # delete x to free up memory
-            data.x = data.x_raw     # bring back original features
         return data
 
     @classmethod
     def supported_methods(cls):
         return cls.non_private_methods + cls.private_methods
+
+
+class RandomizedProjection:
+    def __init__(self, input_dim, output_dim):
+        self.w = torch.rand(input_dim, output_dim)
+
+    def __call__(self, data):
+        data.x = data.x.matmul(self.w)
+        return data
 
 
 class OneHotDegree:
