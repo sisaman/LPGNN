@@ -19,7 +19,6 @@ class Trainer:
             checkpoint:     dict(help='disable model checkpointing', option='--disable-checkpoint',
                                  action='store_false', dest='checkpoint') = True,
             logger = None,
-            **kwargs
     ):
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay

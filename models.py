@@ -58,7 +58,7 @@ class NodeClassifier(torch.nn.Module):
                  batch_norm: dict(help='use batch-normalization', action='store_true') = False,
                  self_loops: dict(help='remove self-loops from the graph', option='--no-self-loops',
                                   action='store_false', dest='self_loops') = True,
-                 **kwargs):
+                 ):
         super().__init__()
 
         self.conv1 = KProp(input_dim, hidden_dim, step=step, aggregator=aggregator,

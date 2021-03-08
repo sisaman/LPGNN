@@ -76,6 +76,23 @@ def add_parameters_as_argument(function, parser: ArgumentParser):
             parser.add_argument(*option, **arg_info)
 
 
+def strip_unexpected_kwargs(func, kwargs):
+    signature = inspect.signature(func)
+    parameters = signature.parameters
+
+    # check if the function has kwargs
+    for name, param in parameters.items():
+        if param.kind == inspect.Parameter.VAR_KEYWORD:
+            return kwargs
+
+    kwargs = {arg: value for arg, value in kwargs.items() if arg in parameters}
+    return kwargs
+
+
+def from_args(func, ns, *args, **kwargs):
+    return func(*args, **strip_unexpected_kwargs(func, vars(ns)), **kwargs)
+
+
 def print_args(args):
     message = [f'{name}: {colored_text(str(value), TermColors.FG.cyan)}' for name, value in vars(args).items()]
     print(', '.join(message) + '\n')

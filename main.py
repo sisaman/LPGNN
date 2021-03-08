@@ -12,12 +12,13 @@ from datasets import load_dataset
 from models import NodeClassifier
 from trainer import Trainer
 from transforms import Privatize
-from utils import colored_text, print_args, seed_everything, WandbLogger, add_parameters_as_argument, measure_runtime
+from utils import colored_text, print_args, seed_everything, WandbLogger, \
+    add_parameters_as_argument, measure_runtime, from_args
 
 
 @measure_runtime
 def run(args):
-    dataset = load_dataset(**vars(args))
+    dataset = from_args(load_dataset, args)
 
     experiment_name = ', '.join([
         args.dataset_name, args.method, f'label:{args.train_ratio}',
@@ -33,17 +34,13 @@ def run(args):
 
         try:
             # define model
-            model = NodeClassifier(
-                input_dim=dataset.num_features,
-                num_classes=dataset.num_classes,
-                **vars(args)
-            )
+            model = from_args(NodeClassifier, args, input_dim=dataset.num_features, num_classes=dataset.num_classes)
 
             # perturb features
             dataset = Privatize(method=args.method, epsilon=args.epsilon, input_range=args.data_range)(dataset)
 
             # train the model
-            trainer = Trainer(**vars(args), logger=logger)
+            trainer = from_args(Trainer, args, logger=logger)
             trainer.fit(model, dataset)
             result = trainer.test(dataset)
 
