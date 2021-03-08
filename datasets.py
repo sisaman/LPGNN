@@ -95,8 +95,7 @@ def load_dataset(
         train_ratio:    dict(help='Fraction of nodes used for training') = .50,
         val_ratio:      dict(help='Fraction of nodes used for validation') = .25,
         test_ratio:     dict(help='Fraction of nodes used for test') = .25,
-        **kwargs
-):
+        ):
     dataset = supported_datasets[dataset_name](root=os.path.join(data_dir, dataset_name))
     data = NodeSplit(train_ratio, val_ratio, test_ratio)(dataset[0])
     data = ToSparseTensor()(data)
