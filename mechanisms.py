@@ -192,6 +192,19 @@ class MultiDimPiecewise(Piecewise):
         return z
 
 
+class RandomizedResopnse(Mechanism):
+    def __init__(self, eps, k):
+        super(RandomizedResopnse, self).__init__(eps=eps, input_range=(None, None))
+        self.k = k
+
+    def transform(self, x):
+        n = x.size(0)
+        prob = 1.0 / (math.exp(self.eps) + self.k - 1)
+        p = torch.ones(n, self.k, device=x.device) * prob
+        p[x] *= math.exp(self.eps)
+        return torch.multinomial(p, num_samples=1).squeeze()
+
+
 supported_mechanisms = {
     'agm': AnalyticGaussian,
     'mbm': MultiBit,
