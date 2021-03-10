@@ -48,11 +48,17 @@ class Privatize:
         if self.method == 'ohd':
             return OneHotDegree(max_degree=data.num_features - 1)(data)
 
-        elif self.method == 'one':
+        if self.method == 'one':
             data.x = torch.ones_like(data.x)
-        elif self.method in self.private_methods:
+            return data
+
+        if self.method in self.private_methods:
+            if self.projection_dim:
+                data = RandomizedProjection(input_dim=data.num_features, output_dim=self.projection_dim)(data)
+
             if self.input_range is None:
                 self.input_range = data.x.min().item(), data.x.max().item()
+
             data.x = supported_mechanisms[self.method](eps=self.epsilon, input_range=self.input_range)(data.x)
 
         return data
