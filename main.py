@@ -18,7 +18,7 @@ from utils import colored_text, print_args, seed_everything, WandbLogger, \
 
 @measure_runtime
 def run(args):
-    data = from_args(load_dataset, args).to(args.device)
+    data = from_args(load_dataset, args)
 
     experiment_name = ', '.join([
         args.dataset_name, args.method, f'label:{args.train_ratio}',
