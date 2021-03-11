@@ -201,7 +201,7 @@ class RandomizedResopnse(Mechanism):
         n = x.size(0)
         prob = 1.0 / (math.exp(self.eps) + self.k - 1)
         p = torch.ones(n, self.k, device=x.device) * prob
-        p[x] *= math.exp(self.eps)
+        p.scatter_(1, x.unsqueeze(1), prob * math.exp(self.eps))
         return torch.multinomial(p, num_samples=1).squeeze()
 
 
