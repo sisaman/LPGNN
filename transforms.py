@@ -15,7 +15,7 @@ class Privatize:
                  epsilon:           dict(help='privacy budget epsilon (ignored for non-DP methods)', type=float,
                                          option=('-e', '--epsilon')) = None,
                  projection_dim:    dict(help='dimension of the random feature projection', type=int) = None,
-                 private_labels:    dict(help='no help') = False,
+                 private_labels:    dict(help='use private labels') = False,
                  input_range = None
                  ):
 
