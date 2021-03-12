@@ -30,14 +30,19 @@ def run(args):
     progbar = tqdm(range(args.repeats), desc=run_desc, file=sys.stdout)
     for run_id in progbar:
         args.version = run_id
-        logger = WandbLogger(project='LPGNN', name=experiment_name, config=args, enabled=args.log)
+        logger = WandbLogger(project='LPGNN', config=args, enabled=args.log, group=args.group)
 
         try:
             # define model
             model = from_args(NodeClassifier, args, input_dim=data.num_features, num_classes=data.num_classes)
 
             # perturb features
-            data = Privatize(method=args.method, epsilon=args.epsilon, input_range=args.data_range)(data)
+            data = Privatize(
+                method=args.method,
+                epsilon=args.epsilon,
+                input_range=args.data_range,
+                private_labels=args.private_labels
+            )(data)
 
             # train the model
             trainer = from_args(Trainer, args, logger=logger)
@@ -88,6 +93,7 @@ def main():
     group_expr.add_argument('-r', '--repeats', type=int, default=1, help="number of times the experiment is repeated")
     group_expr.add_argument('-o', '--output-dir', type=str, default='./output', help="directory to store the results")
     group_expr.add_argument('--log', action='store_true', help='enable logging')
+    group_expr.add_argument('--group', type=str, default=None, help='used to group runs in wandb')
 
     parser = ArgumentParser(parents=[init_parser], formatter_class=ArgumentDefaultsHelpFormatter)
     args = parser.parse_args()

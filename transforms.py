@@ -1,22 +1,25 @@
 import math
 import torch
 import torch.nn.functional as F
-from mechanisms import supported_mechanisms
+from mechanisms import supported_mechanisms, RandomizedResopnse
 
 
 class Privatize:
-    non_private_methods = ['raw', 'rnd', 'ohd', 'one', 'crnd']
+    non_private_methods = ['raw', 'rnd', 'one',]
     private_methods = list(supported_mechanisms.keys())
 
     def __init__(self,
-                 method:        dict(help='feature perturbation method', choices=non_private_methods + private_methods,
-                                     option=('-m', '--method')) = 'raw',
-                 epsilon:       dict(help='privacy budget epsilon (ignored for non-DP methods)', type=float,
-                                     option=('-e', '--epsilon')) = None,
+                 method:            dict(help='feature perturbation method',
+                                         choices=non_private_methods + private_methods,
+                                         option=('-m', '--method')) = 'raw',
+                 epsilon:           dict(help='privacy budget epsilon (ignored for non-DP methods)', type=float,
+                                         option=('-e', '--epsilon')) = None,
                  projection_dim:    dict(help='dimension of the random feature projection', type=int) = None,
+                 private_labels:    dict(help='no help') = False,
                  input_range = None
                  ):
 
+        self.private_labels = private_labels
         self.method = method
         self.epsilon = epsilon
         self.projection_dim = projection_dim
@@ -25,34 +28,38 @@ class Privatize:
         assert method in self.non_private_methods or (epsilon is not None and epsilon > 0)
 
     def __call__(self, data):
-        # backup original features for later use
         if not hasattr(data, 'x_raw'):
-            data.x_raw = data.x
+            data.x_raw = data.x  # backup original features for later use
+        else:
+            data.x = data.x_raw  # restore original features
 
-        # restore original features should they have changed
-        data.x = data.x_raw
+        if self.private_labels:
+            if not hasattr(data, 'y_raw'):
+                data.y_raw = data.y.clone()
+            else:
+                data.y = data.y_raw.clone()
+
+            perturb_mask = data.train_mask | data.val_mask
+            data.y[perturb_mask] = RandomizedResopnse(eps=self.epsilon, k=data.num_classes)(data.y[perturb_mask])
 
         if self.method == 'rnd':
             data.x = torch.rand_like(data.x)
-            return data
 
-        if self.method == 'crnd':
+        elif self.method == 'crnd':
             n = data.x.size(0)
             d = data.x.size(1)
             m = int(max(1, min(d, math.floor(self.epsilon / 2.18))))
             x = torch.rand(n, m, device=data.x.device)
             s = torch.rand_like(data.x).topk(m, dim=1).indices
             data.x = torch.zeros_like(data.x).scatter(1, s, x)
-            return data
 
-        if self.method == 'ohd':
-            return OneHotDegree(max_degree=data.num_features - 1)(data)
+        elif self.method == 'ohd':
+            data = OneHotDegree(max_degree=data.num_features - 1)(data)
 
-        if self.method == 'one':
-            data.x = torch.ones_like(data.x)
-            return data
+        elif self.method == 'one':
+            data.x = torch.zeros_like(data.x)
 
-        if self.method in self.private_methods:
+        elif self.method in self.private_methods:
             if self.projection_dim:
                 data = RandomizedProjection(input_dim=data.num_features, output_dim=self.projection_dim)(data)
 
