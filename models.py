@@ -55,9 +55,8 @@ class NodeClassifier(torch.nn.Module):
                  step:       dict(help='KProp step parameter', option=('-k', '--step')) = 1,
                  aggregator: dict(help='GNN aggregator function', choices=['gcn', 'mean'],
                                   option=('-a', '--aggregator')) = 'gcn',
-                 batch_norm: dict(help='use batch-normalization', action='store_true') = False,
-                 self_loops: dict(help='remove self-loops from the graph', option='--no-self-loops',
-                                  action='store_false', dest='self_loops') = True,
+                 batch_norm: dict(help='use batch-normalization') = False,
+                 self_loops: dict(help='remove self-loops from the graph') = True,
                  ):
         super().__init__()
 

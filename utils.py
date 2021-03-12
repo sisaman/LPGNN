@@ -1,6 +1,6 @@
 import os
 import time
-from argparse import ArgumentParser
+from argparse import ArgumentParser, ArgumentTypeError
 
 import inspect
 import enum
@@ -55,6 +55,17 @@ def measure_runtime(func):
     return wrapper
 
 
+def str2bool(v):
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise ArgumentTypeError('Boolean value expected.')
+
+
 def add_parameters_as_argument(function, parser: ArgumentParser):
     if inspect.isclass(function):
         function = function.__init__
@@ -63,9 +74,12 @@ def add_parameters_as_argument(function, parser: ArgumentParser):
         if param_obj.annotation is not inspect.Parameter.empty:
             arg_info = param_obj.annotation
             arg_info['default'] = param_obj.default
+            arg_info['type'] = arg_info.get('type', type(param_obj.default))
 
-            if 'action' not in arg_info:
-                arg_info['type'] = arg_info.get('type', type(param_obj.default))
+            if arg_info['type'] is bool:
+                arg_info['type'] = str2bool
+                arg_info['nargs'] = '?'
+                arg_info['const'] = True
 
             if 'choices' in arg_info:
                 arg_info['help'] = arg_info.get('help', '') + f" (choices: { ', '.join(arg_info['choices']) })"

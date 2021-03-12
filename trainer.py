@@ -16,8 +16,7 @@ class Trainer:
             weight_decay:   dict(help='weight decay (L2 penalty)') = 0.0,
             max_epochs:     dict(help='maximum number of training epochs') = 500,
             device:         dict(help='desired device for training', choices=['cpu', 'cuda']) = 'cuda',
-            checkpoint:     dict(help='disable model checkpointing', option='--disable-checkpoint',
-                                 action='store_false', dest='checkpoint') = True,
+            checkpoint:     dict(help='disable model checkpointing') = True,
             logger = None,
     ):
         self.learning_rate = learning_rate

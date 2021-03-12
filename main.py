@@ -13,7 +13,7 @@ from models import NodeClassifier
 from trainer import Trainer
 from transforms import Privatize
 from utils import colored_text, print_args, seed_everything, WandbLogger, \
-    add_parameters_as_argument, measure_runtime, from_args
+    add_parameters_as_argument, measure_runtime, from_args, str2bool
 
 
 @measure_runtime
@@ -92,7 +92,7 @@ def main():
     group_expr.add_argument('-s', '--seed', type=int, default=None, help='initial random seed')
     group_expr.add_argument('-r', '--repeats', type=int, default=1, help="number of times the experiment is repeated")
     group_expr.add_argument('-o', '--output-dir', type=str, default='./output', help="directory to store the results")
-    group_expr.add_argument('--log', action='store_true', help='enable logging')
+    group_expr.add_argument('--log', type=str2bool, nargs='?', const=True, default=True, help='enable logging')
     group_expr.add_argument('--group', type=str, default=None, help='used to group runs in wandb')
 
     parser = ArgumentParser(parents=[init_parser], formatter_class=ArgumentDefaultsHelpFormatter)
