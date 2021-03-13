@@ -71,7 +71,8 @@ class Trainer:
 
         if self.logger:
             self.logger.log({'best_val_loss': best_val_loss})
-        return self.model
+
+        return best_val_loss
 
     def _train(self, data, optimizer):
         self.model.train()
