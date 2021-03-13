@@ -70,7 +70,7 @@ class Trainer:
             pass
 
         if self.logger:
-            self.logger.log({'train_epochs': epoch})
+            self.logger.log({'best_val_loss': best_val_loss})
         return self.model
 
     def _train(self, data, optimizer):
