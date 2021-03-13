@@ -12,27 +12,33 @@ from datasets import load_dataset
 from models import NodeClassifier
 from trainer import Trainer
 from transforms import Privatize
-from utils import colored_text, print_args, seed_everything, WandbLogger, \
-    add_parameters_as_argument, measure_runtime, from_args, str2bool
+from utils import print_args, seed_everything, WandbLogger, \
+    add_parameters_as_argument, measure_runtime, from_args, str2bool, Enum, EnumAction
+
+
+class LogMode(Enum):
+    INDIVIDUAL = 'individual'
+    COLLECTIVE = 'collective'
 
 
 @measure_runtime
 def run(args):
     data = from_args(load_dataset, args)
 
-    experiment_name = ', '.join([
-        args.dataset_name, args.method, f'label:{args.train_ratio}',
-        f'e:{args.epsilon}', f'k:{args.step}', f'agg:{args.aggregator}', f'loop:{int(args.self_loops)}'
-    ])
-
-    results = []
-    run_desc = colored_text(experiment_name.replace('/', ', '), color='green')
-    progbar = tqdm(range(args.repeats), desc=run_desc, file=sys.stdout)
+    test_results = []
+    val_results = []
     run_id = str(uuid.uuid1())
 
+    logger = None
+    if args.log_mode == LogMode.COLLECTIVE:
+        logger = WandbLogger(project=args.project_name, config=args, enabled=args.log, reinit=False, group=run_id)
+
+    progbar = tqdm(range(args.repeats), file=sys.stdout)
     for version in progbar:
-        args.version = version
-        logger = WandbLogger(project=args.project_name, config=args, enabled=args.log, group=run_id)
+
+        if args.log_mode == LogMode.INDIVIDUAL:
+            args.version = version
+            logger = WandbLogger(project=args.project_name, config=args, enabled=args.log, group=run_id)
 
         try:
             # define model
@@ -47,26 +53,32 @@ def run(args):
             )(data)
 
             # train the model
-            trainer = from_args(Trainer, args, logger=logger)
-            trainer.fit(model, data)
+            trainer_logger = logger if args.log_mode == LogMode.INDIVIDUAL else None
+            trainer = from_args(Trainer, args, logger=trainer_logger)
+            best_val_loss = trainer.fit(model, data)
             result = trainer.test(data)
 
             # process results
-            results.append(result['test_acc'])
-            progbar.set_postfix({'last_test_acc': results[-1], 'avg_test_acc': np.mean(results)})
+            val_results.append(best_val_loss)
+            test_results.append(result['test_acc'])
+            progbar.set_postfix({'last_test_acc': test_results[-1], 'avg_test_acc': np.mean(test_results)})
 
         except Exception as e:
             error = ''.join(traceback.format_exception(Exception, e, e.__traceback__))
             logger.log({'error': error})
             raise e
         finally:
-            logger.finish()
+            if args.log_mode == LogMode.INDIVIDUAL:
+                logger.finish()
 
     # save results
+    if args.log_mode == LogMode.COLLECTIVE:
+        logger.log_summary({'best_val_loss': np.mean(val_results), 'test_acc': np.mean(test_results)})
+
     os.makedirs(args.output_dir, exist_ok=True)
-    df_results = pd.DataFrame(results, columns=['test_acc']).rename_axis('version').reset_index()
+    df_results = pd.DataFrame(test_results, columns=['test_acc']).rename_axis('version').reset_index()
     for arg_name, arg_val in vars(args).items():
-        df_results[arg_name] = [arg_val] * len(results)
+        df_results[arg_name] = [arg_val] * len(test_results)
     df_results.to_csv(os.path.join(args.output_dir, f'{run_id}.csv'), index=False)
 
 
@@ -95,6 +107,8 @@ def main():
     group_expr.add_argument('-r', '--repeats', type=int, default=1, help="number of times the experiment is repeated")
     group_expr.add_argument('-o', '--output-dir', type=str, default='./output', help="directory to store the results")
     group_expr.add_argument('--log', type=str2bool, nargs='?', const=True, default=False, help='enable logging')
+    group_expr.add_argument('--log-mode', type=LogMode, action=EnumAction, default=LogMode.INDIVIDUAL,
+                            help='logging mode')
     group_expr.add_argument('--project-name', type=str, default='LPGNN', help='project name for wandb logging')
 
     parser = ArgumentParser(parents=[init_parser], formatter_class=ArgumentDefaultsHelpFormatter)
