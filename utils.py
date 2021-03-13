@@ -1,6 +1,6 @@
 import os
 import time
-from argparse import ArgumentParser, ArgumentTypeError
+from argparse import ArgumentParser, ArgumentTypeError, Action
 
 import inspect
 import enum
@@ -118,6 +118,41 @@ def colored_text(msg, color):
     if isinstance(color, str):
         color = TermColors.FG.__dict__[color]
     return color.value + msg + TermColors.Control.reset.value
+
+
+class Enum(enum.Enum):
+    def __str__(self):
+        return str(self.value)
+
+    def __repr__(self):
+        return str(self.value)
+
+
+class EnumAction(Action):
+    """
+    Argparse action for handling Enums
+    """
+    def __init__(self, **kwargs):
+        # Pop off the type value
+        _enum = kwargs.pop("type", None)
+
+        # Ensure an Enum subclass is provided
+        if _enum is None:
+            raise ValueError("type must be assigned an Enum when using EnumAction")
+        if not issubclass(_enum, enum.Enum):
+            raise TypeError("type must be an Enum when using EnumAction")
+
+        # Generate choices from the Enum
+        kwargs.setdefault("choices", tuple(e.value for e in _enum))
+
+        super(EnumAction, self).__init__(**kwargs)
+
+        self._enum = _enum
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        # Convert value back into an Enum
+        enum = self._enum(values)  # noqa
+        setattr(namespace, self.dest, enum)
 
 
 class TermColors:
