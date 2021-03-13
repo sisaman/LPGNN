@@ -28,9 +28,11 @@ def run(args):
     results = []
     run_desc = colored_text(experiment_name.replace('/', ', '), color='green')
     progbar = tqdm(range(args.repeats), desc=run_desc, file=sys.stdout)
-    for run_id in progbar:
-        args.version = run_id
-        logger = WandbLogger(project='LPGNN', config=args, enabled=args.log, group=args.group)
+    run_id = str(uuid.uuid1())
+
+    for version in progbar:
+        args.version = version
+        logger = WandbLogger(project=args.project_name, config=args, enabled=args.log, group=run_id)
 
         try:
             # define model
@@ -65,7 +67,7 @@ def run(args):
     df_results = pd.DataFrame(results, columns=['test_acc']).rename_axis('version').reset_index()
     for arg_name, arg_val in vars(args).items():
         df_results[arg_name] = [arg_val] * len(results)
-    df_results.to_csv(os.path.join(args.output_dir, f'{uuid.uuid1()}.csv'), index=False)
+    df_results.to_csv(os.path.join(args.output_dir, f'{run_id}.csv'), index=False)
 
 
 def main():
@@ -93,7 +95,7 @@ def main():
     group_expr.add_argument('-r', '--repeats', type=int, default=1, help="number of times the experiment is repeated")
     group_expr.add_argument('-o', '--output-dir', type=str, default='./output', help="directory to store the results")
     group_expr.add_argument('--log', type=str2bool, nargs='?', const=True, default=False, help='enable logging')
-    group_expr.add_argument('--group', type=str, default=None, help='used to group runs in wandb')
+    group_expr.add_argument('--project-name', type=str, default='LPGNN', help='project name for wandb logging')
 
     parser = ArgumentParser(parents=[init_parser], formatter_class=ArgumentDefaultsHelpFormatter)
     args = parser.parse_args()
