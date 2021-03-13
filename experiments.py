@@ -24,7 +24,7 @@ datasets = {
     'lastfm':   {'--learning-rate': 0.01, '--weight-decay': 0.001, '--dropout': 0.75},
 }
 
-error_run = f"python error.py -d {' '.join(datasets.keys())} -m agm obm mbm -e 0.1 0.5 1 2 -a mean gcn"
+error_run = f"python error.py -d {' '.join(datasets.keys())} -m agm 1bm mbm -e 0.1 0.5 1 2 -a mean gcn"
 print(colored_text(error_run, color='lightcyan'))
 os.system(error_run)
 
