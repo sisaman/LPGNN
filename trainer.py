@@ -47,7 +47,6 @@ class Trainer:
         best_val_loss = float('inf')
         epoch_progbar = tqdm(range(1, self.max_epochs + 1), desc='Epoch: ', leave=False, position=1, file=sys.stdout)
 
-        epoch = None
         try:
             for epoch in epoch_progbar:
                 train_metrics = self._train(data, optimizer)
