@@ -15,6 +15,18 @@ except ImportError:
     wandb = None
 
 
+def measure_runtime(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        out = func(*args, **kwargs)
+        end = time.time()
+        print(f'\nTotal time spent in {str(func)}:', end - start, 'seconds.\n\n')
+        return out
+
+    return wrapper
+
+
 class WandbLogger:
     def __init__(self, project=None, name=None, config=None, save_code=True,
                  reinit=True, enabled=True, **kwargs):
@@ -43,18 +55,6 @@ def seed_everything(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-
-
-def measure_runtime(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        start = time.time()
-        out = func(*args, **kwargs)
-        end = time.time()
-        print('\nTotal time spent:', end - start, 'seconds.\n\n')
-        return out
-
-    return wrapper
 
 
 def str2bool(v):
