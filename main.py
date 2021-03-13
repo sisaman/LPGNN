@@ -7,11 +7,11 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
-
+from torch_geometric.transforms import Compose
 from datasets import load_dataset
 from models import NodeClassifier
 from trainer import Trainer
-from transforms import Privatize
+from transforms import FeatureTransform, FeaturePerturbation, LabelPerturbation
 from utils import print_args, seed_everything, WandbLogger, \
     add_parameters_as_argument, measure_runtime, from_args, str2bool, Enum, EnumAction
 
@@ -44,13 +44,12 @@ def run(args):
             # define model
             model = from_args(NodeClassifier, args, input_dim=data.num_features, num_classes=data.num_classes)
 
-            # perturb features
-            data = Privatize(
-                method=args.method,
-                epsilon=args.epsilon,
-                input_range=args.data_range,
-                private_labels=args.private_labels
-            )(data)
+            # preprocess data
+            data = Compose([
+                from_args(FeatureTransform, args),
+                from_args(FeaturePerturbation, args),
+                from_args(LabelPerturbation, args)
+            ])(data)
 
             # train the model
             trainer_logger = logger if args.log_mode == LogMode.INDIVIDUAL else None
@@ -89,9 +88,11 @@ def main():
     group_dataset = init_parser.add_argument_group('dataset arguments')
     add_parameters_as_argument(load_dataset, group_dataset)
 
-    # perturbation arguments
-    group_perturb = init_parser.add_argument_group(f'perturbation arguments')
-    add_parameters_as_argument(Privatize, group_perturb)
+    # data transformation args
+    group_perturb = init_parser.add_argument_group(f'data transformation arguments')
+    add_parameters_as_argument(FeatureTransform, group_perturb)
+    add_parameters_as_argument(FeaturePerturbation, group_perturb)
+    add_parameters_as_argument(LabelPerturbation, group_perturb)
 
     # model args
     group_model = init_parser.add_argument_group(f'model arguments')

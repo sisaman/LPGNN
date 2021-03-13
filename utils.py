@@ -82,6 +82,7 @@ def add_parameters_as_argument(function, parser: ArgumentParser):
         if param_obj.annotation is not inspect.Parameter.empty:
             arg_info = param_obj.annotation
             arg_info['default'] = param_obj.default
+            arg_info['dest'] = param_name
             arg_info['type'] = arg_info.get('type', type(param_obj.default))
 
             if arg_info['type'] is bool:
@@ -93,9 +94,12 @@ def add_parameters_as_argument(function, parser: ArgumentParser):
                 arg_info['help'] = arg_info.get('help', '') + f" (choices: {', '.join(arg_info['choices'])})"
                 arg_info['metavar'] = param_name.upper()
 
-            option = arg_info.pop('option', [f'--{param_name.replace("_", "-")}'])
-            option = [option] if isinstance(option, str) else option
-            parser.add_argument(*option, **arg_info)
+            options = {f'--{param_name}', f'--{param_name.replace("_", "-")}'}
+            custom_options = arg_info.pop('option', [])
+            custom_options = [custom_options] if isinstance(custom_options, str) else custom_options
+            options.update(custom_options)
+            options = sorted(sorted(list(options)), key=len)
+            parser.add_argument(*options, **arg_info)
 
 
 def strip_unexpected_kwargs(func, kwargs):

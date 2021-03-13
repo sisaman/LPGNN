@@ -1,78 +1,92 @@
-import math
 import torch
 import torch.nn.functional as F
 from mechanisms import supported_mechanisms, RandomizedResopnse
 
 
-class Privatize:
-    non_private_methods = ['raw', 'rnd', 'one',]
-    private_methods = list(supported_mechanisms.keys())
+class FeatureTransform:
+    supported_features = ['raw', 'rnd', 'one', 'ohd', 'crnd']
 
     def __init__(self,
-                 method:            dict(help='feature perturbation method',
-                                         choices=non_private_methods + private_methods,
-                                         option=('-m', '--method')) = 'raw',
-                 epsilon:           dict(help='privacy budget epsilon (ignored for non-DP methods)', type=float,
-                                         option=('-e', '--epsilon')) = None,
-                 projection_dim:    dict(help='dimension of the random feature projection', type=int) = None,
-                 private_labels:    dict(help='use private labels') = False,
-                 input_range = None
+                 feature: dict(help='feature transformation method', choices=supported_features, option='-f') = 'raw',
                  ):
 
-        self.private_labels = private_labels
-        self.method = method
-        self.epsilon = epsilon
-        self.projection_dim = projection_dim
-        self.input_range = input_range
-
-        assert method in self.non_private_methods or (epsilon is not None and epsilon > 0)
+        self.feature = feature
 
     def __call__(self, data):
+
+        if self.feature == 'rnd':
+            data.x = torch.rand_like(data.x)
+
+        elif self.feature == 'crnd':
+            n = data.x.size(0)
+            # d = data.x.size(1)
+            m = 1
+            x = torch.rand(n, m, device=data.x.device)
+            s = torch.rand_like(data.x).topk(m, dim=1).indices
+            data.x = torch.zeros_like(data.x).scatter(1, s, x)
+
+        elif self.feature == 'ohd':
+            data = OneHotDegree(max_degree=data.num_features - 1)(data)
+
+        elif self.feature == 'one':
+            data.x = torch.zeros_like(data.x)
+
+        return data
+
+
+class FeaturePerturbation:
+    def __init__(self,
+                 mechanism: dict(help='feature perturbation mechanism', choices=list(supported_mechanisms),
+                                 option='-m') = 'mbm',
+                 epsilon_x: dict(help='privacy budget for feature perturbation (set None to disable)', type=float,
+                                 option='--ex') = None,
+                 reduce_dim: dict(help='dimension of the random dimensionality reduction (set None to disable)',
+                                  type=int) = None,
+                 data_range=None,
+                 ):
+        self.mechanism = mechanism
+        self.input_range = data_range
+        self.reduce_dim = reduce_dim
+        self.epsilon_x = epsilon_x
+
+    def __call__(self, data):
+        if self.epsilon_x is None:
+            return data
+
         if not hasattr(data, 'x_raw'):
             data.x_raw = data.x  # backup original features for later use
         else:
             data.x = data.x_raw  # restore original features
 
-        if self.private_labels:
-            if not hasattr(data, 'y_raw'):
-                data.y_raw = data.y.clone()
-            else:
-                data.y = data.y_raw.clone()
+        if self.input_range is None:
+            self.input_range = data.x.min().item(), data.x.max().item()
 
-            perturb_mask = data.train_mask | data.val_mask
-            data.y[perturb_mask] = RandomizedResopnse(eps=self.epsilon, k=data.num_classes)(data.y[perturb_mask])
+        if self.reduce_dim:
+            data = RandomizedProjection(input_dim=data.num_features, output_dim=self.reduce_dim)(data)
 
-        if self.method == 'rnd':
-            data.x = torch.rand_like(data.x)
-
-        elif self.method == 'crnd':
-            n = data.x.size(0)
-            d = data.x.size(1)
-            m = int(max(1, min(d, math.floor(self.epsilon / 2.18))))
-            x = torch.rand(n, m, device=data.x.device)
-            s = torch.rand_like(data.x).topk(m, dim=1).indices
-            data.x = torch.zeros_like(data.x).scatter(1, s, x)
-
-        elif self.method == 'ohd':
-            data = OneHotDegree(max_degree=data.num_features - 1)(data)
-
-        elif self.method == 'one':
-            data.x = torch.zeros_like(data.x)
-
-        elif self.method in self.private_methods:
-            if self.projection_dim:
-                data = RandomizedProjection(input_dim=data.num_features, output_dim=self.projection_dim)(data)
-
-            if self.input_range is None:
-                self.input_range = data.x.min().item(), data.x.max().item()
-
-            data.x = supported_mechanisms[self.method](eps=self.epsilon, input_range=self.input_range)(data.x)
-
+        data.x = supported_mechanisms[self.mechanism](eps=self.epsilon_x, input_range=self.input_range)(data.x)
         return data
 
-    @classmethod
-    def supported_methods(cls):
-        return cls.non_private_methods + cls.private_methods
+
+class LabelPerturbation:
+    def __init__(self,
+                 epsilon_y: dict(help='privacy budget for label perturbation (set None to disable)',
+                                 type=float, option='--ey') = None,
+                 ):
+        self.epsilon_y = epsilon_y
+
+    def __call__(self, data):
+        if self.epsilon_y is None:
+            return data
+
+        if not hasattr(data, 'y_raw'):
+            data.y_raw = data.y.clone()
+        else:
+            data.y = data.y_raw.clone()
+
+        perturb_mask = data.train_mask | data.val_mask
+        data.y[perturb_mask] = RandomizedResopnse(eps=self.epsilon_y, k=data.num_classes)(data.y[perturb_mask])
+        return data
 
 
 class RandomizedProjection:

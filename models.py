@@ -52,9 +52,8 @@ class NodeClassifier(torch.nn.Module):
                  num_classes,
                  hidden_dim: dict(help='dimension of the hidden layers') = 16,
                  dropout:    dict(help='dropout rate (between zero and one)') = 0.0,
-                 step:       dict(help='KProp step parameter', option=('-k', '--step')) = 1,
-                 aggregator: dict(help='GNN aggregator function', choices=['gcn', 'mean'],
-                                  option=('-a', '--aggregator')) = 'gcn',
+                 step:       dict(help='KProp step parameter', option='-k') = 1,
+                 aggregator: dict(help='GNN aggregator function', choices=['gcn', 'mean']) = 'gcn',
                  batch_norm: dict(help='use batch-normalization') = True,
                  self_loops: dict(help='whether to add self-loops to the graph') = True,
                  ):
