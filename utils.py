@@ -45,6 +45,10 @@ class WandbLogger:
         if self.enabled:
             self.experiment.log(metrics, step=step)
 
+    def log_summary(self, metrics):
+        if self.enabled:
+            self.experiment.summary.update(metrics)
+
     def finish(self):
         if self.enabled:
             self.experiment.finish()

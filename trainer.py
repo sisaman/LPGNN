@@ -69,7 +69,7 @@ class Trainer:
             pass
 
         if self.logger:
-            self.logger.log({'best_val_loss': best_val_loss})
+            self.logger.log_summary({'best_val_loss': best_val_loss})
 
         return best_val_loss
 
@@ -96,6 +96,6 @@ class Trainer:
         metrics = self.model.test_step(data)
 
         if self.logger:
-            self.logger.log(metrics)
+            self.logger.log_summary(metrics)
 
         return metrics
