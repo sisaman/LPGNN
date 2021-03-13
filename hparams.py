@@ -6,6 +6,9 @@ from transforms import Privatize
 from utils import print_args
 
 parser = ArgumentParser()
+parser.add_argument('--project-name', type=str, default='LPGNN-Tune', help='project name for wandb logging')
+parser.add_argument('-s', '--seed', type=int, default=12345, help='initial random seed')
+parser.add_argument('-r', '--repeats', type=int, default=10, help="number of times the experiment is repeated")
 subparser = parser.add_subparsers()
 parser_grid = subparser.add_parser('grid')
 parser_grid.add_argument('-q', '--queue', type=str, default='sgpu', choices=['sgpu', 'gpu', 'lgpu'])
@@ -14,7 +17,7 @@ parser_grid.add_argument('-j', '--jobs-dir', type=str, default='./jobs')
 args = parser.parse_args()
 print_args(args)
 
-default_args = ' --seed 12345 --log --group tune '
+default_args = f' -s {args.seed} -r {args.repeats} --log --log-mode collective --project-name {args.project_name} '
 
 params = {
     '--dataset': list(supported_datasets),
@@ -52,4 +55,5 @@ if 'queue' in args:
     print('Job files created in:', args.jobs_dir)
 else:
     for run in run_cmds:
+        # print(run)
         os.system(run)
