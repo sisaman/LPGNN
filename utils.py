@@ -8,6 +8,7 @@ import functools
 import torch
 import numpy as np
 import random
+
 try:
     import wandb
 except ImportError:
@@ -52,12 +53,13 @@ def measure_runtime(func):
         end = time.time()
         print('\nTotal time spent:', end - start, 'seconds.\n\n')
         return out
+
     return wrapper
 
 
 def str2bool(v):
     if isinstance(v, bool):
-       return v
+        return v
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
         return True
     elif v.lower() in ('no', 'false', 'f', 'n', '0'):
@@ -82,7 +84,7 @@ def add_parameters_as_argument(function, parser: ArgumentParser):
                 arg_info['const'] = True
 
             if 'choices' in arg_info:
-                arg_info['help'] = arg_info.get('help', '') + f" (choices: { ', '.join(arg_info['choices']) })"
+                arg_info['help'] = arg_info.get('help', '') + f" (choices: {', '.join(arg_info['choices'])})"
                 arg_info['metavar'] = param_name.upper()
 
             option = arg_info.pop('option', [f'--{param_name.replace("_", "-")}'])
