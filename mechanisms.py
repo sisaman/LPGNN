@@ -8,15 +8,12 @@ class Mechanism:
         self.eps = eps
         self.alpha, self.beta = input_range
 
-    def transform(self, x):
-        raise NotImplementedError
-
     def __call__(self, x):
-        return self.transform(x)
+        raise NotImplementedError
 
 
 class Laplace(Mechanism):
-    def transform(self, x):
+    def __call__(self, x):
         d = x.size(1)
         sensitivity = (self.beta - self.alpha) * d
         scale = torch.ones_like(x) * (sensitivity / self.eps)
@@ -32,7 +29,7 @@ class Gaussian(Mechanism):
         self.sigma = None
         self.sensitivity = None
 
-    def transform(self, x):
+    def __call__(self, x):
         len_interval = self.beta - self.alpha
         if torch.is_tensor(len_interval) and len(len_interval) > 1:
             self.sensitivity = torch.norm(len_interval, p=2)
@@ -113,7 +110,7 @@ class MultiBit(Mechanism):
         super().__init__(*args, **kwargs)
         self.m = m
 
-    def transform(self, x):
+    def __call__(self, x):
         n, d = x.size()
         if self.m == 'best':
             m = int(max(1, min(d, math.floor(self.eps / 2.18))))
@@ -148,7 +145,7 @@ class OneBit(MultiBit):
 
 
 class Piecewise(Mechanism):
-    def transform(self, x):
+    def __call__(self, x):
         # normalize x between -1,1
         t = (x - self.alpha) / (self.beta - self.alpha)
         t = 2 * t - 1
@@ -180,35 +177,59 @@ class Piecewise(Mechanism):
 
 
 class MultiDimPiecewise(Piecewise):
-    def transform(self, x):
+    def __call__(self, x):
         n, d = x.size()
         k = int(max(1, min(d, math.floor(self.eps / 2.5))))
         sample = torch.rand_like(x).topk(k, dim=1).indices
         mask = torch.zeros_like(x, dtype=torch.bool)
         mask.scatter_(1, sample, True)
         self.eps /= k
-        y = super().transform(x)
+        y = super().__call__(x)
         z = mask * y * d / k
         return z
 
 
-class RandomizedResopnse(Mechanism):
-    def __init__(self, eps, k):
-        super(RandomizedResopnse, self).__init__(eps=eps, input_range=(None, None))
-        self.k = k
+class RandomizedResopnse:
+    def __init__(self, eps, d):
+        self.eps = eps
+        self.d = d
 
-    def transform(self, x):
-        n = x.size(0)
-        prob = 1.0 / (math.exp(self.eps) + self.k - 1)
-        p = torch.ones(n, self.k, device=x.device) * prob
-        p.scatter_(1, x.unsqueeze(1), prob * math.exp(self.eps))
-        return torch.multinomial(p, num_samples=1).squeeze()
+    def __call__(self, y):
+        n = y.size(0)
+        p_incorrect = 1.0 / (math.exp(self.eps) + self.d - 1)
+        pr = torch.ones(n, self.d, device=y.device) * p_incorrect
+        pr.scatter_(1, y.unsqueeze(1), p_incorrect * math.exp(self.eps))
+        return torch.multinomial(pr, num_samples=1).squeeze()
 
 
-supported_mechanisms = {
+class OptimizedUnaryEncoding:
+    def __init__(self, eps, d):
+        self.d = d
+        self.p = 0.5
+        self.q = 1 / (math.exp(eps) + 1)
+
+    def __call__(self, y):
+        n = y.size(0)
+        y = y.unsqueeze(dim=1) if len(y.size()) == 1 else y
+        pr = y.new_ones(n, self.d) * self.q
+        pr.scatter_(1, y, self.p)
+        return torch.bernoulli(pr)
+
+    def estimate(self, b):
+        n = b.size(0)
+        return (b.sum(dim=0) / n - self.q) / (self.p - self.q)
+
+
+supported_feature_mechanisms = {
     'agm': AnalyticGaussian,
     'mbm': MultiBit,
     '1bm': OneBit,
     'lpm': Laplace,
     'pwm': MultiDimPiecewise,
+}
+
+
+supported_label_mechanisms = {
+    'krr': RandomizedResopnse,
+    'oue': OptimizedUnaryEncoding
 }
