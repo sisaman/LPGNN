@@ -199,7 +199,8 @@ class RandomizedResopnse:
         p_incorrect = 1.0 / (math.exp(self.eps) + self.d - 1)
         pr = torch.ones(n, self.d, device=y.device) * p_incorrect
         pr.scatter_(1, y.unsqueeze(1), p_incorrect * math.exp(self.eps))
-        return torch.multinomial(pr, num_samples=1).squeeze()
+        y = torch.multinomial(pr, num_samples=1)
+        return torch.zeros_like(pr).scatter(1, y, 1)
 
 
 class OptimizedUnaryEncoding:
