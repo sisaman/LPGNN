@@ -1,13 +1,14 @@
 import torch
 import torch.nn.functional as F
-from mechanisms import supported_mechanisms, RandomizedResopnse
+from mechanisms import supported_feature_mechanisms, supported_label_mechanisms
+from torch_sparse import matmul, SparseTensor
 
 
 class FeatureTransform:
     supported_features = ['raw', 'rnd', 'one', 'ohd', 'crnd']
 
-    def __init__(self,
-                 feature: dict(help='feature transformation method', choices=supported_features, option='-f') = 'raw',
+    def __init__(self, feature: dict(help='feature transformation method',
+                                     choices=supported_features, option='-f') = 'raw',
                  ):
 
         self.feature = feature
@@ -36,15 +37,15 @@ class FeatureTransform:
 
 class FeaturePerturbation:
     def __init__(self,
-                 mechanism: dict(help='feature perturbation mechanism', choices=list(supported_mechanisms),
-                                 option='-m') = 'mbm',
+                 mechanism_x: dict(help='feature perturbation mechanism', choices=list(supported_feature_mechanisms),
+                                   option='--mx') = 'mbm',
                  epsilon_x: dict(help='privacy budget for feature perturbation (set None to disable)', type=float,
                                  option='--ex') = None,
                  reduce_dim: dict(help='dimension of the random dimensionality reduction (set None to disable)',
                                   type=int) = None,
                  data_range=None,
                  ):
-        self.mechanism = mechanism
+        self.mechanism_x = mechanism_x
         self.input_range = data_range
         self.reduce_dim = reduce_dim
         self.epsilon_x = epsilon_x
@@ -64,16 +65,25 @@ class FeaturePerturbation:
         if self.reduce_dim:
             data = RandomizedProjection(input_dim=data.num_features, output_dim=self.reduce_dim)(data)
 
-        data.x = supported_mechanisms[self.mechanism](eps=self.epsilon_x, input_range=self.input_range)(data.x)
+        data.x = supported_feature_mechanisms[self.mechanism_x](
+            eps=self.epsilon_x,
+            input_range=self.input_range
+        )(data.x)
+
         return data
 
 
 class LabelPerturbation:
     def __init__(self,
+                 mechanism_y: dict(help='label perturbation mechanism', choices=supported_label_mechanisms,
+                                   option='--my') = 'krr',
                  epsilon_y: dict(help='privacy budget for label perturbation (set None to disable)',
                                  type=float, option='--ey') = None,
+                 lp_step: dict(help='number of label propagation steps') = 0
                  ):
+        self.mechanism_y = mechanism_y
         self.epsilon_y = epsilon_y
+        self.lp_step = lp_step
 
     def __call__(self, data):
         if self.epsilon_y is None:
@@ -85,8 +95,27 @@ class LabelPerturbation:
             data.y = data.y_raw.clone()
 
         perturb_mask = data.train_mask | data.val_mask
-        data.y[perturb_mask] = RandomizedResopnse(eps=self.epsilon_y, k=data.num_classes)(data.y[perturb_mask])
+
+        data.y[perturb_mask] = self.perturb(
+            adj=data.adj_t[perturb_mask, perturb_mask],
+            y=data.y[perturb_mask],
+            num_classes=data.num_classes
+        )
+
         return data
+
+    def perturb(self, adj, y, num_classes):
+        num_nodes = adj.size(0)
+        y = supported_label_mechanisms[self.mechanism_y](eps=self.epsilon_y, d=num_classes)(y)
+        deg = adj.sum(dim=1)
+        nodes = torch.arange(num_nodes, device=deg.device)
+        D_inv = SparseTensor(row=nodes, col=nodes, value=1 / deg)
+
+        for i in range(self.lp_step):
+            y = matmul(adj, y, reduce='sum')
+            y = matmul(D_inv, y)
+
+        return y.argmax(dim=1)
 
 
 class RandomizedProjection:
