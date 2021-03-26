@@ -55,12 +55,10 @@ class NodeClassifier(torch.nn.Module):
                  step:       dict(help='KProp step parameter', option='-k') = 1,
                  aggregator: dict(help='GNN aggregator function', choices=['gcn', 'mean']) = 'gcn',
                  batch_norm: dict(help='use batch-normalization') = True,
-                 correct_loss: dict(help='correct loss based on label noise') = False,
                  self_loops: dict(help='whether to add self-loops to the graph') = True,
                  ):
         super().__init__()
 
-        self.correct_loss = correct_loss
         self.conv1 = KProp(input_dim, hidden_dim, step=step, aggregator=aggregator,
                            add_self_loops=self_loops, cached=True)
         self.conv2 = KProp(hidden_dim, num_classes, step=1, aggregator=aggregator,
@@ -76,15 +74,12 @@ class NodeClassifier(torch.nn.Module):
         x = torch.selu(x)
         x = self.dropout(x)
         x = self.conv2(x, adj_t)
-        x = F.softmax(x, dim=1)
+        x = F.log_softmax(x, dim=1)
         return x
 
     def evaluate(self, data, mask):
         out = self(data)
-        if self.correct_loss and hasattr(data, 'P'):
-            out = out.matmul(data.P)
-        out = torch.log(out)
-        loss = F.nll_loss(out[mask], data.y[mask], ignore_index=-1)
+        loss = F.nll_loss(out[mask], data.y[mask])
         pred = out.argmax(dim=1)
         acc = accuracy(pred=pred[mask], target=data.y[mask]) * 100
         return loss, acc
