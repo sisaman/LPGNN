@@ -96,9 +96,11 @@ def load_dataset(
         val_ratio:      dict(help='Fraction of nodes used for validation') = .25,
         test_ratio:     dict(help='Fraction of nodes used for test') = .25,
         ):
-    dataset = supported_datasets[dataset_name](root=os.path.join(data_dir, dataset_name))
+    dataset = supported_datasets[dataset_name](
+        root=os.path.join(data_dir, dataset_name),
+        pre_transform=ToSparseTensor()
+    )
     data = NodeSplit(train_ratio, val_ratio, test_ratio)(dataset[0])
-    data = ToSparseTensor()(data)
 
     if data_range is not None:
         low, high = data_range
