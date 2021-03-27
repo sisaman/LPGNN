@@ -17,7 +17,6 @@ class FeatureTransform:
 
         if self.feature == 'rnd':
             data.x = torch.rand_like(data.x)
-
         elif self.feature == 'crnd':
             n = data.x.size(0)
             # d = data.x.size(1)
@@ -25,10 +24,8 @@ class FeatureTransform:
             x = torch.rand(n, m, device=data.x.device)
             s = torch.rand_like(data.x).topk(m, dim=1).indices
             data.x = torch.zeros_like(data.x).scatter(1, s, x)
-
         elif self.feature == 'ohd':
             data = OneHotDegree(max_degree=data.num_features - 1)(data)
-
         elif self.feature == 'one':
             data.x = torch.zeros_like(data.x)
 
@@ -53,11 +50,6 @@ class FeaturePerturbation:
     def __call__(self, data):
         if self.epsilon_x is None:
             return data
-
-        if not hasattr(data, 'x_raw'):
-            data.x_raw = data.x  # backup original features for later use
-        else:
-            data.x = data.x_raw  # restore original features
 
         if self.input_range is None:
             self.input_range = data.x.min().item(), data.x.max().item()
@@ -88,11 +80,6 @@ class LabelPerturbation:
     def __call__(self, data):
         if self.epsilon_y is None:
             return data
-
-        if not hasattr(data, 'y_raw'):
-            data.y_raw = data.y.clone()
-        else:
-            data.y = data.y_raw.clone()
 
         perturb_mask = data.train_mask | data.val_mask
 

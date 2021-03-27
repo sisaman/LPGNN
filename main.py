@@ -3,6 +3,7 @@ import sys
 import traceback
 import uuid
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from copy import copy
 
 import numpy as np
 import pandas as pd
@@ -23,7 +24,7 @@ class LogMode(Enum):
 
 @measure_runtime
 def run(args):
-    data = from_args(load_dataset, args)
+    dataset = from_args(load_dataset, args)
 
     test_results = []
     val_results = []
@@ -41,6 +42,7 @@ def run(args):
             logger = WandbLogger(project=args.project_name, config=args, enabled=args.log, group=run_id)
 
         try:
+            data = copy(dataset).to(args.device)
             # define model
             model = from_args(NodeClassifier, args, input_dim=data.num_features, num_classes=data.num_classes)
 
