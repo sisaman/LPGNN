@@ -9,15 +9,12 @@ from torch_sparse import matmul
 
 class KProp(MessagePassing):
     def __init__(self, in_channels, out_channels, step, aggregator, add_self_loops, cached=False):
-        super().__init__(aggr='add' if aggregator == 'gcn' else aggregator)
-        self.in_channels = in_channels
-        self.out_channels = out_channels
+        super().__init__(aggr=aggregator)
         self.fc = Linear(in_channels, out_channels)
         self.K = step
         self.add_self_loops = add_self_loops
         self.cached = cached
         self._cached_x = None
-        self.aggregator = aggregator
 
     def forward(self, x, adj_t):
         if self._cached_x is None or not self.cached:
@@ -28,12 +25,7 @@ class KProp(MessagePassing):
         return x
 
     def neighborhood_aggregation(self, x, adj_t):
-        if self.aggregator == 'gcn':
-            adj_t = gcn_norm(
-                adj_t, num_nodes=x.size(self.node_dim),
-                add_self_loops=self.add_self_loops, dtype=x.dtype
-            )
-        elif self.add_self_loops:
+        if self.add_self_loops:
             adj_t = adj_t.set_diag()
 
         for k in range(self.K):
@@ -50,17 +42,17 @@ class NodeClassifier(torch.nn.Module):
     def __init__(self,
                  input_dim,
                  num_classes,
-                 hidden_dim: dict(help='dimension of the hidden layers') = 16,
-                 dropout:    dict(help='dropout rate (between zero and one)') = 0.0,
-                 step:       dict(help='KProp step parameter', option='-k') = 1,
-                 aggregator: dict(help='GNN aggregator function', choices=['gcn', 'mean']) = 'gcn',
-                 batch_norm: dict(help='use batch-normalization') = True,
-                 self_loops: dict(help='whether to add self-loops to the graph') = True,
+                 hidden_dim:        dict(help='dimension of the hidden layers') = 16,
+                 dropout:           dict(help='dropout rate (between zero and one)') = 0.0,
+                 step:              dict(help='KProp step parameter', option='-k') = 1,
+                 aggregator:        dict(help='GNN aggregator function', choices=['add', 'mean']) = 'add',
+                 batch_norm:        dict(help='use batch-normalization') = True,
+                 add_self_loops:    dict(help='whether to add self-loops to the graph') = True,
                  ):
         super().__init__()
 
         self.conv1 = KProp(input_dim, hidden_dim, step=step, aggregator=aggregator,
-                           add_self_loops=self_loops, cached=True)
+                           add_self_loops=add_self_loops, cached=True)
         self.conv2 = KProp(hidden_dim, num_classes, step=1, aggregator=aggregator,
                            add_self_loops=True, cached=False)
         self.bn = BatchNorm(hidden_dim) if batch_norm else None

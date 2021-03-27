@@ -1,11 +1,12 @@
 import os
 from functools import partial
-
+import logging
 import pandas as pd
 import torch
 from torch_geometric.data import Data, InMemoryDataset, download_url
 from torch_geometric.datasets import Planetoid
-from torch_geometric.transforms import ToSparseTensor
+from torch_geometric.nn.conv.gcn_conv import gcn_norm
+from torch_geometric.transforms import ToSparseTensor, GDC
 from torch_geometric.utils import to_undirected
 
 from transforms import NodeSplit, Normalize
@@ -92,19 +93,33 @@ def load_dataset(
                              choices=supported_datasets) = 'cora',
         data_dir:       dict(help='directory to store the dataset') = './datasets',
         data_range:     dict(help='min and max feature value', nargs=2, type=float) = (0, 1),
-        train_ratio:    dict(help='Fraction of nodes used for training') = .50,
-        val_ratio:      dict(help='Fraction of nodes used for validation') = .25,
-        test_ratio:     dict(help='Fraction of nodes used for test') = .25,
+        train_ratio:    dict(help='fraction of nodes used for training') = .50,
+        val_ratio:      dict(help='fraction of nodes used for validation') = .25,
+        test_ratio:     dict(help='fraction of nodes used for test') = .25,
+        normalization:  dict(help='type of graph normalization', choices=['gcn', 'gdc']) = 'gcn',
         ):
-    dataset = supported_datasets[dataset_name](
-        root=os.path.join(data_dir, dataset_name),
-        pre_transform=ToSparseTensor()
-    )
+    dataset = supported_datasets[dataset_name](root=os.path.join(data_dir, dataset_name))
     data = NodeSplit(train_ratio, val_ratio, test_ratio)(dataset[0])
+
+    if normalization == 'gdc':
+        gdc = GDC(
+            normalization_in='sym',
+            normalization_out='row',
+            diffusion_kwargs=dict(method='ppr', alpha=0.05, eps=1e-4),
+            sparsification_kwargs=dict(method='threshold', avg_degree=256),
+            exact=False
+        )
+        logging.info('Preprocessing data with GDC...')
+        data = gdc(data)
 
     if data_range is not None:
         low, high = data_range
         data = Normalize(low, high)(data)
+
+    data = ToSparseTensor()(data)
+
+    if normalization == 'gcn':
+        data.adj_t = gcn_norm(data.adj_t, num_nodes=data.num_nodes, add_self_loops=False)
 
     data.name = dataset_name
     data.num_classes = dataset.num_classes

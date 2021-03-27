@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from mechanisms import supported_feature_mechanisms, supported_label_mechanisms
-from torch_sparse import matmul, SparseTensor
+from torch_sparse import matmul
 
 
 class FeatureTransform:
@@ -35,9 +35,9 @@ class FeatureTransform:
 class FeaturePerturbation:
     def __init__(self,
                  mechanism_x: dict(help='feature perturbation mechanism', choices=list(supported_feature_mechanisms),
-                                   option='--mx') = 'mbm',
+                                   option='-mx') = 'mbm',
                  epsilon_x: dict(help='privacy budget for feature perturbation (set None to disable)', type=float,
-                                 option='--ex') = None,
+                                 option='-ex') = None,
                  reduce_dim: dict(help='dimension of the random dimensionality reduction (set None to disable)',
                                   type=int) = None,
                  data_range=None,
@@ -68,9 +68,9 @@ class FeaturePerturbation:
 class LabelPerturbation:
     def __init__(self,
                  mechanism_y: dict(help='label perturbation mechanism', choices=supported_label_mechanisms,
-                                   option='--my') = 'krr',
+                                   option='-my') = 'krr',
                  epsilon_y: dict(help='privacy budget for label perturbation (set None to disable)',
-                                 type=float, option='--ey') = None,
+                                 type=float, option='-ey') = None,
                  lp_step: dict(help='number of label propagation steps') = 0
                  ):
         self.mechanism_y = mechanism_y
@@ -92,15 +92,10 @@ class LabelPerturbation:
         return data
 
     def perturb(self, adj, y, num_classes):
-        num_nodes = adj.size(0)
         y = supported_label_mechanisms[self.mechanism_y](eps=self.epsilon_y, d=num_classes)(y)
-        deg = adj.sum(dim=1)
-        nodes = torch.arange(num_nodes, device=deg.device)
-        D_inv = SparseTensor(row=nodes, col=nodes, value=1 / deg)
 
         for i in range(self.lp_step):
             y = matmul(adj, y, reduce='sum')
-            y = matmul(D_inv, y)
 
         return y.argmax(dim=1)
 
