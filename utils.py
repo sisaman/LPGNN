@@ -21,7 +21,7 @@ def measure_runtime(func):
         start = time.time()
         out = func(*args, **kwargs)
         end = time.time()
-        print(f'\nTotal time spent in {str(func)}:', end - start, 'seconds.\n\n')
+        print(f'\nTotal time spent in {str(func.__name__)}:', end - start, 'seconds.\n\n')
         return out
 
     return wrapper
