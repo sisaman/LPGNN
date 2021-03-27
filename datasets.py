@@ -106,7 +106,7 @@ def load_dataset(
             normalization_in='sym',
             normalization_out='row',
             diffusion_kwargs=dict(method='ppr', alpha=0.05, eps=1e-4),
-            sparsification_kwargs=dict(method='threshold', avg_degree=256),
+            sparsification_kwargs=dict(method='threshold', avg_degree=128),
             exact=False
         )
         logging.info('Preprocessing data with GDC...')
