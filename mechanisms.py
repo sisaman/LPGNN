@@ -191,14 +191,14 @@ class MultiDimPiecewise(Piecewise):
 
 class RandomizedResopnse:
     def __init__(self, eps, d):
-        self.eps = eps
         self.d = d
+        self.q = 1.0 / (math.exp(eps) + self.d - 1)
+        self.p = self.q * math.exp(eps)
 
     def __call__(self, y):
         n = y.size(0)
-        p_incorrect = 1.0 / (math.exp(self.eps) + self.d - 1)
-        pr = torch.ones(n, self.d, device=y.device) * p_incorrect
-        pr.scatter_(1, y.unsqueeze(1), p_incorrect * math.exp(self.eps))
+        pr = torch.ones(n, self.d, device=y.device) * self.q
+        pr.scatter_(1, y.unsqueeze(1), self.p)
         y = torch.multinomial(pr, num_samples=1)
         return torch.zeros_like(pr).scatter(1, y, 1)
 
