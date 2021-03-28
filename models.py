@@ -44,12 +44,16 @@ class NodeClassifier(torch.nn.Module):
                  hidden_dim:        dict(help='dimension of the hidden layers') = 16,
                  dropout:           dict(help='dropout rate (between zero and one)') = 0.0,
                  x_steps:           dict(help='KProp step parameter', option='-k') = 1,
+                 y_steps: dict(help='number of label propagation steps') = 0,
                  aggregator:        dict(help='GNN aggregator function', choices=['add', 'mean']) = 'add',
                  batch_norm:        dict(help='use batch-normalization') = True,
                  add_self_loops:    dict(help='whether to add self-loops to the graph') = True,
                  ):
         super().__init__()
 
+        self.y_steps = y_steps
+        self.theta = torch.nn.Parameter(torch.Tensor(self.y_steps + 1))
+        # torch.nn.init.xavier_uniform(self.theta)
         self.conv1 = KProp(input_dim, hidden_dim, steps=x_steps, aggregator=aggregator,
                            add_self_loops=add_self_loops, cached=True)
         self.conv2 = KProp(hidden_dim, num_classes, steps=1, aggregator=aggregator,
@@ -68,11 +72,28 @@ class NodeClassifier(torch.nn.Module):
         x = F.log_softmax(x, dim=1)
         return x
 
+    def propagate_labels(self, data):
+        mask = data.train_mask | data.val_mask
+        adj = data.adj_t[mask, mask]
+        s = data.y[mask]
+        theta = torch.softmax(self.theta, dim=0)
+        y = theta[0] * s
+
+        for i in range(1, self.y_steps + 1):
+            s = matmul(adj, s, reduce='sum')
+            y += theta[i] * s
+
+        new_y = data.y.clone()
+        new_y[mask] = y
+        new_y = new_y.argmax(dim=1)
+        return new_y
+
     def evaluate(self, data, mask):
         out = self(data)
-        loss = F.nll_loss(out[mask], data.y[mask])
+        target = self.propagate_labels(data)
+        loss = F.nll_loss(out[mask], target[mask])
         pred = out.argmax(dim=1)
-        acc = accuracy(pred=pred[mask], target=data.y[mask]) * 100
+        acc = accuracy(pred=pred[mask], target=target[mask]) * 100
         return loss, acc
 
     def training_step(self, data):
@@ -87,7 +108,8 @@ class NodeClassifier(torch.nn.Module):
         return result
 
     def test_step(self, data):
+        print(self.theta)
         out = self(data)
         pred = out.argmax(dim=1)
-        acc = accuracy(pred=pred[data.test_mask], target=data.y[data.test_mask]) * 100
+        acc = accuracy(pred=pred[data.test_mask], target=data.y[data.test_mask].argmax(dim=1)) * 100
         return {'test_acc': acc}

@@ -4,7 +4,7 @@ import traceback
 import uuid
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from copy import copy
-
+import logging
 import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
@@ -84,6 +84,7 @@ def run(args):
 
 
 def main():
+    logging.basicConfig(level=logging.INFO)
     init_parser = ArgumentParser(add_help=False, conflict_handler='resolve')
 
     # dataset args

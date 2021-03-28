@@ -63,6 +63,15 @@ def seed_everything(seed):
     torch.cuda.manual_seed_all(seed)
 
 
+def one_hot_encode(y, num_classes=None):
+    if num_classes is None:
+        num_classes = len(y.unique())
+
+    y = y.unsqueeze(dim=1) if len(y.size()) == 1 else y
+    out = y.new_zeros(y.size(0), num_classes, dtype=torch.float).scatter(1, y, 1)
+    return out
+
+
 def str2bool(v):
     if isinstance(v, bool):
         return v
