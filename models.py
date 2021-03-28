@@ -3,15 +3,14 @@ import torch.nn.functional as F
 from torch_geometric.utils import accuracy
 from torch.nn import Linear, Dropout
 from torch_geometric.nn import MessagePassing, BatchNorm
-from torch_geometric.nn.conv.gcn_conv import gcn_norm
 from torch_sparse import matmul
 
 
 class KProp(MessagePassing):
-    def __init__(self, in_channels, out_channels, step, aggregator, add_self_loops, cached=False):
+    def __init__(self, in_channels, out_channels, steps, aggregator, add_self_loops, cached=False):
         super().__init__(aggr=aggregator)
         self.fc = Linear(in_channels, out_channels)
-        self.K = step
+        self.K = steps
         self.add_self_loops = add_self_loops
         self.cached = cached
         self._cached_x = None
@@ -44,16 +43,16 @@ class NodeClassifier(torch.nn.Module):
                  num_classes,
                  hidden_dim:        dict(help='dimension of the hidden layers') = 16,
                  dropout:           dict(help='dropout rate (between zero and one)') = 0.0,
-                 step:              dict(help='KProp step parameter', option='-k') = 1,
+                 x_steps:           dict(help='KProp step parameter', option='-k') = 1,
                  aggregator:        dict(help='GNN aggregator function', choices=['add', 'mean']) = 'add',
                  batch_norm:        dict(help='use batch-normalization') = True,
                  add_self_loops:    dict(help='whether to add self-loops to the graph') = True,
                  ):
         super().__init__()
 
-        self.conv1 = KProp(input_dim, hidden_dim, step=step, aggregator=aggregator,
+        self.conv1 = KProp(input_dim, hidden_dim, steps=x_steps, aggregator=aggregator,
                            add_self_loops=add_self_loops, cached=True)
-        self.conv2 = KProp(hidden_dim, num_classes, step=1, aggregator=aggregator,
+        self.conv2 = KProp(hidden_dim, num_classes, steps=1, aggregator=aggregator,
                            add_self_loops=True, cached=False)
         self.bn = BatchNorm(hidden_dim) if batch_norm else None
         self.dropout = Dropout(p=dropout)

@@ -71,11 +71,11 @@ class LabelPerturbation:
                                    option='-my') = 'krr',
                  epsilon_y: dict(help='privacy budget for label perturbation (set None to disable)',
                                  type=float, option='-ey') = None,
-                 lp_step: dict(help='number of label propagation steps') = 0
+                 y_steps: dict(help='number of label propagation steps') = 0
                  ):
         self.mechanism_y = mechanism_y
         self.epsilon_y = epsilon_y
-        self.lp_step = lp_step
+        self.y_steps = y_steps
 
     def __call__(self, data):
         if self.epsilon_y is None:
@@ -94,7 +94,7 @@ class LabelPerturbation:
     def perturb(self, adj, y, num_classes):
         y = supported_label_mechanisms[self.mechanism_y](eps=self.epsilon_y, d=num_classes)(y)
 
-        for i in range(self.lp_step):
+        for i in range(self.y_steps):
             y = matmul(adj, y, reduce='sum')
 
         return y.argmax(dim=1)
