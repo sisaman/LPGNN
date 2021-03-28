@@ -82,7 +82,10 @@ class NodeClassifier(torch.nn.Module):
 
     def validation_step(self, data):
         loss, acc = self.evaluate(data, mask=data.val_mask)
-        return {'val_loss': loss.item(), 'val_acc': acc}
+        # test_loss, test_acc = self.evaluate(data, mask=data.test_mask)
+        result = {'val_loss': loss.item(), 'val_acc': acc}
+        # result.update({'test_loss': test_loss.item(), 'test_acc': test_acc})
+        return result
 
     def test_step(self, data):
         out = self(data)
