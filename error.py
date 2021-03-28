@@ -8,7 +8,7 @@ import torch
 
 from datasets import supported_datasets, load_dataset
 from models import KProp
-from mechanisms import supported_mechanisms
+from mechanisms import supported_feature_mechanisms
 from transforms import Privatize
 from utils import colored_text, print_args, seed_everything, measure_runtime
 
@@ -70,7 +70,7 @@ def main():
     # parse arguments
     parser = ArgumentParser()
     parser.add_argument('-d', '--datasets', nargs='+', choices=supported_datasets, default=list(supported_datasets))
-    parser.add_argument('-m', '--methods', nargs='+', choices=supported_mechanisms, default=list(supported_mechanisms))
+    parser.add_argument('-m', '--methods', nargs='+', choices=supported_feature_mechanisms, default=list(supported_feature_mechanisms))
     parser.add_argument('-e', '--epsilons', nargs='+', type=float, dest='epsilons', required=True)
     parser.add_argument('-a', '--aggs', nargs='*', type=str, default=['gcn'])
     parser.add_argument('-s', '--seed', type=int, default=None)
