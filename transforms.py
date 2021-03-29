@@ -1,8 +1,6 @@
 import torch
 import torch.nn.functional as F
 from mechanisms import supported_feature_mechanisms, supported_label_mechanisms
-from torch_sparse import matmul
-
 from utils import one_hot_encode
 
 
@@ -73,41 +71,26 @@ class LabelPerturbation:
                                    option='-my') = 'krr',
                  epsilon_y: dict(help='privacy budget for label perturbation (set None to disable)',
                                  type=float, option='-ey') = None,
-                 # y_steps: dict(help='number of label propagation steps') = 0
                  ):
         self.mechanism_y = mechanism_y
         self.epsilon_y = epsilon_y
-        # self.y_steps = y_steps
 
     def __call__(self, data):
         if self.epsilon_y is None:
             return data
 
         perturb_mask = data.train_mask | data.val_mask
-
-        # y_perturbed = self.perturb(
-        #     adj=data.adj_t[perturb_mask, perturb_mask],
-        #     y=data.y[perturb_mask],
-        #     num_classes=data.num_classes
-        # )
-
-        y_perturbed = supported_label_mechanisms[self.mechanism_y](
+        mechanism = supported_label_mechanisms[self.mechanism_y](
             eps=self.epsilon_y,
             d=data.num_classes
-        )(data.y[perturb_mask])
+        )
 
+        y_perturbed = mechanism(data.y[perturb_mask])
         data.y = one_hot_encode(data.y, num_classes=data.num_classes)
         data.y[perturb_mask] = y_perturbed
+        data.p_ij = mechanism.get_perturbation_matrix().to(data.y.device)
+
         return data
-
-    def perturb(self, y, num_classes):
-        y = supported_label_mechanisms[self.mechanism_y](eps=self.epsilon_y, d=num_classes)(y)
-
-        # for i in range(self.y_steps):
-        #     y = matmul(adj, y, reduce='sum')
-        #
-        # y = y.argmax(dim=1)
-        return y
 
 
 class RandomizedProjection:

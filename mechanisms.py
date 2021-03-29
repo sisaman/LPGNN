@@ -197,10 +197,16 @@ class RandomizedResopnse:
 
     def __call__(self, y):
         n = y.size(0)
-        pr = torch.ones(n, self.d, device=y.device) * self.q
-        pr.scatter_(1, y.unsqueeze(1), self.p)
+        y = y.unsqueeze(dim=1) if len(y.size()) == 1 else y
+        pr = y.new_ones(n, self.d) * self.q
+        pr.scatter_(1, y, self.p)
         y = torch.multinomial(pr, num_samples=1)
         return torch.zeros_like(pr).scatter(1, y, 1)
+
+    def get_perturbation_matrix(self):
+        p_ij = torch.ones(self.d, self.d) * self.q
+        p_ij.fill_diagonal_(self.p)
+        return p_ij
 
 
 class OptimizedUnaryEncoding:
