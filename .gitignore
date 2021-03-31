@@ -139,3 +139,7 @@ checkpoints
 data.ipynb
 test.ipynb
 *.job
+gcn.py
+labeldp.py
+link.py
+test/supergat.py
