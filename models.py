@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from torch import Tensor
+from torch.optim import Adam
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
 from torch_geometric.utils import accuracy, add_remaining_self_loops
 from torch.nn import Linear, Dropout
@@ -81,19 +81,24 @@ class GNN(torch.nn.Module):
 
 
 class LabelGNN(torch.nn.Module):  # todo add second layer
-    def __init__(self, num_classes, steps, aggregator):
+    def __init__(self, num_classes, steps, aggregator, batch_norm):
         super().__init__()
-        self.conv = KProp(
-            in_channels=num_classes, out_channels=num_classes, steps=steps,
+        hidden_dim = 16
+        self.conv1 = KProp(
+            in_channels=num_classes, out_channels=hidden_dim, steps=steps,
             aggregator=aggregator, add_self_loops=False, cached=True
         )
+        self.conv2 = KProp(hidden_dim, num_classes, steps=1, aggregator='add', add_self_loops=False, cached=False)
+        self.bn = BatchNorm(hidden_dim) if batch_norm else None
 
     def forward(self, y, adj_t):
-        y = self.conv.neighborhood_aggregation(y, adj_t)
-        y = torch.log(y)
-        # y = self.conv(y, adj_t)
-        # y = torch.log_softmax(y, dim=1)
-        return y
+        # y = self.conv.neighborhood_aggregation(y, adj_t)
+        # y = torch.log(y)
+        y = self.conv1(y, adj_t)
+        y = self.bn(y) if self.bn else y
+        y = F.selu(y)
+        y = self.conv2(y, adj_t)
+        return F.log_softmax(y, dim=1)
 
 
 class NodeClassifier(torch.nn.Module):
@@ -107,23 +112,35 @@ class NodeClassifier(torch.nn.Module):
                  aggregator: dict(help='GNN aggregator function', choices=['add', 'mean']) = 'add',
                  batch_norm: dict(help='use batch-normalization') = True,
                  add_self_loops: dict(help='whether to add self-loops to the graph') = True,
+                 learning_rate: dict(help='learning rate') = 0.01,
+                 weight_decay: dict(help='weight decay (L2 penalty)') = 0.0,
                  ):
         super().__init__()
 
         self.y_steps = y_steps
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+
         self.x_gnn = GNN(
             input_dim=input_dim, output_dim=num_classes, hidden_dim=hidden_dim, steps=x_steps,
             aggregator=aggregator, batch_norm=batch_norm, dropout=dropout, add_self_loops=add_self_loops
         )
-        self.y_gnn = LabelGNN(num_classes=num_classes, steps=y_steps, aggregator=aggregator)
+        self.y_gnn = LabelGNN(num_classes=num_classes, steps=y_steps, aggregator=aggregator, batch_norm=batch_norm)
 
     def forward(self, data):
         return self.x_gnn(data)
 
-    def infer_labels(self, data):
+    def infer_labels(self, data, y_test=None):
         mask = data.train_mask | data.val_mask
+        y = data.y.clone()
+
+        if y_test is not None:
+            mask = mask | data.test_mask
+            y[data.test_mask] = y_test
+
         adj_t = data.adj_t[mask, mask]
-        y = data.y[mask]
+
+        y = y[mask]
         y = self.y_gnn(y, adj_t)
 
         new_y = data.y.clone()
@@ -131,35 +148,49 @@ class NodeClassifier(torch.nn.Module):
         # new_y = new_y.argmax(dim=1)
         return new_y
 
-    def evaluate(self, data, mask):
-        z = data.y[mask]
+    def training_step(self, data, optim_idx):
+        mask = data.train_mask
         p_yx = self(data)[mask]
         p_yz = self.infer_labels(data)[mask]
-        p_zy = torch.log(data.p[:, z.argmax(dim=1)].T)
-        p_z = torch.log(z.mean(dim=0)[z.argmax(dim=1, keepdim=True)])
-        # loss = F.kl_div(p_yz + p_z, p_zy + p_yx, log_target=True)
 
-        loss = F.nll_loss(input=p_yx, target=p_yz.argmax(dim=1))
-        pred = p_yx.argmax(dim=1)
-        target = p_yz.argmax(dim=1)
-        acc = accuracy(pred=pred, target=target) * 100
-        return loss, acc
+        if optim_idx == 0:
+            pred = p_yx.argmax(dim=1)
+            target = p_yz.argmax(dim=1)
+            loss = F.nll_loss(input=p_yx, target=target)
+            acc = accuracy(pred=pred, target=target) * 100
+            metrics = {'x_loss': loss.item(), 'x_acc': acc}
+        else:
+            pred = p_yz.argmax(dim=1)
+            target = p_yx.argmax(dim=1)
+            loss = F.nll_loss(input=p_yz, target=target)
+            acc = accuracy(pred=pred, target=target) * 100
+            metrics = {'y_loss': loss.item(), 'y_acc': acc}
 
-    def training_step(self, data):
-        mask = data.train_mask
-        loss, acc = self.evaluate(data, mask=mask)
-        return {'train_loss': loss, 'train_acc': acc}
+        return loss, metrics
 
     def validation_step(self, data):
         mask = data.val_mask
-        loss, acc = self.evaluate(data, mask=mask)
-        result = {'val_loss': loss.item(), 'val_acc': acc}
-        result.update(self.test_step(data))
-        return result
+        p_yx = self(data)[mask]
+        p_yz = self.infer_labels(data)[mask]
+        pred = p_yx
+        target = p_yz.argmax(dim=1)
+        loss = F.nll_loss(input=pred, target=target)
+        acc = accuracy(pred=pred.argmax(dim=1), target=target) * 100
+        metrics = {'val_loss': loss.item(), 'val_acc': acc}
+        metrics.update(self.test_step(data))
+        return metrics
 
     def test_step(self, data):
         # print(self.theta)
-        out = self(data)
+        out = self(data)[data.test_mask]
+        y_test = torch.zeros_like(out).scatter(1, out.argmax(dim=1, keepdim=True), 1)
+        out = self.infer_labels(data, y_test=y_test)
         pred = out.argmax(dim=1)
         acc = accuracy(pred=pred[data.test_mask], target=data.y[data.test_mask].argmax(dim=1)) * 100
         return {'test_acc': acc}
+
+    def configure_optimizers(self):
+        return [
+            Adam(self.x_gnn.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay),
+            Adam(self.y_gnn.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay),
+        ]
