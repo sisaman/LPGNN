@@ -12,15 +12,11 @@ from utils import colored_text
 class Trainer:
     def __init__(
             self,
-            learning_rate:  dict(help='learning rate') = 0.01,
-            weight_decay:   dict(help='weight decay (L2 penalty)') = 0.0,
             max_epochs:     dict(help='maximum number of training epochs') = 500,
             device:         dict(help='desired device for training', choices=['cpu', 'cuda']) = 'cuda',
             checkpoint:     dict(help='use model checkpointing') = True,
             logger = None,
     ):
-        self.learning_rate = learning_rate
-        self.weight_decay = weight_decay
         self.max_epochs = max_epochs
         self.device = device
         self.checkpoint = checkpoint
@@ -35,36 +31,36 @@ class Trainer:
             print(colored_text('CUDA is not available, falling back to CPU', color='red'))
             self.device = 'cpu'
 
-    def configure_optimizer(self):
-        optimizer = Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
-        return optimizer
-
     def fit(self, model, data):
         self.model = model.to(self.device)
         data = data.to(self.device)
-        optimizer = self.configure_optimizer()
+        optimizers = self.model.configure_optimizers()
+        if not isinstance(optimizers, list):
+            optimizers = [optimizers]
 
         best_val_loss = float('inf')
         epoch_progbar = tqdm(range(1, self.max_epochs + 1), desc='Epoch: ', leave=False, position=1, file=sys.stdout)
 
         try:
             for epoch in epoch_progbar:
-                train_metrics = self._train(data, optimizer)
-                train_metrics['train_loss'] = train_metrics['train_loss'].item()
+                metrics = {}
+                for idx, optimizer in enumerate(optimizers):
+                    train_metrics = self._train(data, optimizer, idx)
+                    metrics.update(train_metrics)
 
                 val_metrics = self._validation(data)
+                metrics.update(val_metrics)
                 val_loss = val_metrics['val_loss']
 
                 if self.logger:
-                    self.logger.log({**train_metrics, **val_metrics}, step=epoch)
+                    self.logger.log(metrics, step=epoch)
 
                 if self.checkpoint and val_loss < best_val_loss:
                     best_val_loss = val_loss
                     torch.save(self.model.state_dict(), self.checkpoint_path)
 
                 # display metrics on progress bar
-                postfix = {**train_metrics, **val_metrics}
-                epoch_progbar.set_postfix(postfix)
+                epoch_progbar.set_postfix(metrics)
         except KeyboardInterrupt:
             pass
 
@@ -73,11 +69,10 @@ class Trainer:
 
         return best_val_loss
 
-    def _train(self, data, optimizer):
+    def _train(self, data, optimizer, idx):
         self.model.train()
         optimizer.zero_grad()
-        metrics = self.model.training_step(data)
-        loss = metrics['train_loss']
+        loss, metrics = self.model.training_step(data, idx)
         loss.backward()
         optimizer.step()
         return metrics
