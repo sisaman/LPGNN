@@ -202,7 +202,7 @@ class RandomizedResopnse:
 
     def get_transition_matrix(self):
         p_ij = torch.ones(self.d, self.d) * self.q
-        p_ij.fill_diagonal_(self.q)
+        p_ij.fill_diagonal_(self.p)
         return p_ij
 
 
