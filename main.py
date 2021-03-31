@@ -3,7 +3,6 @@ import sys
 import traceback
 import uuid
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-from copy import copy
 import logging
 import numpy as np
 import pandas as pd
@@ -42,7 +41,7 @@ def run(args):
             logger = WandbLogger(project=args.project_name, config=args, enabled=args.log, group=run_id)
 
         try:
-            data = copy(dataset).to(args.device)
+            data = dataset.clone().to(args.device)
             # define model
             model = from_args(NodeClassifier, args, input_dim=data.num_features, num_classes=data.num_classes)
 
