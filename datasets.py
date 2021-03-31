@@ -97,6 +97,7 @@ def load_dataset(
         val_ratio:      dict(help='fraction of nodes used for validation') = .25,
         test_ratio:     dict(help='fraction of nodes used for test') = .25,
         normalization:  dict(help='type of graph normalization', choices=['gcn', 'gdc']) = 'gcn',
+        sparse=True
         ):
     dataset = supported_datasets[dataset_name](root=os.path.join(data_dir, dataset_name))
     data = NodeSplit(train_ratio, val_ratio, test_ratio)(dataset[0])
@@ -111,15 +112,15 @@ def load_dataset(
         )
         logging.info('Preprocessing data with GDC...')
         data = gdc(data)
+    elif normalization == 'gcn':
+        data.edge_index, data.edge_attr = gcn_norm(data.edge_index, num_nodes=data.num_nodes, add_self_loops=False)
 
     if data_range is not None:
         low, high = data_range
         data = Normalize(low, high)(data)
 
-    data = ToSparseTensor()(data)
-
-    if normalization == 'gcn':
-        data.adj_t = gcn_norm(data.adj_t, num_nodes=data.num_nodes, add_self_loops=False)
+    if sparse:
+        data = ToSparseTensor()(data)
 
     data.name = dataset_name
     data.num_classes = dataset.num_classes
