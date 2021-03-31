@@ -78,20 +78,20 @@ class LabelPerturbation:
         self.epsilon_y = epsilon_y
 
     def __call__(self, data):
+        data.y = one_hot_encode(data.y, num_classes=data.num_classes)
+
         if self.epsilon_y is None:
             return data
 
         perturb_mask = data.train_mask | data.val_mask
-
         mechanism = supported_label_mechanisms[self.mechanism_y](
             eps=self.epsilon_y,
             d=data.num_classes
         )
 
         y_perturbed = mechanism(data.y[perturb_mask])
-        data.y = one_hot_encode(data.y, num_classes=data.num_classes)
         data.y[perturb_mask] = y_perturbed
-        data.p = mechanism.get_perturbation_matrix().to(data.y.device)
+        data.p = mechanism.get_transition_matrix().to(data.y.device)
         return data
 
 

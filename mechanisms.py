@@ -196,14 +196,11 @@ class RandomizedResopnse:
         self.p = self.q * math.exp(eps)
 
     def __call__(self, y):
-        n = y.size(0)
-        y = y.unsqueeze(dim=1) if len(y.size()) == 1 else y
-        pr = y.new_ones(n, self.d) * self.q
-        pr.scatter_(1, y, self.p)
-        y = torch.multinomial(pr, num_samples=1)
-        return torch.zeros_like(pr).scatter(1, y, 1)
+        pr = y * self.p + (1 - y) * self.q
+        out = torch.multinomial(pr, num_samples=1)
+        return torch.zeros_like(pr).scatter(1, out, 1)
 
-    def get_perturbation_matrix(self):
+    def get_transition_matrix(self):
         p_ij = torch.ones(self.d, self.d) * self.q
         p_ij.fill_diagonal_(self.q)
         return p_ij
@@ -216,10 +213,7 @@ class OptimizedUnaryEncoding:
         self.q = 1 / (math.exp(eps) + 1)
 
     def __call__(self, y):
-        n = y.size(0)
-        y = y.unsqueeze(dim=1) if len(y.size()) == 1 else y
-        pr = y.new_ones(n, self.d) * self.q
-        pr.scatter_(1, y, self.p)
+        pr = y * self.p + (1 - y) * self.q
         return torch.bernoulli(pr)
 
     def estimate(self, b):
