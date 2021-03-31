@@ -91,7 +91,7 @@ class LabelPerturbation:
         y_perturbed = mechanism(data.y[perturb_mask])
         data.y = one_hot_encode(data.y, num_classes=data.num_classes)
         data.y[perturb_mask] = y_perturbed
-        data.p_ij = mechanism.get_perturbation_matrix().to(data.y.device)
+        data.p = mechanism.get_perturbation_matrix().to(data.y.device)
         return data
 
 
