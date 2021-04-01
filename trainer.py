@@ -15,11 +15,15 @@ class Trainer:
             max_epochs:     dict(help='maximum number of training epochs') = 500,
             device:         dict(help='desired device for training', choices=['cpu', 'cuda']) = 'cuda',
             checkpoint:     dict(help='use model checkpointing') = True,
-            logger = None,
+            learning_rate: dict(help='learning rate') = 0.01,
+            weight_decay: dict(help='weight decay (L2 penalty)') = 0.0,
+            logger=None,
     ):
         self.max_epochs = max_epochs
         self.device = device
         self.checkpoint = checkpoint
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
         self.logger = logger
         self.model = None
 
@@ -31,12 +35,13 @@ class Trainer:
             print(colored_text('CUDA is not available, falling back to CPU', color='red'))
             self.device = 'cpu'
 
+    def configure_optimizers(self):
+        return Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+
     def fit(self, model, data):
         self.model = model.to(self.device)
         data = data.to(self.device)
-        optimizers = self.model.configure_optimizers()
-        if not isinstance(optimizers, list):
-            optimizers = [optimizers]
+        optimizer = self.configure_optimizers()
 
         best_val_loss = float('inf')
         epoch_progbar = tqdm(range(1, self.max_epochs + 1), desc='Epoch: ', leave=False, position=1, file=sys.stdout)
@@ -44,9 +49,8 @@ class Trainer:
         try:
             for epoch in epoch_progbar:
                 metrics = {}
-                for idx, optimizer in enumerate(optimizers):
-                    train_metrics = self._train(data, optimizer, idx)
-                    metrics.update(train_metrics)
+                train_metrics = self._train(data, optimizer)
+                metrics.update(train_metrics)
 
                 val_metrics = self._validation(data)
                 metrics.update(val_metrics)
@@ -69,10 +73,10 @@ class Trainer:
 
         return best_val_loss
 
-    def _train(self, data, optimizer, idx):
+    def _train(self, data, optimizer):
         self.model.train()
         optimizer.zero_grad()
-        loss, metrics = self.model.training_step(data, idx)
+        loss, metrics = self.model.training_step(data)
         loss.backward()
         optimizer.step()
         return metrics
