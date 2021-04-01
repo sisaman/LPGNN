@@ -51,6 +51,9 @@ class WandbLogger:
         if self.enabled:
             self.experiment.summary.update(metrics)
 
+    def watch(self, model):
+        self.experiment.watch(model, log_freq=50)
+
     def finish(self):
         if self.enabled:
             self.experiment.finish()
