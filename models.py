@@ -97,7 +97,7 @@ class NodeClassifier(torch.nn.Module):
         p_yp_x = torch.matmul(p_y_x, data.T)
         p_yt_x = self.prop(p_yp_x, data.adj_t)
 
-        yt = data.y.clone()
+        yt = data.y.float()
         yt[data.test_mask] = 0
         p_yt_yp = self.prop(yt, data.adj_t)
 

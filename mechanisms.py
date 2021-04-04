@@ -1,5 +1,6 @@
 import math
 import torch
+import torch.nn.functional as F
 from scipy.special import erf
 
 
@@ -198,7 +199,7 @@ class RandomizedResopnse:
     def __call__(self, y):
         pr = y * self.p + (1 - y) * self.q
         out = torch.multinomial(pr, num_samples=1)
-        return torch.zeros_like(pr).scatter(1, out, 1)
+        return F.one_hot(out.squeeze(), num_classes=self.d)
 
 
 class OptimizedUnaryEncoding:

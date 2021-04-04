@@ -1,9 +1,6 @@
 import torch
 import torch.nn.functional as F
 from mechanisms import supported_feature_mechanisms, RandomizedResopnse
-from torch_sparse import matmul
-
-from utils import one_hot_encode
 
 
 class FeatureTransform:
@@ -75,7 +72,7 @@ class LabelPerturbation:
         self.y_eps = y_eps
 
     def __call__(self, data):
-        data.y = one_hot_encode(data.y, num_classes=data.num_classes)
+        data.y = F.one_hot(data.y, num_classes=data.num_classes)
         p_ii = 1  # probability of preserving the clean label i
         p_ij = 0  # probability of perturbing label i into another label j
 
