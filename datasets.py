@@ -1,12 +1,10 @@
 import os
 from functools import partial
-import logging
 import pandas as pd
 import torch
 from torch_geometric.data import Data, InMemoryDataset, download_url
 from torch_geometric.datasets import Planetoid
-from torch_geometric.nn.conv.gcn_conv import gcn_norm
-from torch_geometric.transforms import ToSparseTensor, GDC
+from torch_geometric.transforms import ToSparseTensor
 from torch_geometric.utils import to_undirected
 
 from transforms import NodeSplit, Normalize
