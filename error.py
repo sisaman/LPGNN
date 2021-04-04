@@ -16,7 +16,7 @@ from utils import colored_text, print_args, seed_everything, measure_runtime
 class GConv(KProp):
     def __init__(self, aggregator):
         super().__init__(
-            in_channels=1, out_channels=1, step=1,
+            in_channels=1, out_channels=1, steps=1,
             aggregator=aggregator, add_self_loops=True, cached=False
         )
 

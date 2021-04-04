@@ -99,7 +99,7 @@ class NodeClassifier(torch.nn.Module):
         yt_x = self.prop(p_yp_x, data.adj_t)
 
         yt_yp = data.y.float()
-        yt_yp[data.test_mask] = 0
+        yt_yp[data.test_mask] = 0  # to avoid using test labels
         p_yt_yp = self.prop(yt_yp, data.adj_t)
 
         if self.y_steps > 0:
