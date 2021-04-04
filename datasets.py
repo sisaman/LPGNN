@@ -96,24 +96,10 @@ def load_dataset(
         train_ratio:    dict(help='fraction of nodes used for training') = .50,
         val_ratio:      dict(help='fraction of nodes used for validation') = .25,
         test_ratio:     dict(help='fraction of nodes used for test') = .25,
-        normalization:  dict(help='type of graph normalization', choices=['gcn', 'gdc']) = 'gcn',
         sparse=True
         ):
     dataset = supported_datasets[dataset_name](root=os.path.join(data_dir, dataset_name))
     data = NodeSplit(train_ratio, val_ratio, test_ratio)(dataset[0])
-
-    if normalization == 'gdc':
-        gdc = GDC(
-            normalization_in='sym',
-            normalization_out='row',
-            diffusion_kwargs=dict(method='ppr', alpha=0.05, eps=1e-4),
-            sparsification_kwargs=dict(method='threshold', avg_degree=128),
-            exact=False
-        )
-        logging.info('Preprocessing data with GDC...')
-        data = gdc(data)
-    elif normalization == 'gcn':
-        data.edge_index, data.edge_attr = gcn_norm(data.edge_index, num_nodes=data.num_nodes, add_self_loops=False)
 
     if data_range is not None:
         low, high = data_range

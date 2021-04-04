@@ -1,14 +1,14 @@
 import torch
 import torch.nn.functional as F
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
-from torch_geometric.utils import accuracy, add_remaining_self_loops
+from torch_geometric.utils import accuracy
 from torch.nn import Linear, Dropout
-from torch_geometric.nn import MessagePassing, BatchNorm, APPNP
-from torch_sparse import matmul, SparseTensor
+from torch_geometric.nn import MessagePassing, BatchNorm
+from torch_sparse import matmul
 
 
 class KProp(MessagePassing):
-    def __init__(self, in_channels, out_channels, steps, aggregator, add_self_loops, normalize=False, cached=False):
+    def __init__(self, in_channels, out_channels, steps, aggregator, add_self_loops, normalize, cached=False):
         super().__init__(aggr=aggregator)
         self.fc = Linear(in_channels, out_channels)
         self.K = steps
@@ -17,41 +17,25 @@ class KProp(MessagePassing):
         self.cached = cached
         self._cached_x = None
 
-    def forward(self, x, edge_index_or_adj_t, edge_weight=None):
+    def forward(self, x, adj_t):
         if self._cached_x is None or not self.cached:
-            x = self.neighborhood_aggregation(x, edge_index_or_adj_t, edge_weight)
+            x = self.neighborhood_aggregation(x, adj_t)
             self._cached_x = x
 
         x = self.fc(self._cached_x)
         return x
 
-    def neighborhood_aggregation(self, x, edge_index_or_adj_t, edge_weight=None):
+    def neighborhood_aggregation(self, x, adj_t):
         if self.normalize:
-            if isinstance(edge_index_or_adj_t, SparseTensor):
-                edge_index_or_adj_t = gcn_norm(edge_index_or_adj_t, add_self_loops=False)
-            else:
-                edge_index_or_adj_t, edge_weight = gcn_norm(
-                    edge_index_or_adj_t, edge_weight, num_nodes=x.size(0), add_self_loops=False
-                )
+            adj_t = gcn_norm(adj_t, add_self_loops=False)
 
         if self.add_self_loops:
-            if isinstance(edge_index_or_adj_t, SparseTensor):
-                edge_index_or_adj_t = edge_index_or_adj_t.set_diag()
-            else:
-                edge_index_or_adj_t, edge_weight = add_remaining_self_loops(
-                    edge_index_or_adj_t, edge_weight, num_nodes=x.size(0)
-                )
+            adj_t = adj_t.set_diag()
 
         for k in range(self.K):
-            x = self.propagate(edge_index_or_adj_t, x=x)
+            x = self.propagate(adj_t, x=x)
 
         return x
-
-    def message(self, x_j, edge_weight):  # noqa
-        if edge_weight is None:
-            return x_j
-        else:
-            return edge_weight.view(-1, 1) * x_j
 
     def message_and_aggregate(self, adj_t, x):  # noqa
         return matmul(adj_t, x, reduce=self.aggr)
@@ -61,9 +45,9 @@ class GNN(torch.nn.Module):
     def __init__(self, input_dim, output_dim, hidden_dim, steps, aggregator, batch_norm, dropout, add_self_loops):
         super().__init__()
         self.conv1 = KProp(input_dim, hidden_dim, steps=steps, aggregator=aggregator,
-                           add_self_loops=add_self_loops, cached=True)
+                           add_self_loops=add_self_loops, normalize=True, cached=True)
         self.conv2 = KProp(hidden_dim, output_dim, steps=1, aggregator=aggregator,
-                           add_self_loops=True, cached=False)
+                           add_self_loops=True, normalize=True, cached=False)
         self.bn = BatchNorm(hidden_dim) if batch_norm else None
         self.dropout = Dropout(p=dropout)
 
@@ -80,11 +64,11 @@ class GNN(torch.nn.Module):
 
 
 class LabelGNN(torch.nn.Module):
-    def __init__(self, num_classes, steps, aggregator, dropout):
+    def __init__(self, num_classes, steps, aggregator):
         super().__init__()
         self.conv1 = KProp(
             in_channels=num_classes, out_channels=num_classes, steps=steps,
-            aggregator=aggregator, add_self_loops=False, cached=False
+            aggregator=aggregator, add_self_loops=False, normalize=True, cached=False
         )
 
     def forward(self, y, adj_t):
@@ -113,7 +97,7 @@ class NodeClassifier(torch.nn.Module):
             input_dim=input_dim, output_dim=num_classes, hidden_dim=hidden_dim, steps=x_steps,
             aggregator=aggregator, batch_norm=batch_norm, dropout=dropout, add_self_loops=add_self_loops
         )
-        self.y_gnn = LabelGNN(num_classes=num_classes, steps=y_steps, aggregator=aggregator, dropout=dropout)
+        self.y_gnn = LabelGNN(num_classes=num_classes, steps=y_steps, aggregator=aggregator)
 
     def forward(self, data):
         return self.x_gnn(data)
@@ -126,16 +110,16 @@ class NodeClassifier(torch.nn.Module):
         else:
             p_y_x = self(data)
             p_yp_x = torch.matmul(p_y_x, data.p)
-            p_yt_x = self.y_gnn(p_yp_x, data.adj_t)[mask]
+            p_yt_x = self.y_gnn(p_yp_x, data.adj_t)
 
             yp = data.y.clone()
             yp_test = torch.randint(low=0, high=data.num_classes, size=(data.test_mask.sum(), 1), device=data.y.device)
             yp[data.test_mask] = 0
             yp[data.test_mask].scatter_(1, yp_test, 1)
-            p_yt_yp = self.y_gnn(yp, data.adj_t)[mask]
+            p_yt_yp = self.y_gnn(yp, data.adj_t)
 
-            out = p_yt_x
-            target = p_yt_yp
+            out = p_yt_x[mask]
+            target = p_yt_yp[mask]
 
         target = target.argmax(dim=1)
         loss = F.nll_loss(input=out, target=target)
@@ -161,5 +145,3 @@ class NodeClassifier(torch.nn.Module):
         target = data.y[data.test_mask].argmax(dim=1)
         acc = accuracy(pred=pred, target=target) * 100
         return {'test_acc': acc}
-
-
