@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from mechanisms import supported_feature_mechanisms, supported_label_mechanisms
+from mechanisms import supported_feature_mechanisms, RandomizedResopnse
 from torch_sparse import matmul
 
 from utils import one_hot_encode
@@ -36,21 +36,21 @@ class FeatureTransform:
 
 class FeaturePerturbation:
     def __init__(self,
-                 mechanism_x: dict(help='feature perturbation mechanism', choices=list(supported_feature_mechanisms),
-                                   option='-mx') = 'mbm',
-                 epsilon_x: dict(help='privacy budget for feature perturbation (set None to disable)', type=float,
-                                 option='-ex') = None,
+                 mechanism: dict(help='feature perturbation mechanism', choices=list(supported_feature_mechanisms),
+                                 option='-m') = 'mbm',
+                 x_eps: dict(help='privacy budget for feature perturbation (set None to disable)', type=float,
+                             option='-ex') = None,
                  reduce_dim: dict(help='dimension of the random dimensionality reduction (set None to disable)',
                                   type=int) = None,
                  data_range=None,
                  ):
-        self.mechanism_x = mechanism_x
+        self.mechanism = mechanism
         self.input_range = data_range
         self.reduce_dim = reduce_dim
-        self.epsilon_x = epsilon_x
+        self.x_eps = x_eps
 
     def __call__(self, data):
-        if self.epsilon_x is None:
+        if self.x_eps is None:
             return data
 
         if self.input_range is None:
@@ -59,8 +59,8 @@ class FeaturePerturbation:
         if self.reduce_dim:
             data = RandomizedProjection(input_dim=data.num_features, output_dim=self.reduce_dim)(data)
 
-        data.x = supported_feature_mechanisms[self.mechanism_x](
-            eps=self.epsilon_x,
+        data.x = supported_feature_mechanisms[self.mechanism](
+            eps=self.x_eps,
             input_range=self.input_range
         )(data.x)
 
@@ -69,29 +69,27 @@ class FeaturePerturbation:
 
 class LabelPerturbation:
     def __init__(self,
-                 mechanism_y: dict(help='label perturbation mechanism', choices=supported_label_mechanisms,
-                                   option='-my') = 'krr',
-                 epsilon_y: dict(help='privacy budget for label perturbation (set None to disable)',
-                                 type=float, option='-ey') = None,
+                 y_eps: dict(help='privacy budget for label perturbation (set None to disable)',
+                             type=float, option='-ey') = None,
                  ):
-        self.mechanism_y = mechanism_y
-        self.epsilon_y = epsilon_y
+        self.y_eps = y_eps
 
     def __call__(self, data):
         data.y = one_hot_encode(data.y, num_classes=data.num_classes)
+        p_ii = 1  # probability of preserving the clean label i
+        p_ij = 0  # probability of perturbing label i into another label j
 
-        if self.epsilon_y is None:
-            return data
+        if self.y_eps is not None:
+            mechanism = RandomizedResopnse(eps=self.y_eps, d=data.num_classes)
+            perturb_mask = data.train_mask | data.val_mask
+            y_perturbed = mechanism(data.y[perturb_mask])
+            data.y[perturb_mask] = y_perturbed
+            p_ii, p_ij = mechanism.p, mechanism.q
 
-        perturb_mask = data.train_mask | data.val_mask
-        mechanism = supported_label_mechanisms[self.mechanism_y](
-            eps=self.epsilon_y,
-            d=data.num_classes
-        )
+        # set label transistion matrix
+        data.T = torch.ones(data.num_classes, data.num_classes, device=data.y.device) * p_ij
+        data.T.fill_diagonal_(p_ii)
 
-        y_perturbed = mechanism(data.y[perturb_mask])
-        data.y[perturb_mask] = y_perturbed
-        data.p = mechanism.get_transition_matrix().to(data.y.device)
         return data
 
 

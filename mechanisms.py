@@ -200,11 +200,6 @@ class RandomizedResopnse:
         out = torch.multinomial(pr, num_samples=1)
         return torch.zeros_like(pr).scatter(1, out, 1)
 
-    def get_transition_matrix(self):
-        p_ij = torch.ones(self.d, self.d) * self.q
-        p_ij.fill_diagonal_(self.p)
-        return p_ij
-
 
 class OptimizedUnaryEncoding:
     def __init__(self, eps, d):
