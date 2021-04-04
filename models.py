@@ -79,12 +79,14 @@ class NodeClassifier(torch.nn.Module):
                  ):
         super().__init__()
 
+        self.y_steps = y_steps
+
         self.gnn = GNN(
             input_dim=input_dim, output_dim=num_classes, hidden_dim=hidden_dim, steps=x_steps,
             aggregator='add', batch_norm=batch_norm, dropout=dropout, add_self_loops=add_self_loops
         )
-        self.label_prop = KProp(
-            1, 1, steps=y_steps, aggregator='add', add_self_loops=add_self_loops, normalize=True, cached=False
+        self.prop = KProp(
+            1, 1, steps=y_steps, aggregator='add', add_self_loops=False, normalize=True, cached=False
         ).neighborhood_aggregation
 
     def forward(self, data):
@@ -93,11 +95,17 @@ class NodeClassifier(torch.nn.Module):
     def step(self, data, mask):
         p_y_x = self(data)
         p_yp_x = torch.matmul(p_y_x, data.T)
-        p_yt_x = torch.log(self.label_prop(p_yp_x, data.adj_t))
+        p_yt_x = self.prop(p_yp_x, data.adj_t)
 
         yt = data.y.clone()
         yt[data.test_mask] = 0
-        p_yt_yp = torch.softmax(self.label_prop(yt, data.adj_t), dim=1)  # todo might not work for non-priv labels
+        p_yt_yp = self.prop(yt, data.adj_t)
+
+        if self.y_steps > 0:
+            p_yt_x = torch.log_softmax(p_yt_x, dim=1)
+            p_yt_yp = torch.softmax(p_yt_yp, dim=1)
+        else:
+            p_yt_x = torch.log(p_yt_x + 1e-7)
 
         out = p_yt_x[mask]
         target = p_yt_yp[mask].argmax(dim=1)
