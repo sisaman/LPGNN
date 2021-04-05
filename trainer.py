@@ -15,8 +15,9 @@ class Trainer:
             max_epochs:     dict(help='maximum number of training epochs') = 500,
             device:         dict(help='desired device for training', choices=['cpu', 'cuda']) = 'cuda',
             checkpoint:     dict(help='use model checkpointing') = True,
-            learning_rate: dict(help='learning rate') = 0.01,
-            weight_decay: dict(help='weight decay (L2 penalty)') = 0.0,
+            learning_rate:  dict(help='learning rate') = 0.01,
+            weight_decay:   dict(help='weight decay (L2 penalty)') = 0.0,
+            patience:       dict(help='early-stopping patience window size') = 0,
             logger=None,
     ):
         self.max_epochs = max_epochs
@@ -24,6 +25,7 @@ class Trainer:
         self.checkpoint = checkpoint
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
+        self.patience = patience
         self.logger = logger
         self.model = None
 
@@ -43,6 +45,8 @@ class Trainer:
         data = data.to(self.device)
         optimizer = self.configure_optimizers()
 
+        num_epochs_without_improvement = 0
+        best_val_acc = 0
         best_val_loss = float('inf')
         epoch_progbar = tqdm(range(1, self.max_epochs + 1), desc='Epoch: ', leave=False, position=1, file=sys.stdout)
 
@@ -55,13 +59,21 @@ class Trainer:
                 val_metrics = self._validation(data)
                 metrics.update(val_metrics)
                 val_loss = val_metrics['val_loss']
+                val_acc = val_metrics['val_acc']
 
                 if self.logger:
                     self.logger.log({**metrics, 'epoch': epoch})
 
-                if self.checkpoint and val_loss < best_val_loss:
+                if val_acc > best_val_acc or (val_acc == best_val_acc and val_loss < best_val_loss):
                     best_val_loss = val_loss
-                    torch.save(self.model.state_dict(), self.checkpoint_path)
+                    best_val_acc = val_acc
+                    num_epochs_without_improvement = 0
+                    if self.checkpoint:
+                        torch.save(self.model.state_dict(), self.checkpoint_path)
+                else:
+                    num_epochs_without_improvement += 1
+                    if num_epochs_without_improvement >= self.patience > 0:
+                        break
 
                 # display metrics on progress bar
                 epoch_progbar.set_postfix(metrics)
@@ -69,7 +81,7 @@ class Trainer:
             pass
 
         if self.logger:
-            self.logger.log_summary({'val_loss': best_val_loss})
+            self.logger.log_summary({'val_loss': best_val_loss, 'val_acc': best_val_acc})
 
         return best_val_loss
 

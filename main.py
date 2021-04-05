@@ -72,7 +72,7 @@ def run(args):
 
     # save results
     if args.log_mode == LogMode.COLLECTIVE:
-        logger.log_summary({'best_val_loss': np.mean(val_results), 'test_acc': np.mean(test_results)})
+        logger.log_summary({'avg_val_loss': np.mean(val_results), 'avg_test_acc': np.mean(test_results)})
 
     os.makedirs(args.output_dir, exist_ok=True)
     df_results = pd.DataFrame(test_results, columns=['test_acc']).rename_axis('version').reset_index()
