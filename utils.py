@@ -1,7 +1,6 @@
 import os
 import time
 from argparse import ArgumentParser, ArgumentTypeError, Action
-
 import inspect
 import enum
 import functools
@@ -38,18 +37,19 @@ class WandbLogger:
             os.environ["WANDB_SILENT"] = "true"
 
             settings = wandb.Settings(start_method="fork", _disable_stats=True)  # noqa
-            self.experiment = wandb.init(
-                project=project, name=name, config=config, save_code=save_code, reinit=reinit,
-                settings=settings, **kwargs
-            )
 
-    def log(self, metrics, step=None):
+            self.experiment = wandb.init(
+                name=name, project=project,
+                reinit=reinit, resume='allow', config=config, save_code=save_code, **kwargs)
+
+    def log(self, metrics):
         if self.enabled:
-            self.experiment.log(metrics, step=step)
+            self.experiment.log(metrics)
 
     def log_summary(self, metrics):
         if self.enabled:
-            self.experiment.summary.update(metrics)
+            for metric, value in metrics.items():
+                self.experiment.summary[metric] = value
 
     def watch(self, model):
         self.experiment.watch(model, log_freq=50)

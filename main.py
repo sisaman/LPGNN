@@ -53,8 +53,7 @@ def run(args):
             ])(data)
 
             # train the model
-            trainer_logger = logger if args.log_mode == LogMode.INDIVIDUAL else None
-            trainer = from_args(Trainer, args, logger=trainer_logger)
+            trainer = from_args(Trainer, args, logger=logger if args.log_mode == LogMode.INDIVIDUAL else None)
             best_val_loss = trainer.fit(model, data)
             result = trainer.test(data)
 

@@ -57,7 +57,7 @@ class Trainer:
                 val_loss = val_metrics['val_loss']
 
                 if self.logger:
-                    self.logger.log(metrics, step=epoch)
+                    self.logger.log({**metrics, 'epoch': epoch})
 
                 if self.checkpoint and val_loss < best_val_loss:
                     best_val_loss = val_loss
@@ -69,7 +69,7 @@ class Trainer:
             pass
 
         if self.logger:
-            self.logger.log_summary({'best_val_loss': best_val_loss})
+            self.logger.log_summary({'val_loss': best_val_loss})
 
         return best_val_loss
 
