@@ -54,11 +54,11 @@ def run(args):
 
             # train the model
             trainer = from_args(Trainer, args, logger=logger if args.log_mode == LogMode.INDIVIDUAL else None)
-            best_val_loss = trainer.fit(model, data)
+            best_metrics = trainer.fit(model, data)
             result = trainer.test(data)
 
             # process results
-            val_results.append(best_val_loss)
+            val_results.append(best_metrics['val_acc'])
             test_results.append(result['test_acc'])
             progbar.set_postfix({'last_test_acc': test_results[-1], 'avg_test_acc': np.mean(test_results)})
 
@@ -72,10 +72,16 @@ def run(args):
 
     # save results
     if args.log_mode == LogMode.COLLECTIVE:
-        logger.log_summary({'avg_val_loss': np.mean(val_results), 'avg_test_acc': np.mean(test_results)})
+        logger.log_summary({
+            'val_acc_mean': np.mean(val_results),
+            'val_acc_std': np.std(val_results),
+            'test_acc_mean': np.mean(test_results),
+            'test_acc_std': np.std(test_results)
+        })
 
     os.makedirs(args.output_dir, exist_ok=True)
     df_results = pd.DataFrame(test_results, columns=['test_acc']).rename_axis('version').reset_index()
+    df_results['group'] = run_id
     for arg_name, arg_val in vars(args).items():
         df_results[arg_name] = [arg_val] * len(test_results)
     df_results.to_csv(os.path.join(args.output_dir, f'{run_id}.csv'), index=False)
