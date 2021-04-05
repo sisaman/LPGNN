@@ -17,7 +17,7 @@ class Trainer:
             checkpoint:     dict(help='use model checkpointing') = True,
             learning_rate:  dict(help='learning rate') = 0.01,
             weight_decay:   dict(help='weight decay (L2 penalty)') = 0.0,
-            patience:       dict(help='early-stopping patience window size') = 0,
+            patience:       dict(help='early-stopping patience window size') = 100,
             logger=None,
     ):
         self.max_epochs = max_epochs
@@ -80,10 +80,12 @@ class Trainer:
         except KeyboardInterrupt:
             pass
 
-        if self.logger:
-            self.logger.log_summary({'val_loss': best_val_loss, 'val_acc': best_val_acc})
+        best_metrics = {'val_loss': best_val_loss, 'val_acc': best_val_acc}
 
-        return best_val_loss
+        if self.logger:
+            self.logger.log_summary(best_metrics)
+
+        return best_metrics
 
     def _train(self, data, optimizer):
         self.model.train()
