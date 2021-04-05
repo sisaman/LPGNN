@@ -26,7 +26,7 @@ class FeatureTransform:
         elif self.feature == 'ohd':
             data = OneHotDegree(max_degree=data.num_features - 1)(data)
         elif self.feature == 'one':
-            data.x = torch.zeros_like(data.x)
+            data.x = torch.ones_like(data.x)
 
         return data
 
