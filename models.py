@@ -74,11 +74,13 @@ class NodeClassifier(torch.nn.Module):
                  dropout: dict(help='dropout rate (between zero and one)') = 0.0,
                  x_steps: dict(help='KProp step parameter', option='-k') = 1,
                  y_steps: dict(help='number of label propagation steps') = 0,
+                 correct_loss: dict(help='perform loss correction') = True,
                  batch_norm: dict(help='use batch-normalization') = True,
                  add_self_loops: dict(help='whether to add self-loops to the graph') = True,
                  ):
         super().__init__()
 
+        self.correct_loss = correct_loss
         self.y_steps = y_steps
 
         self.gnn = GNN(
@@ -94,22 +96,21 @@ class NodeClassifier(torch.nn.Module):
 
     def training_step(self, data):
         mask = data.train_mask
-        p_y_x = self(data)
-        p_yp_x = torch.matmul(p_y_x, data.T)
-        yt_x = self.prop(p_yp_x, data.adj_t)
+        p_y_x = self(data)                                                      # P(y|x')
+        p_yp_x = torch.matmul(p_y_x, data.T) if self.correct_loss else p_y_x    # P(y'|x')
+        p_yt_x = self.prop(p_yp_x, data.adj_t)                                  # P(y~|x')
 
         yt_yp = data.y.float()
         yt_yp[data.test_mask] = 0  # to avoid using test labels
-        p_yt_yp = self.prop(yt_yp, data.adj_t)
+        yt_yp = self.prop(yt_yp, data.adj_t)                                    # y~
 
         if self.y_steps > 0:
-            log_p_yt_x = torch.log_softmax(yt_x, dim=1)
-            p_yt_yp = torch.softmax(p_yt_yp, dim=1)
+            log_p_yt_x = torch.log_softmax(p_yt_x, dim=1)
         else:
-            log_p_yt_x = torch.log(yt_x + 1e-7)
+            log_p_yt_x = torch.log(p_yt_x + 1e-10)
 
         out = log_p_yt_x[mask]
-        target = p_yt_yp[mask].argmax(dim=1)
+        target = yt_yp[mask].argmax(dim=1)
 
         loss = F.nll_loss(input=out, target=target)
         acc = accuracy(pred=out.argmax(dim=1), target=target) * 100
@@ -119,8 +120,8 @@ class NodeClassifier(torch.nn.Module):
     def validation_step(self, data):
         mask = data.val_mask
         p_y_x = self(data)
-        p_yp_x = torch.matmul(p_y_x, data.T)
-        out = torch.log(p_yp_x[mask] + 1e-8)
+        p_yp_x = torch.matmul(p_y_x, data.T) if self.correct_loss else p_y_x
+        out = torch.log(p_yp_x[mask] + 1e-10)
         target = data.y[mask].argmax(dim=1)
 
         loss = F.nll_loss(input=out, target=target)
