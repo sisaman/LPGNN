@@ -74,12 +74,14 @@ class NodeClassifier(torch.nn.Module):
                  dropout: dict(help='dropout rate (between zero and one)') = 0.0,
                  x_steps: dict(help='KProp step parameter', option='-k') = 1,
                  y_steps: dict(help='number of label propagation steps') = 0,
-                 correct_loss: dict(help='perform loss correction') = True,
+                 correct_loss: dict(help='perform loss correction') = False,
+                 propagate_predictions: dict(help='whether to propagate predictions') = False,
                  batch_norm: dict(help='use batch-normalization') = True,
                  add_self_loops: dict(help='whether to add self-loops to the graph') = True,
                  ):
         super().__init__()
 
+        self.propagate_predictions = propagate_predictions
         self.correct_loss = correct_loss
         self.y_steps = y_steps
 
@@ -98,7 +100,7 @@ class NodeClassifier(torch.nn.Module):
         mask = data.train_mask
         p_y_x = self(data)                                                      # P(y|x')
         p_yp_x = torch.matmul(p_y_x, data.T) if self.correct_loss else p_y_x    # P(y'|x')
-        p_yt_x = self.prop(p_yp_x, data.adj_t)                                  # P(y~|x')
+        p_yt_x = self.prop(p_yp_x, data.adj_t) if self.propagate_predictions else p_yp_x                    # P(y~|x')
 
         yt_yp = data.y.float()
         yt_yp[data.test_mask] = 0  # to avoid using test labels
