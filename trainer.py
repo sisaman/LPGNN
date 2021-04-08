@@ -12,7 +12,7 @@ from utils import colored_text
 class Trainer:
     def __init__(
             self,
-            optimizer:      dict('optimization algorithm', choices=['sgd', 'adam']) = 'sgd',
+            optimizer:      dict(help='optimization algorithm', choices=['sgd', 'adam']) = 'sgd',
             max_epochs:     dict(help='maximum number of training epochs') = 500,
             device:         dict(help='desired device for training', choices=['cpu', 'cuda']) = 'cuda',
             checkpoint:     dict(help='use model checkpointing') = True,
