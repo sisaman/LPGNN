@@ -7,11 +7,19 @@ import functools
 import torch
 import numpy as np
 import random
+import torch.nn.functional as F
 
 try:
     import wandb
 except ImportError:
     wandb = None
+
+
+def js_div(p, q):
+    eps = 1e-20
+    m = (p + q) / 2
+    js = F.kl_div(torch.log(p + eps), m) + F.kl_div(torch.log(q + eps), m)
+    return js / 2
 
 
 def measure_runtime(func):
