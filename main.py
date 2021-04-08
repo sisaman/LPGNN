@@ -34,61 +34,58 @@ def run(args):
         logger = WandbLogger(project=args.project_name, config=args, enabled=args.log, reinit=False, group=run_id)
 
     progbar = tqdm(range(args.repeats), file=sys.stdout)
-    try:
-        for version in progbar:
+    for version in progbar:
 
+        if args.log_mode == LogMode.INDIVIDUAL:
+            args.version = version
+            logger = WandbLogger(project=args.project_name, config=args, enabled=args.log, group=run_id)
+
+        try:
+            data = dataset.clone().to(args.device)
+            # define model
+            model = from_args(NodeClassifier, args, input_dim=data.num_features, num_classes=data.num_classes)
+
+            # preprocess data
+            data = Compose([
+                from_args(FeatureTransform, args),
+                from_args(FeaturePerturbation, args),
+                from_args(LabelPerturbation, args)
+            ])(data)
+
+            # train the model
+            trainer = from_args(Trainer, args, logger=logger if args.log_mode == LogMode.INDIVIDUAL else None)
+            best_metrics = trainer.fit(model, data)
+            result = trainer.test(data)
+
+            # process results
+            val_results.append(best_metrics['val_acc'])
+            test_results.append(result['test_acc'])
+            progbar.set_postfix({'last_test_acc': test_results[-1], 'avg_test_acc': np.mean(test_results)})
+
+        except Exception as e:
+            error = ''.join(traceback.format_exception(Exception, e, e.__traceback__))
+            logger.log({'error': error})
+            raise e
+        finally:
             if args.log_mode == LogMode.INDIVIDUAL:
-                args.version = version
-                logger = WandbLogger(project=args.project_name, config=args, enabled=args.log, group=run_id)
+                logger.finish()
 
-            try:
-                data = dataset.clone().to(args.device)
-                # define model
-                model = from_args(NodeClassifier, args, input_dim=data.num_features, num_classes=data.num_classes)
+    # save results
+    if args.log_mode == LogMode.COLLECTIVE:
+        logger.log_summary({
+            'val_acc_mean': np.mean(val_results),
+            'val_acc_std': np.std(val_results),
+            'test_acc_mean': np.mean(test_results),
+            'test_acc_std': np.std(test_results)
+        })
 
-                # preprocess data
-                data = Compose([
-                    from_args(FeatureTransform, args),
-                    from_args(FeaturePerturbation, args),
-                    from_args(LabelPerturbation, args)
-                ])(data)
+    os.makedirs(args.output_dir, exist_ok=True)
+    df_results = pd.DataFrame(test_results, columns=['test_acc']).rename_axis('version').reset_index()
+    df_results['group'] = run_id
+    for arg_name, arg_val in vars(args).items():
+        df_results[arg_name] = [arg_val] * len(test_results)
+    df_results.to_csv(os.path.join(args.output_dir, f'{run_id}.csv'), index=False)
 
-                # train the model
-                trainer = from_args(Trainer, args, logger=logger if args.log_mode == LogMode.INDIVIDUAL else None)
-                best_metrics = trainer.fit(model, data)
-                result = trainer.test(data)
-
-                # process results
-                val_results.append(best_metrics['val_acc'])
-                test_results.append(result['test_acc'])
-                progbar.set_postfix({'last_test_acc': test_results[-1], 'avg_test_acc': np.mean(test_results)})
-
-            except Exception as e:
-                error = ''.join(traceback.format_exception(Exception, e, e.__traceback__))
-                logger.log({'error': error})
-                raise e
-            finally:
-                if args.log_mode == LogMode.INDIVIDUAL:
-                    logger.finish()
-
-        # save results
-        if args.log_mode == LogMode.COLLECTIVE:
-            logger.log_summary({
-                'val_acc_mean': np.mean(val_results),
-                'val_acc_std': np.std(val_results),
-                'test_acc_mean': np.mean(test_results),
-                'test_acc_std': np.std(test_results)
-            })
-
-        os.makedirs(args.output_dir, exist_ok=True)
-        df_results = pd.DataFrame(test_results, columns=['test_acc']).rename_axis('version').reset_index()
-        df_results['group'] = run_id
-        for arg_name, arg_val in vars(args).items():
-            df_results[arg_name] = [arg_val] * len(test_results)
-        df_results.to_csv(os.path.join(args.output_dir, f'{run_id}.csv'), index=False)
-
-    except KeyboardInterrupt:
-        print('Graceful Shutdown...')
 
 def main():
     logging.basicConfig(level=logging.INFO)
@@ -130,7 +127,10 @@ def main():
     if args.seed:
         seed_everything(args.seed)
 
-    run(args)
+    try:
+        run(args)
+    except KeyboardInterrupt:
+        print('Graceful Shutdown...')
 
 
 if __name__ == '__main__':
