@@ -74,8 +74,8 @@ class NodeClassifier(torch.nn.Module):
                  dropout: dict(help='dropout rate (between zero and one)') = 0.0,
                  x_steps: dict(help='KProp step parameter', option='-k') = 1,
                  y_steps: dict(help='number of label propagation steps') = 0,
-                 correct_loss: dict(help='perform loss correction') = False,
-                 propagate_predictions: dict(help='whether to propagate predictions') = False,
+                 correct_loss: dict(help='perform loss correction') = True,
+                 propagate_predictions: dict(help='whether to propagate predictions') = True,
                  batch_norm: dict(help='use batch-normalization') = True,
                  add_self_loops: dict(help='whether to add self-loops to the graph') = True,
                  ):
@@ -96,15 +96,14 @@ class NodeClassifier(torch.nn.Module):
     def forward(self, data):
         return self.gnn(data)
 
-    def training_step(self, data):
-        mask = data.train_mask
-        p_y_x = self(data)                                                      # P(y|x')
-        p_yp_x = torch.matmul(p_y_x, data.T) if self.correct_loss else p_y_x    # P(y'|x')
-        p_yt_x = self.prop(p_yp_x, data.adj_t) if self.propagate_predictions else p_yp_x                    # P(y~|x')
+    def evaluate(self, data, mask):
+        p_y_x = self(data)  # P(y|x')
+        p_yp_x = torch.matmul(p_y_x, data.T) if self.correct_loss else p_y_x  # P(y'|x')
+        p_yt_x = self.prop(p_yp_x, data.adj_t) if self.propagate_predictions else p_yp_x  # P(y~|x')
 
         yt_yp = data.y.float()
         yt_yp[data.test_mask] = 0  # to avoid using test labels
-        yt_yp = self.prop(yt_yp, data.adj_t)                                    # y~
+        yt_yp = self.prop(yt_yp, data.adj_t)  # y~
 
         if self.y_steps > 0:
             log_p_yt_x = torch.log_softmax(p_yt_x, dim=1)
@@ -116,18 +115,17 @@ class NodeClassifier(torch.nn.Module):
 
         loss = F.nll_loss(input=out, target=target)
         acc = accuracy(pred=out.argmax(dim=1), target=target) * 100
+        return loss, acc
+
+    def training_step(self, data):
+        mask = data.train_mask
+        loss, acc = self.evaluate(data, mask)
         metrics = {'train_loss': loss.item(), 'train_acc': acc}
         return loss, metrics
 
     def validation_step(self, data):
         mask = data.val_mask
-        p_y_x = self(data)
-        p_yp_x = torch.matmul(p_y_x, data.T) if self.correct_loss else p_y_x
-        out = torch.log(p_yp_x[mask] + 1e-10)
-        target = data.y[mask].argmax(dim=1)
-
-        loss = F.nll_loss(input=out, target=target)
-        acc = accuracy(pred=out.argmax(dim=1), target=target) * 100
+        loss, acc = self.evaluate(data, mask)
         metrics = {'val_loss': loss.item(), 'val_acc': acc}
         metrics.update(self.test_step(data))
         return metrics
