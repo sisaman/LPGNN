@@ -40,9 +40,10 @@ class Trainer:
             self.device = 'cpu'
 
     def configure_optimizers(self):
-        return {
-            'sgd': SGD, 'adam': Adam
-        }[self.optimizer_name](self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        if self.optimizer_name == 'sgd':
+            return SGD(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        elif self.optimizer_name == 'adam':
+            return Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
 
     def fit(self, model, data):
         self.model = model.to(self.device)
@@ -52,37 +53,34 @@ class Trainer:
         num_epochs_without_improvement = 0
         best_val_acc = 0
         best_val_loss = float('inf')
+
         epoch_progbar = tqdm(range(1, self.max_epochs + 1), desc='Epoch: ', leave=False, position=1, file=sys.stdout)
+        for epoch in epoch_progbar:
+            metrics = {}
+            train_metrics = self._train(data, optimizer)
+            metrics.update(train_metrics)
 
-        try:
-            for epoch in epoch_progbar:
-                metrics = {}
-                train_metrics = self._train(data, optimizer)
-                metrics.update(train_metrics)
+            val_metrics = self._validation(data)
+            metrics.update(val_metrics)
+            val_loss = val_metrics['val_loss']
+            val_acc = val_metrics['val_acc']
 
-                val_metrics = self._validation(data)
-                metrics.update(val_metrics)
-                val_loss = val_metrics['val_loss']
-                val_acc = val_metrics['val_acc']
+            if self.logger:
+                self.logger.log({**metrics, 'epoch': epoch})
 
-                if self.logger:
-                    self.logger.log({**metrics, 'epoch': epoch})
+            if val_acc > best_val_acc or (val_acc == best_val_acc and val_loss < best_val_loss):
+                best_val_loss = val_loss
+                best_val_acc = val_acc
+                num_epochs_without_improvement = 0
+                if self.checkpoint:
+                    torch.save(self.model.state_dict(), self.checkpoint_path)
+            else:
+                num_epochs_without_improvement += 1
+                if num_epochs_without_improvement >= self.patience > 0:
+                    break
 
-                if val_acc > best_val_acc or (val_acc == best_val_acc and val_loss < best_val_loss):
-                    best_val_loss = val_loss
-                    best_val_acc = val_acc
-                    num_epochs_without_improvement = 0
-                    if self.checkpoint:
-                        torch.save(self.model.state_dict(), self.checkpoint_path)
-                else:
-                    num_epochs_without_improvement += 1
-                    if num_epochs_without_improvement >= self.patience > 0:
-                        break
-
-                # display metrics on progress bar
-                epoch_progbar.set_postfix(metrics)
-        except KeyboardInterrupt:
-            pass
+            # display metrics on progress bar
+            epoch_progbar.set_postfix(metrics)
 
         best_metrics = {'val_loss': best_val_loss, 'val_acc': best_val_acc}
 
