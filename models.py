@@ -88,11 +88,13 @@ class GNN(torch.nn.Module):
 class LabelGNN(torch.nn.Module):
     def __init__(self, y_steps):
         super().__init__()
+        self.y_steps = y_steps
         self.kprop = KProp(steps=y_steps, aggregator='add', add_self_loops=False, normalize=True, cached=False)
 
     def forward(self, y, adj_t):
         y = self.kprop(y, adj_t)
-        y = torch.softmax(y, dim=1)
+        if self.y_steps > 0:
+            y = torch.softmax(y, dim=1)
         return y
 
     def reset_parameters(self):
@@ -107,7 +109,7 @@ class NodeClassifier(torch.nn.Module):
                  dropout: dict(help='dropout rate (between zero and one)') = 0.0,
                  x_steps: dict(help='KProp step parameter', option='-k') = 1,
                  y_steps: dict(help='number of label propagation steps') = 0,
-                 propagate_predictions: dict(help='whether to propagate predictions') = True,
+                 propagate_predictions: dict(help='whether to propagate predictions') = False,
                  batch_norm: dict(help='use batch-normalization') = True,
                  add_self_loops: dict(help='whether to add self-loops to the graph') = True,
                  ):
