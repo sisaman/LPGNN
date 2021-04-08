@@ -3,7 +3,7 @@ import sys
 import uuid
 
 import torch
-from torch.optim import Adam
+from torch.optim import SGD
 from tqdm.auto import tqdm
 
 from utils import colored_text
@@ -38,7 +38,7 @@ class Trainer:
             self.device = 'cpu'
 
     def configure_optimizers(self):
-        return Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        return SGD(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
 
     def fit(self, model, data):
         self.model = model.to(self.device)
