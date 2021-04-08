@@ -3,7 +3,7 @@ import sys
 import uuid
 
 import torch
-from torch.optim import SGD
+from torch.optim import SGD, Adam
 from tqdm.auto import tqdm
 
 from utils import colored_text
@@ -12,6 +12,7 @@ from utils import colored_text
 class Trainer:
     def __init__(
             self,
+            optimizer:      dict('optimization algorithm', choices=['sgd', 'adam']) = 'sgd',
             max_epochs:     dict(help='maximum number of training epochs') = 500,
             device:         dict(help='desired device for training', choices=['cpu', 'cuda']) = 'cuda',
             checkpoint:     dict(help='use model checkpointing') = True,
@@ -20,6 +21,7 @@ class Trainer:
             patience:       dict(help='early-stopping patience window size') = 100,
             logger=None,
     ):
+        self.optimizer_name = optimizer
         self.max_epochs = max_epochs
         self.device = device
         self.checkpoint = checkpoint
@@ -38,7 +40,9 @@ class Trainer:
             self.device = 'cpu'
 
     def configure_optimizers(self):
-        return SGD(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        return {
+            'sgd': SGD, 'adam': Adam
+        }[self.optimizer_name](self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
 
     def fit(self, model, data):
         self.model = model.to(self.device)
