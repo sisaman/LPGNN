@@ -110,7 +110,7 @@ class NodeClassifier(torch.nn.Module):
                  x_steps: dict(help='KProp step parameter', option='-k') = 1,
                  y_steps: dict(help='number of label propagation steps') = 0,
                  propagate_predictions: dict(help='whether to propagate predictions') = False,
-                 batch_norm: dict(help='use batch-normalization') = True,
+                 batch_norm: dict(help='use batch-normalization') = False,
                  add_self_loops: dict(help='whether to add self-loops to the graph') = True,
                  ):
         super().__init__()
