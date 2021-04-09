@@ -118,14 +118,16 @@ class NodeClassifier(torch.nn.Module):
         self.propagate_predictions = propagate_predictions
         self.y_steps = y_steps
 
+        self.y_gnn = LabelGNN(y_steps=y_steps)
         self.x_gnn = GNN(
             input_dim=input_dim, output_dim=num_classes, hidden_dim=hidden_dim, steps=x_steps,
             aggregator='add', batch_norm=batch_norm, dropout=dropout, add_self_loops=add_self_loops
         )
 
-        self.y_gnn = LabelGNN(y_steps=y_steps)
+        self.cached_yt = None
 
     def reset_parameters(self):
+        self.cached_yt = None
         self.x_gnn.reset_parameters()
         self.y_gnn.reset_parameters()
 
@@ -139,12 +141,13 @@ class NodeClassifier(torch.nn.Module):
             p_yp_x = torch.matmul(p_y_x, data.T)  # P(y'|x')
             p_yt_x = self.y_gnn(p_yp_x, data.adj_t)  # P(y~|x')
 
-        yp = data.y.float()
-        yp[data.test_mask] = 0  # to avoid using test labels
-        yt = self.y_gnn(yp, data.adj_t)  # y~
+        if self.cached_yt is None:
+            yp = data.y.float()
+            yp[data.test_mask] = 0  # to avoid using test labels
+            self.cached_yt = self.y_gnn(yp, data.adj_t)  # y~
 
         out = p_yt_x[mask]
-        target = yt[mask]
+        target = self.cached_yt[mask]
         loss = F.nll_loss(input=torch.log(out + eps), target=target.argmax(dim=1))
         acc = accuracy(pred=out.argmax(dim=1), target=target.argmax(dim=1)) * 100
         return loss, acc
