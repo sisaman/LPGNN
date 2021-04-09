@@ -53,8 +53,7 @@ def run(args):
 
             # define model
             model = from_args(NodeClassifier, args, input_dim=data.num_features, num_classes=data.num_classes)
-            logger.watch(model)
-
+            
             # train the model
             trainer = from_args(Trainer, args, logger=logger if args.log_mode == LogMode.INDIVIDUAL else None)
             best_metrics = trainer.fit(model, data)
