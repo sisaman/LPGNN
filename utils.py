@@ -1,6 +1,6 @@
 import os
 import time
-from argparse import ArgumentParser, ArgumentTypeError, Action
+from argparse import ArgumentTypeError, Action
 import inspect
 import enum
 import functools
@@ -85,7 +85,7 @@ def str2bool(v):
         raise ArgumentTypeError('Boolean value expected.')
 
 
-def add_parameters_as_argument(function, parser: ArgumentParser):
+def add_parameters_as_argument(function, parser):
     if inspect.isclass(function):
         function = function.__init__
     parameters = inspect.signature(function).parameters
