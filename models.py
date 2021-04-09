@@ -2,8 +2,8 @@ import torch
 import torch.nn.functional as F
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
 from torch_geometric.utils import accuracy
-from torch.nn import Linear, Dropout
-from torch_geometric.nn import MessagePassing, SAGEConv
+from torch.nn import Dropout
+from torch_geometric.nn import MessagePassing, SAGEConv, GCNConv
 from torch_sparse import matmul
 eps = 1e-20
 
@@ -16,9 +16,6 @@ class KProp(MessagePassing):
         self.add_self_loops = add_self_loops
         self.normalize = normalize
         self.cached = cached
-        self._cached_x = None
-
-    def reset_parameters(self):
         self._cached_x = None
 
     def forward(self, x, adj_t):
@@ -47,99 +44,80 @@ class KProp(MessagePassing):
         return matmul(adj_t, x, reduce=self.aggr)
 
 
-class KPropConv(KProp):
-    def __init__(self, in_channels, out_channels, steps, aggregator, add_self_loops, normalize, cached):
-        super().__init__(steps, aggregator, add_self_loops, normalize, cached=cached)
-        self.fc = Linear(in_channels, out_channels)
-
-    def forward(self, x, adj_t):
-        x = super().forward(x, adj_t)
-        x = self.fc(x)
-        return x
-
-    def reset_parameters(self):
-        super().reset_parameters()
-        self.fc.reset_parameters()
-
-
-class GNN(torch.nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim, steps, aggregator, dropout, add_self_loops):
+class GCN(torch.nn.Module):
+    def __init__(self, input_dim, output_dim, hidden_dim, dropout):
         super().__init__()
-        # self.conv1 = KPropConv(input_dim, hidden_dim, steps=steps, aggregator=aggregator,
-        #                        add_self_loops=add_self_loops, normalize=True, cached=True)
-        # self.conv2 = KPropConv(hidden_dim, output_dim, steps=1, aggregator=aggregator,
-        #                        add_self_loops=True, normalize=True, cached=False)
-        self.conv1 = KProp(steps=steps, aggregator=aggregator, add_self_loops=add_self_loops, normalize=True, cached=True)
-        self.conv2 = SAGEConv(in_channels=input_dim, out_channels=hidden_dim, normalize=False, root_weight=True)
-        self.conv3 = SAGEConv(in_channels=hidden_dim, out_channels=output_dim, normalize=False, root_weight=True)
+        self.conv1 = GCNConv(input_dim, hidden_dim)
+        self.conv2 = GCNConv(hidden_dim, output_dim)
         self.dropout = Dropout(p=dropout)
 
-    def forward(self, data):
-        # x, adj_t = data.x, data.adj_t
-        # x = self.conv1(x, adj_t)
-        # x = torch.selu(x)
-        # x = self.dropout(x)
-        # x = self.conv2(x, adj_t)
-        # x = F.softmax(x, dim=1)
-        # return x
-
-        x, adj_t = data.x, data.adj_t
+    def forward(self, x, adj_t):
         x = self.conv1(x, adj_t)
-        x = self.conv2(x, adj_t)
         x = torch.selu(x)
         x = self.dropout(x)
-        x = self.conv3(x, adj_t)
-        x = F.softmax(x, dim=1)
+        x = self.conv2(x, adj_t)
         return x
 
-    def reset_parameters(self):
-        for layer in self.children():
-            layer.reset_parameters()
+
+class GraphSAGE(torch.nn.Module):
+    def __init__(self, input_dim, output_dim, hidden_dim, dropout):
+        super().__init__()
+        self.conv1 = SAGEConv(in_channels=input_dim, out_channels=hidden_dim, normalize=False, root_weight=True)
+        self.conv2 = SAGEConv(in_channels=hidden_dim, out_channels=output_dim, normalize=False, root_weight=True)
+        self.dropout = Dropout(p=dropout)
+
+    def forward(self, x, adj_t):
+        x = self.conv1(x, adj_t)
+        x = torch.selu(x)
+        x = self.dropout(x)
+        x = self.conv2(x, adj_t)
+        return x
 
 
 class NodeClassifier(torch.nn.Module):
     def __init__(self,
                  input_dim,
                  num_classes,
-                 hidden_dim: dict(help='dimension of the hidden layers') = 16,
-                 dropout: dict(help='dropout rate (between zero and one)') = 0.0,
-                 x_steps: dict(help='KProp step parameter', option='-k') = 1,
-                 y_steps: dict(help='number of label propagation steps') = 0,
+                 model:                 dict(help='backbone GNN model', choices=['gcn', 'sage']) = 'sage',
+                 hidden_dim:            dict(help='dimension of the hidden layers') = 16,
+                 dropout:               dict(help='dropout rate (between zero and one)') = 0.0,
+                 x_steps:               dict(help='KProp step parameter', option='-k') = 1,
+                 y_steps:               dict(help='number of label propagation steps') = 0,
                  propagate_predictions: dict(help='whether to propagate predictions') = False,
-                 add_self_loops: dict(help='whether to add self-loops to the graph') = True,
                  ):
         super().__init__()
 
         self.propagate_predictions = propagate_predictions
         self.y_steps = y_steps
 
-        self.y_gnn = KProp(steps=y_steps, aggregator='add', add_self_loops=False, normalize=True, cached=False)
-        self.x_gnn = GNN(
-            input_dim=input_dim, output_dim=num_classes, hidden_dim=hidden_dim, steps=x_steps,
-            aggregator='add', dropout=dropout, add_self_loops=add_self_loops
-        )
+        self.x_prop = KProp(steps=x_steps, aggregator='add', add_self_loops=False, normalize=True, cached=True)
+        self.y_prop = KProp(steps=y_steps, aggregator='add', add_self_loops=False, normalize=True, cached=False)
+
+        if model == 'sage':
+            self.gnn = GraphSAGE(input_dim=input_dim, output_dim=num_classes, hidden_dim=hidden_dim, dropout=dropout)
+        elif model == 'gcn':
+            self.gnn = GCN(input_dim=input_dim, output_dim=num_classes, hidden_dim=hidden_dim, dropout=dropout)
 
         self.cached_yt = None
-
-    def reset_parameters(self):
-        self.cached_yt = None
-        self.x_gnn.reset_parameters()
-        self.y_gnn.reset_parameters()
 
     def forward(self, data):
-        return self.x_gnn(data)
+        x, adj_t = data.x, data.adj_t
+        x = self.x_prop(x, adj_t)
+        x = self.gnn(x, adj_t)
+        x = F.softmax(x, dim=1)
+        return x
 
     def step(self, data, mask):
-        p_y_x = p_yt_x = self.x_gnn(data)  # P(y|x')
+        p_y_x = p_yt_x = self(data)  # P(y|x')
 
         if self.propagate_predictions:
             p_yp_x = torch.matmul(p_y_x, data.T)  # P(y'|x')
-            p_yt_x = self.y_gnn(p_yp_x, data.adj_t)  # P(y~|x')
+            p_yt_x = self.y_prop(p_yp_x, data.adj_t)  # P(y~|x')
 
         if self.cached_yt is None:
             yp = data.y.float()
             yp[data.test_mask] = 0  # to avoid using test labels
-            self.cached_yt = self.y_gnn(yp, data.adj_t)  # y~
+            self.cached_yt = self.y_prop(yp, data.adj_t)  # y~
 
         out = p_yt_x[mask]
         target = self.cached_yt[mask]
