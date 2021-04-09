@@ -18,7 +18,7 @@ class Laplace(Mechanism):
         sensitivity = (self.beta - self.alpha) * d
         scale = torch.ones_like(x) * (sensitivity / self.eps)
         out = torch.distributions.Laplace(x, scale).sample()
-        out = torch.clip(out, min=self.alpha, max=self.beta)
+        # out = torch.clip(out, min=self.alpha, max=self.beta)
         return out
 
 
