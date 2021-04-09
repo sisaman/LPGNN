@@ -3,14 +3,15 @@ import torch.nn.functional as F
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
 from torch_geometric.utils import accuracy
 from torch.nn import Linear, Dropout
-from torch_geometric.nn import MessagePassing, BatchNorm
+from torch_geometric.nn import MessagePassing, SAGEConv
 from torch_sparse import matmul
 eps = 1e-20
 
 
 class KProp(MessagePassing):
-    def __init__(self, steps, aggregator, add_self_loops, normalize, cached):
+    def __init__(self, steps, aggregator, add_self_loops, normalize, cached, post_step = lambda x: x):
         super().__init__(aggr=aggregator)
+        self.post_step = post_step
         self.K = steps
         self.add_self_loops = add_self_loops
         self.normalize = normalize
@@ -38,6 +39,7 @@ class KProp(MessagePassing):
 
         for k in range(self.K):
             x = self.propagate(adj_t, x=x)
+            x = self.post_step(x)
 
         return x
 
@@ -61,44 +63,38 @@ class KPropConv(KProp):
 
 
 class GNN(torch.nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim, steps, aggregator, batch_norm, dropout, add_self_loops):
+    def __init__(self, input_dim, output_dim, hidden_dim, steps, aggregator, dropout, add_self_loops):
         super().__init__()
-        self.conv1 = KPropConv(input_dim, hidden_dim, steps=steps, aggregator=aggregator,
-                               add_self_loops=add_self_loops, normalize=True, cached=True)
-        self.conv2 = KPropConv(hidden_dim, output_dim, steps=1, aggregator=aggregator,
-                               add_self_loops=True, normalize=True, cached=False)
-        self.bn = BatchNorm(hidden_dim) if batch_norm else None
+        # self.conv1 = KPropConv(input_dim, hidden_dim, steps=steps, aggregator=aggregator,
+        #                        add_self_loops=add_self_loops, normalize=True, cached=True)
+        # self.conv2 = KPropConv(hidden_dim, output_dim, steps=1, aggregator=aggregator,
+        #                        add_self_loops=True, normalize=True, cached=False)
+        self.conv1 = KProp(steps=steps, aggregator=aggregator, add_self_loops=add_self_loops, normalize=True, cached=True)
+        self.conv2 = SAGEConv(in_channels=input_dim, out_channels=hidden_dim, normalize=False, root_weight=True)
+        self.conv3 = SAGEConv(in_channels=hidden_dim, out_channels=output_dim, normalize=False, root_weight=True)
         self.dropout = Dropout(p=dropout)
 
     def forward(self, data):
+        # x, adj_t = data.x, data.adj_t
+        # x = self.conv1(x, adj_t)
+        # x = torch.selu(x)
+        # x = self.dropout(x)
+        # x = self.conv2(x, adj_t)
+        # x = F.softmax(x, dim=1)
+        # return x
+
         x, adj_t = data.x, data.adj_t
         x = self.conv1(x, adj_t)
-        x = self.bn(x) if self.bn else x
+        x = self.conv2(x, adj_t)
         x = torch.selu(x)
         x = self.dropout(x)
-        x = self.conv2(x, adj_t)
+        x = self.conv3(x, adj_t)
         x = F.softmax(x, dim=1)
         return x
 
     def reset_parameters(self):
         for layer in self.children():
             layer.reset_parameters()
-
-
-class LabelGNN(torch.nn.Module):
-    def __init__(self, y_steps):
-        super().__init__()
-        self.y_steps = y_steps
-        self.kprop = KProp(steps=y_steps, aggregator='add', add_self_loops=False, normalize=True, cached=False)
-
-    def forward(self, y, adj_t):
-        y = self.kprop(y, adj_t)
-        if self.y_steps > 0:
-            y = torch.softmax(y, dim=1)
-        return y
-
-    def reset_parameters(self):
-        self.kprop.reset_parameters()
 
 
 class NodeClassifier(torch.nn.Module):
@@ -110,7 +106,6 @@ class NodeClassifier(torch.nn.Module):
                  x_steps: dict(help='KProp step parameter', option='-k') = 1,
                  y_steps: dict(help='number of label propagation steps') = 0,
                  propagate_predictions: dict(help='whether to propagate predictions') = False,
-                 batch_norm: dict(help='use batch-normalization') = False,
                  add_self_loops: dict(help='whether to add self-loops to the graph') = True,
                  ):
         super().__init__()
@@ -118,10 +113,10 @@ class NodeClassifier(torch.nn.Module):
         self.propagate_predictions = propagate_predictions
         self.y_steps = y_steps
 
-        self.y_gnn = LabelGNN(y_steps=y_steps)
+        self.y_gnn = KProp(steps=y_steps, aggregator='add', add_self_loops=False, normalize=True, cached=False)
         self.x_gnn = GNN(
             input_dim=input_dim, output_dim=num_classes, hidden_dim=hidden_dim, steps=x_steps,
-            aggregator='add', batch_norm=batch_norm, dropout=dropout, add_self_loops=add_self_loops
+            aggregator='add', dropout=dropout, add_self_loops=add_self_loops
         )
 
         self.cached_yt = None
