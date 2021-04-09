@@ -60,7 +60,8 @@ class WandbLogger:
                 self.experiment.summary[metric] = value
 
     def watch(self, model):
-        self.experiment.watch(model, log_freq=50)
+        if self.enabled:
+            self.experiment.watch(model, log_freq=50)
 
     def finish(self):
         if self.enabled:
