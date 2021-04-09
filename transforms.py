@@ -47,7 +47,7 @@ class FeaturePerturbation:
         self.x_eps = x_eps
 
     def __call__(self, data):
-        if self.x_eps is None:
+        if self.x_eps is None or self.x_eps <= 0:
             return data
 
         if self.input_range is None:
@@ -76,7 +76,7 @@ class LabelPerturbation:
         p_ii = 1  # probability of preserving the clean label i
         p_ij = 0  # probability of perturbing label i into another label j
 
-        if self.y_eps is not None:
+        if self.y_eps is not None and self.y_eps > 0:
             mechanism = RandomizedResopnse(eps=self.y_eps, d=data.num_classes)
             perturb_mask = data.train_mask | data.val_mask
             y_perturbed = mechanism(data.y[perturb_mask])
@@ -107,56 +107,6 @@ class OneHotDegree:
         degree = data.adj_t.sum(dim=0).long()
         degree.clamp_(max=self.max_degree)
         data.x = F.one_hot(degree, num_classes=self.max_degree + 1).float()  # add 1 for zero degree
-        return data
-
-
-class NodeSplit:
-    def __init__(self, train_ratio=None, val_ratio=.25, test_ratio=.25, random_state=None):
-        self.train_ratio = 1 - (val_ratio + test_ratio) if train_ratio is None else train_ratio
-        assert self.train_ratio > 0
-        self.val_ratio = val_ratio
-        self.test_ratio = test_ratio
-        self.rng = None
-        if random_state is not None:
-            self.rng = torch.Generator().manual_seed(random_state)
-
-    def __call__(self, data):
-        num_nodes_with_class = data.num_nodes
-        nodes_with_class = torch.ones(data.num_nodes, dtype=torch.bool)
-
-        if hasattr(data, 'y') and -1 in data.y:
-            nodes_with_class = data.y != -1
-            num_nodes_with_class = nodes_with_class.sum().item()
-
-        n_train = int(self.train_ratio * num_nodes_with_class)
-        n_val = int(self.val_ratio * num_nodes_with_class)
-        n_test = int(self.test_ratio * num_nodes_with_class)
-        perm = torch.randperm(num_nodes_with_class, generator=self.rng)
-
-        train_nodes = perm[:n_train]
-        val_nodes = perm[n_train: n_train + n_val]
-        test_nodes = perm[n_train + n_val: n_train + n_val + n_test]
-
-        temp_val_mask = torch.zeros(num_nodes_with_class, dtype=torch.bool)
-        temp_val_mask[val_nodes] = True
-
-        temp_test_mask = torch.zeros(num_nodes_with_class, dtype=torch.bool)
-        temp_test_mask[test_nodes] = True
-
-        temp_train_mask = torch.zeros(num_nodes_with_class, dtype=torch.bool)
-        temp_train_mask[train_nodes] = True
-
-        val_mask = torch.zeros(data.num_nodes, dtype=torch.bool)
-        test_mask = torch.zeros(data.num_nodes, dtype=torch.bool)
-        train_mask = torch.zeros(data.num_nodes, dtype=torch.bool)
-
-        val_mask[nodes_with_class] = temp_val_mask
-        test_mask[nodes_with_class] = temp_test_mask
-        train_mask[nodes_with_class] = temp_train_mask
-
-        data.val_mask = val_mask
-        data.test_mask = test_mask
-        data.train_mask = train_mask
         return data
 
 

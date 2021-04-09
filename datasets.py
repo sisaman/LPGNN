@@ -4,10 +4,10 @@ import pandas as pd
 import torch
 from torch_geometric.data import Data, InMemoryDataset, download_url
 from torch_geometric.datasets import Planetoid
-from torch_geometric.transforms import ToSparseTensor
+from torch_geometric.transforms import ToSparseTensor, AddTrainValTestMask
 from torch_geometric.utils import to_undirected
 
-from transforms import NodeSplit, Normalize
+from transforms import Normalize
 
 
 class KarateClub(InMemoryDataset):
@@ -91,13 +91,12 @@ def load_dataset(
                              choices=supported_datasets) = 'cora',
         data_dir:       dict(help='directory to store the dataset') = './datasets',
         data_range:     dict(help='min and max feature value', nargs=2, type=float) = (0, 1),
-        train_ratio:    dict(help='fraction of nodes used for training') = .50,
         val_ratio:      dict(help='fraction of nodes used for validation') = .25,
         test_ratio:     dict(help='fraction of nodes used for test') = .25,
         sparse=True
         ):
     dataset = supported_datasets[dataset_name](root=os.path.join(data_dir, dataset_name))
-    data = NodeSplit(train_ratio, val_ratio, test_ratio)(dataset[0])
+    data = AddTrainValTestMask(split='train_rest', num_val=val_ratio, num_test=test_ratio)(dataset[0])
 
     if data_range is not None:
         low, high = data_range
