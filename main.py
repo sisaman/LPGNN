@@ -3,7 +3,6 @@ import sys
 import traceback
 import uuid
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-import logging
 import numpy as np
 import pandas as pd
 import torch
@@ -53,7 +52,7 @@ def run(args):
 
             # define model
             model = from_args(NodeClassifier, args, input_dim=data.num_features, num_classes=data.num_classes)
-            
+
             # train the model
             trainer = from_args(Trainer, args, logger=logger if args.log_mode == LogMode.INDIVIDUAL else None)
             best_metrics = trainer.fit(model, data)
@@ -90,7 +89,6 @@ def run(args):
 
 
 def main():
-    logging.basicConfig(level=logging.INFO)
     init_parser = ArgumentParser(add_help=False, conflict_handler='resolve')
 
     # dataset args
