@@ -10,7 +10,7 @@ from tqdm.auto import tqdm
 class Trainer:
     def __init__(
             self,
-            optimizer:      dict(help='optimization algorithm', choices=['sgd', 'adam']) = 'sgd',
+            optimizer:      dict(help='optimization algorithm', choices=['sgd', 'adam']) = 'adam',
             max_epochs:     dict(help='maximum number of training epochs') = 500,
             checkpoint:     dict(help='use model checkpointing') = True,
             learning_rate:  dict(help='learning rate') = 0.01,
