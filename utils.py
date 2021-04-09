@@ -48,7 +48,9 @@ class WandbLogger:
 
             self.experiment = wandb.init(
                 name=name, project=project,
-                reinit=reinit, resume='allow', config=config, save_code=save_code, **kwargs)
+                reinit=reinit, resume='allow', config=config, save_code=save_code,
+                settings=settings,
+                **kwargs)
 
     def log(self, metrics):
         if self.enabled:
