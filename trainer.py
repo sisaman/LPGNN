@@ -6,19 +6,17 @@ import torch
 from torch.optim import SGD, Adam
 from tqdm.auto import tqdm
 
-from utils import colored_text
-
 
 class Trainer:
     def __init__(
             self,
             optimizer:      dict(help='optimization algorithm', choices=['sgd', 'adam']) = 'sgd',
             max_epochs:     dict(help='maximum number of training epochs') = 500,
-            device:         dict(help='desired device for training', choices=['cpu', 'cuda']) = 'cuda',
             checkpoint:     dict(help='use model checkpointing') = True,
             learning_rate:  dict(help='learning rate') = 0.01,
             weight_decay:   dict(help='weight decay (L2 penalty)') = 0.0,
             patience:       dict(help='early-stopping patience window size') = 100,
+            device='cuda',
             logger=None,
     ):
         self.optimizer_name = optimizer
@@ -34,10 +32,6 @@ class Trainer:
         if checkpoint:
             os.makedirs('checkpoints', exist_ok=True)
             self.checkpoint_path = os.path.join('checkpoints', f'{uuid.uuid1()}.pt')
-
-        if not torch.cuda.is_available():
-            print(colored_text('CUDA is not available, falling back to CPU', color='red'))
-            self.device = 'cpu'
 
     def configure_optimizers(self):
         if self.optimizer_name == 'sgd':

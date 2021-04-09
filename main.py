@@ -6,6 +6,7 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import logging
 import numpy as np
 import pandas as pd
+import torch
 from tqdm.auto import tqdm
 from torch_geometric.transforms import Compose
 from datasets import load_dataset
@@ -13,7 +14,7 @@ from models import NodeClassifier
 from trainer import Trainer
 from transforms import FeatureTransform, FeaturePerturbation, LabelPerturbation
 from utils import print_args, seed_everything, WandbLogger, \
-    add_parameters_as_argument, measure_runtime, from_args, str2bool, Enum, EnumAction
+    add_parameters_as_argument, measure_runtime, from_args, str2bool, Enum, EnumAction, colored_text
 
 
 class LogMode(Enum):
@@ -54,7 +55,10 @@ def run(args):
             model = from_args(NodeClassifier, args, input_dim=data.num_features, num_classes=data.num_classes)
 
             # train the model
-            trainer = from_args(Trainer, args, logger=logger if args.log_mode == LogMode.INDIVIDUAL else None)
+            trainer = from_args(Trainer, args,
+                                device=args.device,
+                                logger=logger if args.log_mode == LogMode.INDIVIDUAL else None)
+
             best_metrics = trainer.fit(model, data)
             result = trainer.test(data)
 
@@ -109,6 +113,7 @@ def main():
     # trainer arguments (depends on perturbation)
     group_trainer = init_parser.add_argument_group(f'trainer arguments')
     add_parameters_as_argument(Trainer, group_trainer)
+    group_trainer.add_argument('device', help='desired device for training', choices=['cpu', 'cuda'], default='cuda')
 
     # experiment args
     group_expr = init_parser.add_argument_group('experiment arguments')
@@ -127,6 +132,10 @@ def main():
 
     if args.seed:
         seed_everything(args.seed)
+
+    if args.device == 'cpu' and not torch.cuda.is_available():
+        print(colored_text('CUDA is not available, falling back to CPU', color='red'))
+        args.device = 'cpu'
 
     try:
         run(args)
