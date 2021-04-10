@@ -17,7 +17,6 @@ class FeatureTransform:
             data.x = torch.rand_like(data.x)
         elif self.feature == 'crnd':
             n = data.x.size(0)
-            # d = data.x.size(1)
             m = 1
             x = torch.rand(n, m, device=data.x.device)
             s = torch.rand_like(data.x).topk(m, dim=1).indices
@@ -52,9 +51,6 @@ class FeaturePerturbation:
         if self.input_range is None:
             self.input_range = data.x.min().item(), data.x.max().item()
 
-        if self.reduce_dim:
-            data = RandomizedProjection(input_dim=data.num_features, output_dim=self.reduce_dim)(data)
-
         data.x = supported_feature_mechanisms[self.mechanism](
             eps=self.x_eps,
             input_range=self.input_range
@@ -85,15 +81,6 @@ class LabelPerturbation:
         data.T = torch.ones(data.num_classes, data.num_classes, device=data.y.device) * p_ij
         data.T.fill_diagonal_(p_ii)
 
-        return data
-
-
-class RandomizedProjection:
-    def __init__(self, input_dim, output_dim):
-        self.w = torch.rand(input_dim, output_dim)
-
-    def __call__(self, data):
-        data.x = data.x.matmul(self.w)
         return data
 
 
