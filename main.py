@@ -65,13 +65,12 @@ def run(args):
 
         except Exception as e:
             error = ''.join(traceback.format_exception(Exception, e, e.__traceback__))
-            logger.log({'error': error})
+            logger.log_summary({'error': error})
             raise e
         finally:
             if args.log_mode == LogMode.INDIVIDUAL:
                 logger.finish()
 
-    # save results
     if args.log_mode == LogMode.COLLECTIVE:
         logger.log_summary({
             'val_acc_mean': np.mean(val_results),
@@ -80,12 +79,13 @@ def run(args):
             'test_acc_std': np.std(test_results)
         })
 
-    os.makedirs(args.output_dir, exist_ok=True)
-    df_results = pd.DataFrame(test_results, columns=['test_acc']).rename_axis('version').reset_index()
-    df_results['group'] = run_id
-    for arg_name, arg_val in vars(args).items():
-        df_results[arg_name] = [arg_val] * len(test_results)
-    df_results.to_csv(os.path.join(args.output_dir, f'{run_id}.csv'), index=False)
+    if not args.log:
+        os.makedirs(args.output_dir, exist_ok=True)
+        df_results = pd.DataFrame(test_results, columns=['test_acc']).rename_axis('version').reset_index()
+        df_results['group'] = run_id
+        for arg_name, arg_val in vars(args).items():
+            df_results[arg_name] = [arg_val] * len(test_results)
+        df_results.to_csv(os.path.join(args.output_dir, f'{run_id}.csv'), index=False)
 
 
 def main():
