@@ -98,6 +98,7 @@ class NodeClassifier(torch.nn.Module):
         elif model == 'gcn':
             self.gnn = GCN(input_dim=input_dim, output_dim=num_classes, hidden_dim=hidden_dim, dropout=dropout)
 
+        self.alpha = torch.nn.Parameter(torch.tensor(0.0, requires_grad=True))
         self.cached_yt = None
 
     def forward(self, data):
@@ -107,11 +108,15 @@ class NodeClassifier(torch.nn.Module):
         x = F.softmax(x, dim=1)
         return x
 
+    @staticmethod
+    def cross_entropy_loss(p_y, y):
+        return F.nll_loss(input=torch.log(p_y + eps), target=y.argmax(dim=1))
+
     def step(self, data, mask):
         p_y_x = p_yt_x = self(data)  # P(y|x')
+        p_yp_x = torch.matmul(p_y_x, data.T)  # P(y'|x')
 
         if self.propagate_predictions:
-            p_yp_x = torch.matmul(p_y_x, data.T)  # P(y'|x')
             p_yt_x = self.y_prop(p_yp_x, data.adj_t)  # P(y~|x')
 
         if self.cached_yt is None:
@@ -119,21 +124,26 @@ class NodeClassifier(torch.nn.Module):
             yp[data.test_mask] = 0  # to avoid using test labels
             self.cached_yt = self.y_prop(yp, data.adj_t)  # y~
 
-        out = p_yt_x[mask]
-        target = self.cached_yt[mask]
-        loss = F.nll_loss(input=torch.log(out + eps), target=target.argmax(dim=1))
-        acc = accuracy(pred=out.argmax(dim=1), target=target.argmax(dim=1)) * 100
-        return loss, acc
+        alpha = torch.sigmoid(self.alpha)
+        loss_t = self.cross_entropy_loss(p_y=p_yt_x[mask], y=self.cached_yt[mask])
+        loss_p = self.cross_entropy_loss(p_y=p_yp_x[mask], y=data.y[mask])
+        loss = alpha * loss_p + (1 - alpha) * loss_t
+
+        pred = p_yp_x[mask].argmax(dim=1)
+        target = data.y[mask].argmax(dim=1)
+        acc = accuracy(pred=pred, target=target) * 100
+
+        return loss, acc, alpha
 
     def training_step(self, data):
         mask = data.train_mask
-        loss, acc = self.step(data, mask)
-        metrics = {'train/loss': loss.item(), 'train/acc': acc}
+        loss, acc, alpha = self.step(data, mask)
+        metrics = {'train/loss': loss.item(), 'train/acc': acc, 'train/alpha': alpha.item()}
         return loss, metrics
 
     def validation_step(self, data):
         mask = data.val_mask
-        loss, acc = self.step(data, mask)
+        loss, acc, _ = self.step(data, mask)
         metrics = {'val/loss': loss.item(), 'val/acc': acc}
         metrics.update(self.test_step(data))
         return metrics
