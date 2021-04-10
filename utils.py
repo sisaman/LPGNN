@@ -8,11 +8,18 @@ import torch
 import numpy as np
 import random
 import torch.nn.functional as F
+import seaborn as sns
 
 try:
     import wandb
 except ImportError:
     wandb = None
+
+
+def confidence_interval(data, func=np.mean, size=1000, ci=95, seed=12345):
+    bs_replicates = sns.algorithms.bootstrap(data, func=func, n_boot=size, seed=seed)
+    bounds = sns.utils.ci(bs_replicates, ci)
+    return (bounds[1] - bounds[0]) / 2
 
 
 def js_div(p, q):

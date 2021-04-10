@@ -12,8 +12,8 @@ from datasets import load_dataset
 from models import NodeClassifier
 from trainer import Trainer
 from transforms import FeatureTransform, FeaturePerturbation, LabelPerturbation
-from utils import print_args, seed_everything, WandbLogger, \
-    add_parameters_as_argument, measure_runtime, from_args, str2bool, Enum, EnumAction, colored_text
+from utils import print_args, seed_everything, WandbLogger, add_parameters_as_argument, \
+    measure_runtime, from_args, str2bool, Enum, EnumAction, colored_text, confidence_interval
 
 
 class LogMode(Enum):
@@ -74,9 +74,9 @@ def run(args):
     if args.log_mode == LogMode.COLLECTIVE:
         logger.log_summary({
             'val/acc_mean': np.mean(val_results),
-            'val/acc_std': np.std(val_results),         # todo replace with CI
+            'val/acc_std': confidence_interval(val_results, size=1000, ci=95, seed=args.seed),
             'test/acc_mean': np.mean(test_results),
-            'test/acc_std': np.std(test_results)        # todo replace with CI
+            'test/acc_std': confidence_interval(test_results, size=1000, ci=95, seed=args.seed),
         })
 
     if not args.log:
