@@ -7,8 +7,7 @@ class FeatureTransform:
     supported_features = ['raw', 'rnd', 'one', 'ohd', 'crnd']
 
     def __init__(self, feature: dict(help='feature transformation method',
-                                     choices=supported_features, option='-f') = 'raw',
-                 ):
+                                     choices=supported_features, option='-f') = 'raw'):
 
         self.feature = feature
 
@@ -33,14 +32,14 @@ class FeatureTransform:
 
 class FeaturePerturbation:
     def __init__(self,
-                 mechanism: dict(help='feature perturbation mechanism', choices=list(supported_feature_mechanisms),
-                                 option='-m') = 'mbm',
-                 x_eps: dict(help='privacy budget for feature perturbation (set None to disable)', type=float,
-                             option='-ex') = None,
-                 reduce_dim: dict(help='dimension of the random dimensionality reduction (set None to disable)',
-                                  type=int) = None,
-                 data_range=None,
-                 ):
+                 mechanism:     dict(help='feature perturbation mechanism', choices=list(supported_feature_mechanisms),
+                                     option='-m') = 'mbm',
+                 x_eps:         dict(help='privacy budget for feature perturbation (set None to disable)', type=float,
+                                     option='-ex') = None,
+                 reduce_dim:    dict(help='dimension of the random dimensionality reduction (set None to disable)',
+                                     type=int) = None,
+                 data_range=None):
+
         self.mechanism = mechanism
         self.input_range = data_range
         self.reduce_dim = reduce_dim
@@ -67,8 +66,7 @@ class FeaturePerturbation:
 class LabelPerturbation:
     def __init__(self,
                  y_eps: dict(help='privacy budget for label perturbation (set None to disable)',
-                             type=float, option='-ey') = None,
-                 ):
+                             type=float, option='-ey') = None):
         self.y_eps = y_eps
 
     def __call__(self, data):
