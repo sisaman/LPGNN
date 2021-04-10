@@ -62,7 +62,7 @@ class Trainer:
             if self.logger:
                 self.logger.log({**metrics, 'epoch': epoch})
 
-            if val_acc > best_val_acc:
+            if val_acc > best_val_acc or (val_acc == best_val_acc and val_loss < best_val_loss):
                 best_val_loss = val_loss
                 best_val_acc = val_acc
                 num_epochs_without_improvement = 0
