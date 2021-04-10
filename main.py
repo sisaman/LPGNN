@@ -74,9 +74,9 @@ def run(args):
     if args.log_mode == LogMode.COLLECTIVE:
         logger.log_summary({
             'val/acc_mean': np.mean(val_results),
-            'val/acc_std': confidence_interval(val_results, size=1000, ci=95, seed=args.seed),
+            'val/acc_ci': confidence_interval(val_results, size=1000, ci=95, seed=args.seed),
             'test/acc_mean': np.mean(test_results),
-            'test/acc_std': confidence_interval(test_results, size=1000, ci=95, seed=args.seed),
+            'test/acc_ci': confidence_interval(test_results, size=1000, ci=95, seed=args.seed),
         })
 
     if not args.log:
