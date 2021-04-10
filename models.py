@@ -128,13 +128,13 @@ class NodeClassifier(torch.nn.Module):
     def training_step(self, data):
         mask = data.train_mask
         loss, acc = self.step(data, mask)
-        metrics = {'train_loss': loss.item(), 'train_acc': acc}
+        metrics = {'train/loss': loss.item(), 'train/acc': acc}
         return loss, metrics
 
     def validation_step(self, data):
         mask = data.val_mask
         loss, acc = self.step(data, mask)
-        metrics = {'val_loss': loss.item(), 'val_acc': acc}
+        metrics = {'val/loss': loss.item(), 'val/acc': acc}
         metrics.update(self.test_step(data))
         return metrics
 
@@ -142,4 +142,4 @@ class NodeClassifier(torch.nn.Module):
         pred = self(data)[data.test_mask].argmax(dim=1)
         target = data.y[data.test_mask].argmax(dim=1)
         acc = accuracy(pred=pred, target=target) * 100
-        return {'test_acc': acc}
+        return {'test/acc': acc}

@@ -56,8 +56,8 @@ class Trainer:
 
             val_metrics = self._validation(data)
             metrics.update(val_metrics)
-            val_loss = val_metrics['val_loss']
-            val_acc = val_metrics['val_acc']
+            val_loss = val_metrics['val/loss']
+            val_acc = val_metrics['val/acc']
 
             if self.logger:
                 self.logger.log({**metrics, 'epoch': epoch})
@@ -76,7 +76,7 @@ class Trainer:
             # display metrics on progress bar
             epoch_progbar.set_postfix(metrics)
 
-        best_metrics = {'val_loss': best_val_loss, 'val_acc': best_val_acc}
+        best_metrics = {'val/loss': best_val_loss, 'val/acc': best_val_acc}
 
         if self.logger:
             self.logger.log_summary(best_metrics)

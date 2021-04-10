@@ -59,8 +59,8 @@ def run(args):
             result = trainer.test(data)
 
             # process results
-            val_results.append(best_metrics['val_acc'])
-            test_results.append(result['test_acc'])
+            val_results.append(best_metrics['val/acc'])
+            test_results.append(result['test/acc'])
             progbar.set_postfix({'last_test_acc': test_results[-1], 'avg_test_acc': np.mean(test_results)})
 
         except Exception as e:
@@ -73,10 +73,10 @@ def run(args):
 
     if args.log_mode == LogMode.COLLECTIVE:
         logger.log_summary({
-            'val_acc_mean': np.mean(val_results),
-            'val_acc_std': np.std(val_results),
-            'test_acc_mean': np.mean(test_results),
-            'test_acc_std': np.std(test_results)
+            'val/acc_mean': np.mean(val_results),
+            'val/acc_std': np.std(val_results),         # todo replace with CI
+            'test/acc_mean': np.mean(test_results),
+            'test/acc_std': np.std(test_results)        # todo replace with CI
         })
 
     if not args.log:
