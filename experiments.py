@@ -1,75 +1,158 @@
 import os
-from argparse import ArgumentParser
+import time
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from itertools import product
+from utils import print_args
+from tqdm.auto import tqdm
+from subprocess import DEVNULL, STDOUT, check_call
 
-from utils import print_args, colored_text
 
-parser = ArgumentParser()
-parser.add_argument('-r', '--repeats', type=int, default=100)
-parser.add_argument('-o', '--output-dir', type=str, default='./results')
-parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'])
-subparser = parser.add_subparsers()
-parser_grid = subparser.add_parser('grid')
+parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
+parser.add_argument('-j', '--jobs-dir', type=str, default='./jobs')
+subparser = parser.add_subparsers(dest='command')
+
+parser_create = subparser.add_parser('create')
+parser_create.add_argument('--project-name', type=str, default='LPGNN-experiments', help='project name for wandb logging')
+parser_create.add_argument('-s', '--seed', type=int, default=12345, help='initial random seed')
+parser_create.add_argument('-r', '--repeats', type=int, default=10, help="number of times the experiment is repeated")
+
+subparser_create = parser_create.add_subparsers()
+parser_grid = subparser_create.add_parser('grid')
 parser_grid.add_argument('-q', '--queue', type=str, default='sgpu', choices=['sgpu', 'gpu', 'lgpu'])
 parser_grid.add_argument('-m', '--gpumem', type=int, default=10)
-parser_grid.add_argument('-j', '--jobs-dir', type=str, default='./jobs')
+
+subparser.add_parser('submit')
+subparser.add_parser('status')
+
+parser_resubmit = subparser.add_parser('resubmit')
+parser_resubmit.add_argument('--loop', action='store_true')
+
 args = parser.parse_args()
 print_args(args)
 
-datasets = {
-    'cora':     {'--learning-rate': 0.01, '--weight-decay': 0.010, '--dropout': 0.00},
-    'citeseer': {'--learning-rate': 0.01, '--weight-decay': 0.010, '--dropout': 0.00},
-    'pubmed':   {'--learning-rate': 0.01, '--weight-decay': 0.001, '--dropout': 0.00},
-    'facebook': {'--learning-rate': 0.01, '--weight-decay': 0.001, '--dropout': 0.50},
-    'github':   {'--learning-rate': 0.01, '--weight-decay': 0.000, '--dropout': 0.50},
-    'lastfm':   {'--learning-rate': 0.01, '--weight-decay': 0.001, '--dropout': 0.75},
-}
+def generate_commands(params):
+    default_args = f' -s {args.seed} -r {args.repeats} --log --log-mode collective --project-name {args.project_name} '
+    cmds = []
+    configs = product(*[[f'{param_name} {param_value}' for param_value in param_range]
+                        for param_name, param_range in params.items()])
 
-error_run = f"python error.py -d {' '.join(datasets.keys())} -m agm 1bm mbm -e 0.1 0.5 1 2 -a mean gcn"
-print(colored_text(error_run, color='lightcyan'))
-os.system(error_run)
+    for conf in configs:
+        command = f'python main.py {default_args}'
+        command += ' '.join(conf)
+        cmds.append(command)
 
-configs = [
-    # privacy-accuracy trade-off
-    ' -m raw',
-    ' -m rnd',
-    ' -m ohd',
-    *[f' -m mbm -e {e} -k {2 ** k} --no-loops ' for e in [0.01, 0.1, 0.5, 1, 2, 4] for k in range(6)],
-    # effect of Kprop
-    *[f' -m mbm -e {e} -k {2 ** k} ' for e in [0.01, 0.1, 1] for k in range(6)],
-    *[f' -m raw -k {2 ** k} --no-loops' for k in range(6)],
-    # effect of label-rate
-    *[f' -l {l} -m mbm -e {e} -k {2 ** k} --no-loops ' for l in [0.2, 0.4, 0.6, 0.8] for e in [0.1, 0.5, 1] for k in
-      range(4)],
-]
+    return cmds
 
-train_runs = []
-for dataset, hparams in datasets.items():
-    command = f'python train.py -d {dataset} '
-    command += ' '.join([f'{key} {val}' for key, val in hparams.items()])
-    command += f' -r {args.repeats} -o "{args.output_dir}" --device {args.device} '
-    for config in configs:
-        train_runs.append(command + config)
 
-if 'queue' in args:
+def get_failed_jobs():
+    file_list = os.listdir()
+    failed_jobs = []
+    for file in file_list:
+        if file.count('.e'):
+            num_lines = sum(1 for _ in open(file))
+            if num_lines > 0:
+                job_file = file.split('.')[0] + '.job'
+                failed_jobs.append((job_file, file, num_lines))
+
+    return failed_jobs
+
+
+def create_jobs():
+
+    # non-private and fully-private methods
+    run_cmds = generate_commands({
+        '--dataset': ['cora', 'pubmed', 'facebook', 'lastfm'],
+        '--feature': ['raw', 'rnd', 'one', 'ohd'],
+        '--learning-rate': [0.01, 0.001, 0.0001],
+        '--weight-decay': [0, 1e-4, 1e-3, 1e-2],
+        '--dropout': [0, 0.25, 0.5, 0.75]
+    })
+
+    # LPGNN
+    x_steps = {'cora': 16, 'pubmed': 16, 'facebook': 4, 'lastfm': 8}
+    y_steps = {'cora': 8, 'pubmed': 4, 'facebook': 4, 'lastfm': 8}
+
+    for dataset in ['cora', 'pubmed', 'facebook', 'lastfm']:
+        for x_eps, y_eps in [
+            (1,0),
+            (0,1),
+            (1,1)
+        ]:
+            params = {
+                '--dataset': [dataset],
+                '--learning-rate': [0.01, 0.001, 0.0001],
+                '--weight-decay': [0, 1e-4, 1e-3, 1e-2],
+                '--dropout': [0, 0.25, 0.5, 0.75],
+            }
+            if x_eps:
+                params.update({
+                    '--x-eps': [x_eps],
+                    '--x-steps': [x_steps[dataset]]
+                })
+            if y_eps:
+                params.update({
+                    '--y-eps': [y_eps],
+                    '--y-steps': [y_steps[dataset]],
+                    '--propagate-predictions': ['true']
+                })
+
+            run_cmds += generate_commands(params)
+
+
+
     os.makedirs(args.jobs_dir, exist_ok=True)
-    for i, run in enumerate(train_runs):
-        gpumem = 20 if '-d facebook' in run or '-d github' in run else args.gpumem
-        job_file_content = [
-            f'#$ -N job-{i + 1}\n',
-            f'#$ -S /bin/bash\n',
-            f'#$ -P socialcomputing\n',
-            f'#$ -l pytorch,{args.queue},gpumem={gpumem}\n',
-            f'#$ -cwd\n',
-            f'## Task\n',
-            f'cd ..\n',
-            f'{run}\n'
-        ]
-        with open(os.path.join(args.jobs_dir, f'job-{i + 1}.job'), 'w') as file:
-            file.writelines(job_file_content)
-            file.flush()
+
+    if 'queue' in args:
+        for i, run in tqdm(enumerate(run_cmds), total=len(run_cmds)):
+            job_file_content = [
+                f'#$ -N job-{i + 1}\n',
+                f'#$ -S /bin/bash\n',
+                f'#$ -P dusk2dawn\n',
+                f'#$ -l pytorch,{args.queue},gpumem={args.gpumem}\n',
+                f'#$ -cwd\n',
+                f'cd ..\n',
+                f'{run}\n'
+            ]
+            with open(os.path.join(args.jobs_dir, f'job-{i + 1}.job'), 'w') as file:
+                file.writelines(job_file_content)
+                file.flush()
+    else:
+        with open(os.path.join(args.jobs_dir, f'all.jobs'), 'w') as file:
+            for run in tqdm(run_cmds):
+                file.write(run + '\n')
 
     print('Job files created in:', args.jobs_dir)
-else:
-    for run in train_runs:
-        print(colored_text(run, color='lightcyan'))
-        os.system(run)
+
+if args.command == 'create':
+    create_jobs()
+elif args.command == 'submit':
+    os.chdir(args.jobs_dir)
+    job_list = os.listdir()
+    for job in tqdm(job_list, desc='submitting jobs'):
+        if job.endswith('.job'):
+            check_call(['qsub', '-V', job], stdout=DEVNULL, stderr=STDOUT)
+    print('Done.')
+elif args.command == 'status':
+    os.chdir(args.jobs_dir)
+    failed_jobs = get_failed_jobs()
+    for _, file, num_lines in failed_jobs:
+        print(num_lines, os.path.join(args.jobs_dir, file))
+elif args.command == 'resubmit':
+    os.chdir(args.jobs_dir)
+
+    while True:
+        try:
+            failed_jobs = get_failed_jobs()
+            for job_file, error_file, _ in failed_jobs:
+                print('resubmitting', job_file, '...', end='')
+                check_call(['qsub', '-V', job_file], stdout=DEVNULL, stderr=STDOUT)
+                os.remove(error_file)
+                print('done')
+
+            if args.loop:
+                time.sleep(60)
+            else:
+                break
+        except KeyboardInterrupt:
+            break
+
