@@ -98,7 +98,7 @@ class NodeClassifier(torch.nn.Module):
         elif model == 'gcn':
             self.gnn = GCN(input_dim=input_dim, output_dim=num_classes, hidden_dim=hidden_dim, dropout=dropout)
 
-        self.alpha = torch.nn.Parameter(torch.tensor(0.0, requires_grad=True))
+        self.alpha = torch.nn.Parameter(torch.tensor([0.0, 0.0], requires_grad=True))
         self.cached_yt = None
 
     def forward(self, data):
@@ -109,8 +109,16 @@ class NodeClassifier(torch.nn.Module):
         return x
 
     @staticmethod
-    def cross_entropy_loss(p_y, y):
-        return F.nll_loss(input=torch.log(p_y + eps), target=y.argmax(dim=1))
+    def cross_entropy_loss(p_y, y, weighted=False):
+        y_onehot = F.one_hot(y.argmax(dim=1))
+        loss = -torch.log(p_y + 1e-20) * y_onehot
+        loss *= y if weighted else 1
+        loss = loss.sum(dim=1).mean()
+        return loss
+
+    @staticmethod
+    def kl_loss(p, q):
+        return F.kl_div(input=torch.log(p + eps), target=q)
 
     def step(self, data, mask):
         p_y_x = p_yt_x = self(data)  # P(y|x')
@@ -124,10 +132,9 @@ class NodeClassifier(torch.nn.Module):
             yp[data.test_mask] = 0  # to avoid using test labels
             self.cached_yt = self.y_prop(yp, data.adj_t)  # y~
 
-        alpha = torch.sigmoid(self.alpha)
-        loss_t = self.cross_entropy_loss(p_y=p_yt_x[mask], y=self.cached_yt[mask])
-        loss_p = self.cross_entropy_loss(p_y=p_yp_x[mask], y=data.y[mask])
-        loss = alpha * loss_p + (1 - alpha) * loss_t
+        alpha = torch.softmax(self.alpha, dim=0)
+        loss = alpha[0] * self.cross_entropy_loss(p_y=p_yt_x[mask], y=self.cached_yt[mask])
+        loss += alpha[1] * self.cross_entropy_loss(p_y=p_yp_x[mask], y=data.y[mask])
 
         pred = p_yp_x[mask].argmax(dim=1)
         target = data.y[mask].argmax(dim=1)
@@ -138,7 +145,10 @@ class NodeClassifier(torch.nn.Module):
     def training_step(self, data):
         mask = data.train_mask
         loss, acc, alpha = self.step(data, mask)
-        metrics = {'train/loss': loss.item(), 'train/acc': acc, 'train/alpha': alpha.item()}
+        metrics = {'train/loss': loss.item(), 'train/acc': acc,
+                   'train/alpha_0': alpha[0].item(),
+                   'train/alpha_1': alpha[1].item(),
+                   }
         return loss, metrics
 
     def validation_step(self, data):
