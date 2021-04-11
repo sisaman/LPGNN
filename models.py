@@ -166,8 +166,6 @@ class NodeClassifier(torch.nn.Module):
         metrics = {
             'val/loss': val_loss.item(),
             'val/acc': accuracy(pred=p_y_x[data.val_mask].argmax(dim=1), target=self.cached_yt[data.val_mask].argmax(dim=1)) * 100,
-            'val/acc_p': accuracy(pred=p_yp_x[data.val_mask].argmax(dim=1), target=data.y[data.val_mask].argmax(dim=1)) * 100,
-            'val/acc_t': accuracy(pred=p_yt_x[data.val_mask].argmax(dim=1), target=self.cached_yt[data.val_mask].argmax(dim=1)) * 100,
             'test/acc': accuracy(pred=p_y_x[data.test_mask].argmax(dim=1), target=data.y[data.test_mask].argmax(dim=1)) * 100,
         }
 
