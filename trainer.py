@@ -45,8 +45,8 @@ class Trainer:
         optimizer = self.configure_optimizers()
 
         num_epochs_without_improvement = 0
-        best_val_acc = 0
         best_val_loss = float('inf')
+        best_metrics = None
 
         epoch_progbar = tqdm(range(1, self.max_epochs + 1), desc='Epoch: ', leave=False, position=1, file=sys.stdout)
         for epoch in epoch_progbar:
@@ -57,14 +57,13 @@ class Trainer:
             val_metrics = self._validation(data)
             metrics.update(val_metrics)
             val_loss = val_metrics['val/loss']
-            val_acc = val_metrics['val/acc']
 
             if self.logger:
                 self.logger.log({**metrics, 'epoch': epoch})
 
-            if val_acc > best_val_acc or (val_acc == best_val_acc and val_loss < best_val_loss):
+            if val_loss < best_val_loss:
                 best_val_loss = val_loss
-                best_val_acc = val_acc
+                best_metrics = val_metrics
                 num_epochs_without_improvement = 0
                 if self.checkpoint:
                     torch.save(self.model.state_dict(), self.checkpoint_path)
@@ -75,8 +74,6 @@ class Trainer:
 
             # display metrics on progress bar
             epoch_progbar.set_postfix(metrics)
-
-        best_metrics = {'val/loss': best_val_loss, 'val/acc': best_val_acc}
 
         if self.logger:
             self.logger.log_summary(best_metrics)
