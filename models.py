@@ -82,11 +82,9 @@ class NodeClassifier(torch.nn.Module):
                  dropout:               dict(help='dropout rate (between zero and one)') = 0.0,
                  x_steps:               dict(help='KProp step parameter', option='-k') = 0,
                  y_steps:               dict(help='number of label propagation steps') = 0,
-                 propagate_predictions: dict(help='whether to propagate predictions') = False,
                  ):
         super().__init__()
 
-        self.propagate_predictions = propagate_predictions
         self.y_steps = y_steps
 
         self.x_prop = KProp(steps=x_steps, aggregator='add', add_self_loops=False, normalize=True, cached=True)
@@ -104,11 +102,9 @@ class NodeClassifier(torch.nn.Module):
         x, adj_t = data.x, data.adj_t
         x = self.x_prop(x, adj_t)
         x = self.gnn(x, adj_t)
-        p_y_x = p_yt_x = F.softmax(x, dim=1)            # P(y|x)
-        p_yp_x = torch.matmul(p_y_x, data.T)            # P(y'|x')
-
-        if self.propagate_predictions:
-            p_yt_x = self.y_prop(p_yp_x, data.adj_t)    # P(y~|x')
+        p_y_x = F.softmax(x, dim=1)                 # P(y|x)
+        p_yp_x = torch.matmul(p_y_x, data.T)        # P(y'|x')
+        p_yt_x = self.y_prop(p_yp_x, data.adj_t)    # P(y~|x')
 
         return p_y_x, p_yp_x, p_yt_x
 
@@ -121,7 +117,7 @@ class NodeClassifier(torch.nn.Module):
         return loss
 
     def model_loss(self, p_yp, p_yt, yp, yt):
-        lambdaa = torch.sigmoid(self.lambdaa)
+        lambdaa = torch.sigmoid(self.lambdaa) if self.y_steps > 0 else 1
         loss_p = self.cross_entropy_loss(p_y=p_yp, y=yp)
         loss_t = self.cross_entropy_loss(p_y=p_yt, y=yt)
         loss = lambdaa * loss_p + (1 - lambdaa) * loss_t
