@@ -139,3 +139,4 @@ checkpoints
 data.ipynb
 test.ipynb
 *.job
+test.py
