@@ -51,7 +51,7 @@ class WandbLogger:
 
             os.environ["WANDB_SILENT"] = "true"
 
-            settings = wandb.Settings(start_method="fork", _disable_stats=True)  # noqa
+            settings = wandb.Settings(start_method="fork")  # noqa
 
             self.experiment = wandb.init(
                 name=name, project=project,
