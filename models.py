@@ -97,7 +97,7 @@ class NodeClassifier(torch.nn.Module):
         elif model == 'gcn':
             self.gnn = GCN(input_dim=input_dim, output_dim=num_classes, hidden_dim=hidden_dim, dropout=dropout)
 
-        self.alpha = torch.nn.Parameter(torch.tensor(0.0, requires_grad=True))
+        self.lambdaa = torch.nn.Parameter(torch.tensor(0.0, requires_grad=True))
         self.cached_yt = None
 
     def forward(self, data):
@@ -121,10 +121,10 @@ class NodeClassifier(torch.nn.Module):
         return loss
 
     def model_loss(self, p_yp, p_yt, yp, yt):
-        alpha = torch.sigmoid(self.alpha)
+        lambdaa = torch.sigmoid(self.lambdaa)
         loss_p = self.cross_entropy_loss(p_y=p_yp, y=yp)
         loss_t = self.cross_entropy_loss(p_y=p_yt, y=yt)
-        loss = alpha * loss_p + (1 - alpha) * loss_t
+        loss = lambdaa * loss_p + (1 - lambdaa) * loss_t
         return loss
 
     def training_step(self, data):
@@ -143,11 +143,12 @@ class NodeClassifier(torch.nn.Module):
         )
 
         metrics = {
-            'loss': loss.item(),
-            'acc': accuracy(
+            'train/loss': loss.item(),
+            'train/acc': accuracy(
                 pred=p_y_x[data.train_mask].argmax(dim=1),
                 target=self.cached_yt[data.train_mask].argmax(dim=1)
             ) * 100,
+            'train/lambda': torch.sigmoid(self.lambdaa).item()
         }
 
         return loss, metrics
