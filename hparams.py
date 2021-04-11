@@ -4,7 +4,7 @@ from utils import print_args, JobManager
 
 
 def generate_commands(args, params):
-    default_args = f' -s {args.seed} -r {args.repeats} --log --log-mode collective --project-name {args.project_name} '
+    default_args = f' -s {args.seed} -r {args.repeats} --log --log-mode collective --project-name {args.project} '
     cmds = []
     configs = product(*[[f'{param_name} {param_value}' for param_value in param_range]
                         for param_name, param_range in params.items()])
@@ -65,7 +65,7 @@ def create_jobs(args):
 def main():
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser, parser_create = JobManager.register_arguments(parser)
-    parser_create.add_argument('--project-name', type=str, default='LPGNN-hparams',
+    parser_create.add_argument('--project', type=str, default='LPGNN-hparams',
                                help='project name for wandb logging')
     parser_create.add_argument('-s', '--seed', type=int, default=12345, help='initial random seed')
     parser_create.add_argument('-r', '--repeats', type=int, default=10,

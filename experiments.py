@@ -18,7 +18,7 @@ class HyperParams:
 
 
 def generate_command(args, options):
-    default_args = f' -s {args.seed} -r {args.repeats} --log --log-mode collective --project-name {args.project_name} '
+    default_args = f' -s {args.seed} -r {args.repeats} --log --log-mode collective --project-name {args.project} '
     command = f'python main.py {default_args} {options}'
     return command
 
@@ -69,7 +69,7 @@ def experiment_commands(args):
 def main():
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser, parser_create = JobManager.register_arguments(parser)
-    parser_create.add_argument('--project-name', type=str, default='LPGNN-experiments',
+    parser_create.add_argument('--project', type=str, default='LPGNN-experiments',
                                help='project name for wandb logging')
     parser_create.add_argument('-s', '--seed', type=int, default=12345, help='initial random seed')
     parser_create.add_argument('-r', '--repeats', type=int, default=10,
