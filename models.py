@@ -97,15 +97,20 @@ class NodeClassifier(torch.nn.Module):
         elif model == 'gcn':
             self.gnn = GCN(input_dim=input_dim, output_dim=num_classes, hidden_dim=hidden_dim, dropout=dropout)
 
-        self.alpha = torch.nn.Parameter(torch.tensor([0.0, 0.0], requires_grad=True))
+        self.alpha = torch.nn.Parameter(torch.tensor(0.0, requires_grad=True))
         self.cached_yt = None
 
     def forward(self, data):
         x, adj_t = data.x, data.adj_t
         x = self.x_prop(x, adj_t)
         x = self.gnn(x, adj_t)
-        x = F.softmax(x, dim=1)
-        return x
+        p_y_x = p_yt_x = F.softmax(x, dim=1)            # P(y|x)
+        p_yp_x = torch.matmul(p_y_x, data.T)            # P(y'|x')
+
+        if self.propagate_predictions:
+            p_yt_x = self.y_prop(p_yp_x, data.adj_t)    # P(y~|x')
+
+        return p_y_x, p_yp_x, p_yt_x
 
     @staticmethod
     def cross_entropy_loss(p_y, y, weighted=False):
@@ -115,47 +120,54 @@ class NodeClassifier(torch.nn.Module):
         loss = loss.sum(dim=1).mean()
         return loss
 
-    def step(self, data, mask):
-        p_y_x = p_yt_x = self(data)  # P(y|x')
-        p_yp_x = torch.matmul(p_y_x, data.T)  # P(y'|x')
+    def model_loss(self, p_yp, p_yt, yp, yt):
+        alpha = torch.sigmoid(self.alpha)
+        loss_p = self.cross_entropy_loss(p_y=p_yp, y=yp)
+        loss_t = self.cross_entropy_loss(p_y=p_yt, y=yt)
+        loss = alpha * loss_p + (1 - alpha) * loss_t
+        return loss
 
-        if self.propagate_predictions:
-            p_yt_x = self.y_prop(p_yp_x, data.adj_t)  # P(y~|x')
+    def training_step(self, data):
+        p_y_x, p_yp_x, p_yt_x = self(data)
 
         if self.cached_yt is None:
             yp = data.y.float()
             yp[data.test_mask] = 0  # to avoid using test labels
             self.cached_yt = self.y_prop(yp, data.adj_t)  # y~
 
-        alpha = torch.softmax(self.alpha, dim=0)
-        loss_p = alpha[0] * self.cross_entropy_loss(p_y=p_yp_x[mask], y=data.y[mask])
-        loss_t = alpha[1] * self.cross_entropy_loss(p_y=p_yt_x[mask], y=self.cached_yt[mask])
-        loss = loss_p + loss_t
+        loss = self.model_loss(
+            p_yp=p_yp_x[data.train_mask],
+            p_yt=p_yt_x[data.train_mask],
+            yp=data.y[data.train_mask],
+            yt=self.cached_yt[data.train_mask],
+        )
 
         metrics = {
             'loss': loss.item(),
-            'acc': accuracy(pred=p_y_x[mask].argmax(dim=1), target=self.cached_yt[mask].argmax(dim=1)) * 100,
-            'acc_p': accuracy(pred=p_yp_x[mask].argmax(dim=1), target=data.y[mask].argmax(dim=1)) * 100,
-            'acc_t': accuracy(pred=p_yt_x[mask].argmax(dim=1), target=self.cached_yt[mask].argmax(dim=1)) * 100
+            'acc': accuracy(
+                pred=p_y_x[data.train_mask].argmax(dim=1),
+                target=self.cached_yt[data.train_mask].argmax(dim=1)
+            ) * 100,
         }
 
         return loss, metrics
 
-    def training_step(self, data):
-        mask = data.train_mask
-        loss, metrics = self.step(data, mask)
-        metrics = {f'train/{metric}': value for metric, value in metrics.items()}
-        return loss, metrics
-
     def validation_step(self, data):
-        mask = data.val_mask
-        _, metrics = self.step(data, mask)
-        metrics = {f'val/{metric}': value for metric, value in metrics.items()}
-        metrics.update(self.test_step(data))
-        return metrics
+        p_y_x, p_yp_x, p_yt_x = self(data)
 
-    def test_step(self, data):
-        pred = self(data)[data.test_mask].argmax(dim=1)
-        target = data.y[data.test_mask].argmax(dim=1)
-        acc = accuracy(pred=pred, target=target) * 100
-        return {'test/acc': acc}
+        val_loss = self.model_loss(
+            p_yp=p_yp_x[data.val_mask],
+            p_yt=p_yt_x[data.val_mask],
+            yp=data.y[data.val_mask],
+            yt=self.cached_yt[data.val_mask],
+        )
+
+        metrics = {
+            'val/loss': val_loss.item(),
+            'val/acc': accuracy(pred=p_y_x[data.val_mask].argmax(dim=1), target=self.cached_yt[data.val_mask].argmax(dim=1)) * 100,
+            'val/acc_p': accuracy(pred=p_yp_x[data.val_mask].argmax(dim=1), target=data.y[data.val_mask].argmax(dim=1)) * 100,
+            'val/acc_t': accuracy(pred=p_yt_x[data.val_mask].argmax(dim=1), target=self.cached_yt[data.val_mask].argmax(dim=1)) * 100,
+            'test/acc': accuracy(pred=p_y_x[data.test_mask].argmax(dim=1), target=data.y[data.test_mask].argmax(dim=1)) * 100,
+        }
+
+        return metrics

@@ -1,7 +1,4 @@
-import os
 import sys
-import uuid
-
 import torch
 from torch.optim import SGD, Adam
 from tqdm.auto import tqdm
@@ -12,7 +9,6 @@ class Trainer:
             self,
             optimizer:      dict(help='optimization algorithm', choices=['sgd', 'adam']) = 'adam',
             max_epochs:     dict(help='maximum number of training epochs') = 500,
-            checkpoint:     dict(help='use model checkpointing') = True,
             learning_rate:  dict(help='learning rate') = 0.01,
             weight_decay:   dict(help='weight decay (L2 penalty)') = 0.0,
             patience:       dict(help='early-stopping patience window size') = 0,
@@ -22,16 +18,11 @@ class Trainer:
         self.optimizer_name = optimizer
         self.max_epochs = max_epochs
         self.device = device
-        self.checkpoint = checkpoint
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.patience = patience
         self.logger = logger
         self.model = None
-
-        if checkpoint:
-            os.makedirs('checkpoints', exist_ok=True)
-            self.checkpoint_path = os.path.join('checkpoints', f'{uuid.uuid1()}.pt')
 
     def configure_optimizers(self):
         if self.optimizer_name == 'sgd':
@@ -65,8 +56,6 @@ class Trainer:
                 best_val_loss = val_loss
                 best_metrics = val_metrics
                 num_epochs_without_improvement = 0
-                if self.checkpoint:
-                    torch.save(self.model.state_dict(), self.checkpoint_path)
             else:
                 num_epochs_without_improvement += 1
                 if num_epochs_without_improvement >= self.patience > 0:
@@ -93,15 +82,3 @@ class Trainer:
         self.model.eval()
         return self.model.validation_step(data)
 
-    @torch.no_grad()
-    def test(self, data):
-        if self.checkpoint:
-            self.model.load_state_dict(torch.load(self.checkpoint_path))
-
-        self.model.eval()
-        metrics = self.model.test_step(data)
-
-        if self.logger:
-            self.logger.log_summary(metrics)
-
-        return metrics

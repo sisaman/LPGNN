@@ -26,7 +26,7 @@ def run(args):
     dataset = from_args(load_dataset, args)
 
     test_acc = []
-    val_metrics = {}
+    run_metrics = {}
     run_id = str(uuid.uuid1())
 
     logger = None
@@ -56,12 +56,12 @@ def run(args):
             # train the model
             trainer = from_args(Trainer, args, logger=logger if args.log_mode == LogMode.INDIVIDUAL else None)
             best_metrics = trainer.fit(model, data)
-            result = trainer.test(data)
 
             # process results
             for metric, value in best_metrics.items():
-                val_metrics[metric] = val_metrics.get(metric, []) + [value]
-            test_acc.append(result['test/acc'])
+                run_metrics[metric] = run_metrics.get(metric, []) + [value]
+
+            test_acc.append(best_metrics['test/acc'])
             progbar.set_postfix({'last_test_acc': test_acc[-1], 'avg_test_acc': np.mean(test_acc)})
 
         except Exception as e:
@@ -74,7 +74,7 @@ def run(args):
 
     if args.log_mode == LogMode.COLLECTIVE:
         summary = {}
-        for metric, values in val_metrics.items():
+        for metric, values in run_metrics.items():
             summary[metric + '_mean'] = np.mean(values)
             summary[metric + '_ci'] = confidence_interval(values, size=1000, ci=95, seed=args.seed)
 
