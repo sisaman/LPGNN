@@ -60,14 +60,14 @@ def get_failed_jobs():
 def create_jobs():
     run_cmds = []
 
-    # non-private and fully-private methods
-    # run_cmds += generate_commands({
-    #     '--dataset': ['cora', 'pubmed', 'facebook', 'lastfm'],
-    #     '--feature': ['raw', 'rnd', 'one', 'ohd'],
-    #     '--learning-rate': [0.01, 0.001, 0.0001],
-    #     '--weight-decay': [0, 1e-4, 1e-3, 1e-2],
-    #     '--dropout': [0, 0.25, 0.5, 0.75]
-    # })
+    #non-private and fully-private methods
+    run_cmds += generate_commands({
+        '--dataset': ['cora', 'pubmed', 'facebook', 'lastfm'],
+        '--feature': ['raw', 'rnd', 'one', 'ohd'],
+        '--learning-rate': [0.01, 0.001, 0.0001],
+        '--weight-decay': [0, 1e-4, 1e-3, 1e-2],
+        '--dropout': [0, 0.25, 0.5, 0.75]
+    })
 
     # LPGNN
     x_steps = {'cora': 16, 'pubmed': 16, 'facebook': 4, 'lastfm': 8}
