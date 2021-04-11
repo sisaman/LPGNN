@@ -35,13 +35,10 @@ class FeaturePerturbation:
                                      option='-m') = 'mbm',
                  x_eps:         dict(help='privacy budget for feature perturbation (set None to disable)', type=float,
                                      option='-ex') = None,
-                 reduce_dim:    dict(help='dimension of the random dimensionality reduction (set None to disable)',
-                                     type=int) = None,
                  data_range=None):
 
         self.mechanism = mechanism
         self.input_range = data_range
-        self.reduce_dim = reduce_dim
         self.x_eps = x_eps
 
     def __call__(self, data):
