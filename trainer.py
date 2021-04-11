@@ -36,7 +36,6 @@ class Trainer:
         optimizer = self.configure_optimizers()
 
         num_epochs_without_improvement = 0
-        best_val_loss = float('inf')
         best_metrics = None
 
         epoch_progbar = tqdm(range(1, self.max_epochs + 1), desc='Epoch: ', leave=False, position=1, file=sys.stdout)
@@ -47,13 +46,11 @@ class Trainer:
 
             val_metrics = self._validation(data)
             metrics.update(val_metrics)
-            val_loss = val_metrics['val/loss']
 
             if self.logger:
                 self.logger.log({**metrics, 'epoch': epoch})
 
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
+            if best_metrics is None or val_metrics['val/loss'] < best_metrics['val/loss']:
                 best_metrics = val_metrics
                 num_epochs_without_improvement = 0
             else:
