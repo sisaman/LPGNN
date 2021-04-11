@@ -22,7 +22,7 @@ class HyperParams:
 
 
 def generate_command(args, options):
-    default_args = f' -s {args.seed} -r {args.repeats} --log --log-mode collective --project-name {args.project} '
+    default_args = f' -s {args.seed} -r {args.repeats} -o results --log --log-mode collective --project-name {args.project} '
     command = f'python main.py {default_args} {options}'
     return command
 
