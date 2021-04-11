@@ -33,8 +33,8 @@ class FeaturePerturbation:
     def __init__(self,
                  mechanism:     dict(help='feature perturbation mechanism', choices=list(supported_feature_mechanisms),
                                      option='-m') = 'mbm',
-                 x_eps:         dict(help='privacy budget for feature perturbation (set None to disable)', type=float,
-                                     option='-ex') = None,
+                 x_eps:         dict(help='privacy budget for feature perturbation', type=float,
+                                     option='-ex') = float('inf'),
                  data_range=None):
 
         self.mechanism = mechanism
@@ -42,7 +42,7 @@ class FeaturePerturbation:
         self.x_eps = x_eps
 
     def __call__(self, data):
-        if self.x_eps is None or self.x_eps <= 0:
+        if self.x_eps > 50:     # eps ~= inf
             return data
 
         if self.input_range is None:
@@ -58,8 +58,8 @@ class FeaturePerturbation:
 
 class LabelPerturbation:
     def __init__(self,
-                 y_eps: dict(help='privacy budget for label perturbation (set None to disable)',
-                             type=float, option='-ey') = None):
+                 y_eps: dict(help='privacy budget for label perturbation',
+                             type=float, option='-ey') = float('inf')):
         self.y_eps = y_eps
 
     def __call__(self, data):
@@ -67,7 +67,7 @@ class LabelPerturbation:
         p_ii = 1  # probability of preserving the clean label i
         p_ij = 0  # probability of perturbing label i into another label j
 
-        if self.y_eps is not None and self.y_eps > 0:
+        if self.y_eps < 50:     # eps < inf
             mechanism = RandomizedResopnse(eps=self.y_eps, d=data.num_classes)
             perturb_mask = data.train_mask | data.val_mask
             y_perturbed = mechanism(data.y[perturb_mask])
