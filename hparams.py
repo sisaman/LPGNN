@@ -128,10 +128,9 @@ if args.command == 'create':
     create_jobs()
 elif args.command == 'submit':
     os.chdir(args.jobs_dir)
-    job_list = os.listdir()
+    job_list = [job for job in os.listdir() if job.endswith('.job')]
     for job in tqdm(job_list, desc='submitting jobs'):
-        if job.endswith('.job'):
-            check_call(['qsub', '-V', job], stdout=DEVNULL, stderr=STDOUT)
+        check_call(['qsub', '-V', job], stdout=DEVNULL, stderr=STDOUT)
     print('Done.')
 elif args.command == 'status':
     os.chdir(args.jobs_dir)
