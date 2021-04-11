@@ -11,6 +11,10 @@ class HyperParams:
     def get(self, dataset, feature='raw', x_eps=float('inf'), y_eps=float('inf')):
         if feature == 'crnd':
             feature = 'rnd'
+        if x_eps < float('inf'):
+            x_eps = 1
+        if y_eps < float('inf'):
+            y_eps = 1
 
         return self.df.loc[
             feature, x_eps, y_eps, dataset
