@@ -4,11 +4,14 @@ from argparse import ArgumentTypeError, Action
 import inspect
 import enum
 import functools
+from subprocess import check_call, DEVNULL, STDOUT
+
 import torch
 import numpy as np
 import random
 import torch.nn.functional as F
 import seaborn as sns
+from tqdm.auto import tqdm
 
 try:
     import wandb
@@ -75,6 +78,111 @@ class WandbLogger:
     def finish(self):
         if self.enabled:
             self.experiment.finish()
+
+
+class JobManager:
+    def __init__(self, args, cmd_generator=None):
+        self.args = args
+        self.cmd_generator = cmd_generator
+
+    def run(self):
+        if self.args.command == 'create':
+            self.create()
+        elif self.args.command == 'submit':
+            self.submit()
+        elif self.args.command == 'status':
+            self.status()
+        elif self.args.command == 'resubmit':
+            self.resubmit()
+
+    def create(self):
+        os.makedirs(self.args.jobs_dir, exist_ok=True)
+        run_cmds = self.cmd_generator(self.args)
+
+        if 'queue' in self.args:
+            for i, run in tqdm(enumerate(run_cmds), total=len(run_cmds)):
+                job_file_content = [
+                    f'#$ -N job-{i + 1}\n',
+                    f'#$ -S /bin/bash\n',
+                    f'#$ -P dusk2dawn\n',
+                    f'#$ -l pytorch,{self.args.queue},gpumem={self.args.gpumem}\n',
+                    f'#$ -cwd\n',
+                    f'cd ..\n',
+                    f'{run}\n'
+                ]
+                with open(os.path.join(self.args.jobs_dir, f'job-{i + 1}.job'), 'w') as file:
+                    file.writelines(job_file_content)
+                    file.flush()
+        else:
+            with open(os.path.join(self.args.jobs_dir, f'all.jobs'), 'w') as file:
+                for run in tqdm(run_cmds):
+                    file.write(run + '\n')
+
+        print('Job files created in:', self.args.jobs_dir)
+
+    def submit(self):
+        os.chdir(self.args.jobs_dir)
+        job_list = os.listdir()
+        for job in tqdm(job_list, desc='submitting jobs'):
+            if job.endswith('.job'):
+                check_call(['qsub', '-V', job], stdout=DEVNULL, stderr=STDOUT)
+        print('Done.')
+
+    def resubmit(self):
+        os.chdir(self.args.jobs_dir)
+
+        while True:
+            try:
+                failed_jobs = self.get_failed_jobs()
+                for job_file, error_file, _ in failed_jobs:
+                    print('resubmitting', job_file, '...', end='')
+                    check_call(['qsub', '-V', job_file], stdout=DEVNULL, stderr=STDOUT)
+                    os.remove(error_file)
+                    print('done')
+
+                if self.args.loop:
+                    time.sleep(60)
+                else:
+                    break
+            except KeyboardInterrupt:
+                break
+
+    def status(self):
+        os.chdir(self.args.jobs_dir)
+        failed_jobs = self.get_failed_jobs()
+        for _, file, num_lines in failed_jobs:
+            print(num_lines, os.path.join(self.args.jobs_dir, file))
+
+    @staticmethod
+    def get_failed_jobs():
+        file_list = os.listdir()
+        failed_jobs = []
+        for file in file_list:
+            if file.count('.e'):
+                num_lines = sum(1 for _ in open(file))
+                if num_lines > 0:
+                    job_file = file.split('.')[0] + '.job'
+                    failed_jobs.append((job_file, file, num_lines))
+
+        return failed_jobs
+
+    @staticmethod
+    def register_arguments(parser, default_jobs_dir='./jobs', default_gpu_mem=10, default_queue='sgpu'):
+        parser.add_argument('-j', '--jobs-dir', type=str, default=default_jobs_dir)
+        subparser = parser.add_subparsers(dest='command')
+
+        parser_create = subparser.add_parser('create')
+        subparser_create = parser_create.add_subparsers()
+        parser_grid = subparser_create.add_parser('grid')
+        parser_grid.add_argument('-q', '--queue', type=str, default=default_queue, choices=['sgpu', 'gpu', 'lgpu'])
+        parser_grid.add_argument('-m', '--gpumem', type=int, default=default_gpu_mem)
+
+        subparser.add_parser('submit')
+        subparser.add_parser('status')
+
+        parser_resubmit = subparser.add_parser('resubmit')
+        parser_resubmit.add_argument('--loop', action='store_true')
+        return parser, parser_create
 
 
 def seed_everything(seed):
