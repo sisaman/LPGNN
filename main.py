@@ -25,8 +25,8 @@ class LogMode(Enum):
 def run(args):
     dataset = from_args(load_dataset, args)
 
-    test_results = []
-    val_results = []
+    test_acc = []
+    val_metrics = {}
     run_id = str(uuid.uuid1())
 
     logger = None
@@ -59,9 +59,10 @@ def run(args):
             result = trainer.test(data)
 
             # process results
-            val_results.append(best_metrics['val/acc'])
-            test_results.append(result['test/acc'])
-            progbar.set_postfix({'last_test_acc': test_results[-1], 'avg_test_acc': np.mean(test_results)})
+            for metric, value in best_metrics.items():
+                val_metrics[metric] = val_metrics.get(metric, []) + [value]
+            test_acc.append(result['test/acc'])
+            progbar.set_postfix({'last_test_acc': test_acc[-1], 'avg_test_acc': np.mean(test_acc)})
 
         except Exception as e:
             error = ''.join(traceback.format_exception(Exception, e, e.__traceback__))
@@ -72,19 +73,19 @@ def run(args):
                 logger.finish()
 
     if args.log_mode == LogMode.COLLECTIVE:
-        logger.log_summary({
-            'val/acc_mean': np.mean(val_results),
-            'val/acc_ci': confidence_interval(val_results, size=1000, ci=95, seed=args.seed),
-            'test/acc_mean': np.mean(test_results),
-            'test/acc_ci': confidence_interval(test_results, size=1000, ci=95, seed=args.seed),
-        })
+        summary = {}
+        for metric, values in val_metrics.items():
+            summary[metric + '_mean'] = np.mean(values)
+            summary[metric + '_ci'] = confidence_interval(values, size=1000, ci=95, seed=args.seed)
+
+        logger.log_summary(summary)
 
     if not args.log:
         os.makedirs(args.output_dir, exist_ok=True)
-        df_results = pd.DataFrame(test_results, columns=['test_acc']).rename_axis('version').reset_index()
+        df_results = pd.DataFrame(test_acc, columns=['test_acc']).rename_axis('version').reset_index()
         df_results['group'] = run_id
         for arg_name, arg_val in vars(args).items():
-            df_results[arg_name] = [arg_val] * len(test_results)
+            df_results[arg_name] = [arg_val] * len(test_acc)
         df_results.to_csv(os.path.join(args.output_dir, f'{run_id}.csv'), index=False)
 
 

@@ -5,7 +5,6 @@ from torch_geometric.utils import accuracy
 from torch.nn import Dropout
 from torch_geometric.nn import MessagePassing, SAGEConv, GCNConv
 from torch_sparse import matmul
-eps = 1e-20
 
 
 class KProp(MessagePassing):
@@ -116,10 +115,6 @@ class NodeClassifier(torch.nn.Module):
         loss = loss.sum(dim=1).mean()
         return loss
 
-    @staticmethod
-    def kl_loss(p, q):
-        return F.kl_div(input=torch.log(p + eps), target=q)
-
     def step(self, data, mask):
         p_y_x = p_yt_x = self(data)  # P(y|x')
         p_yp_x = torch.matmul(p_y_x, data.T)  # P(y'|x')
@@ -133,28 +128,29 @@ class NodeClassifier(torch.nn.Module):
             self.cached_yt = self.y_prop(yp, data.adj_t)  # y~
 
         alpha = torch.softmax(self.alpha, dim=0)
-        loss = alpha[0] * self.cross_entropy_loss(p_y=p_yt_x[mask], y=self.cached_yt[mask])
-        loss += alpha[1] * self.cross_entropy_loss(p_y=p_yp_x[mask], y=data.y[mask])
+        loss_p = alpha[0] * self.cross_entropy_loss(p_y=p_yp_x[mask], y=data.y[mask])
+        loss_t = alpha[1] * self.cross_entropy_loss(p_y=p_yt_x[mask], y=self.cached_yt[mask])
+        loss = loss_p + loss_t
 
-        pred = p_yp_x[mask].argmax(dim=1)
-        target = data.y[mask].argmax(dim=1)
-        acc = accuracy(pred=pred, target=target) * 100
+        metrics = {
+            'loss': loss.item(),
+            'acc': accuracy(pred=p_y_x[mask].argmax(dim=1), target=self.cached_yt[mask].argmax(dim=1)) * 100,
+            'acc_p': accuracy(pred=p_yp_x[mask].argmax(dim=1), target=data.y[mask].argmax(dim=1)) * 100,
+            'acc_t': accuracy(pred=p_yt_x[mask].argmax(dim=1), target=self.cached_yt[mask].argmax(dim=1)) * 100
+        }
 
-        return loss, acc, alpha
+        return loss, metrics
 
     def training_step(self, data):
         mask = data.train_mask
-        loss, acc, alpha = self.step(data, mask)
-        metrics = {'train/loss': loss.item(), 'train/acc': acc,
-                   'train/alpha_0': alpha[0].item(),
-                   'train/alpha_1': alpha[1].item(),
-                   }
+        loss, metrics = self.step(data, mask)
+        metrics = {f'train/{metric}': value for metric, value in metrics.items()}
         return loss, metrics
 
     def validation_step(self, data):
         mask = data.val_mask
-        loss, acc, _ = self.step(data, mask)
-        metrics = {'val/loss': loss.item(), 'val/acc': acc}
+        _, metrics = self.step(data, mask)
+        metrics = {f'val/{metric}': value for metric, value in metrics.items()}
         metrics.update(self.test_step(data))
         return metrics
 
