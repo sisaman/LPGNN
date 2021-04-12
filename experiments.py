@@ -1,5 +1,7 @@
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from itertools import product
+
+import numpy as np
 import pandas as pd
 from utils import print_args, JobManager
 
@@ -8,12 +10,12 @@ class HyperParams:
     def __init__(self, path):
         self.df = pd.read_pickle(path)
 
-    def get(self, dataset, feature='raw', x_eps=float('inf'), y_eps=float('inf')):
+    def get(self, dataset, feature='raw', x_eps=np.inf, y_eps=np.inf):
         if feature == 'crnd':
             feature = 'rnd'
-        if x_eps < float('inf'):
+        if x_eps < np.inf:
             x_eps = 1
-        if y_eps < float('inf'):
+        if y_eps < np.inf:
             y_eps = 1
 
         return self.df.loc[
@@ -40,9 +42,9 @@ def experiment_commands(args):
     ## LPGNN ALL CASES
 
     datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
-    x_eps_list = [0.01, 0.1, 1, 2, 3, float('inf')]
+    x_eps_list = [0.01, 0.1, 1, 2, 3, np.inf]
     x_steps_list = [0, 2, 4, 8, 16]
-    y_eps_list = [1, 2, 3, 4, float('inf')]
+    y_eps_list = [1, 2, 3, 4, np.inf]
     y_steps_list = [0, 2, 4, 8, 16]
 
     for dataset, x_eps, x_steps, y_eps, y_steps in product(datasets, x_eps_list, x_steps_list, y_eps_list, y_steps_list):
@@ -61,7 +63,7 @@ def experiment_commands(args):
     for dataset, feature in product(datasets, features):
         params = hparams.get(dataset=dataset, feature=feature)
         options = get_option_string(dataset=dataset, feature=feature, mechanism='mbm', model='sage',
-                                    x_eps=float('inf'), x_steps=0, y_eps=float('inf'), y_steps=0, **params)
+                                    x_eps=np.inf, x_steps=0, y_eps=np.inf, y_steps=0, **params)
         command = generate_command(args, options)
         run_cmds.append(command)
 
