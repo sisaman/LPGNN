@@ -9,10 +9,12 @@ from utils import print_args, JobManager
 
 class HyperParams:
     def __init__(self, path_dir):
-        self.df_params = pd.read_pickle(os.path.join(path_dir, 'params.pkl'))
-        self.df_steps = pd.read_pickle(os.path.join(path_dir, 'steps.pkl'))
+        self.df_params = pd.read_csv(os.path.join(path_dir, 'params.csv'),
+                                     index_col=['dataset_name', 'feature', 'x_eps', 'y_eps'])
+        self.df_steps = pd.read_csv(os.path.join(path_dir, 'steps.csv'),
+                                    index_col=['dataset_name', 'x_eps', 'y_eps'])
 
-    def get(self, dataset, feature, x_eps, y_eps, return_steps):
+    def get(self, dataset, feature, x_eps, y_eps):
         if feature == 'crnd':
             feature = 'rnd'
         if x_eps < np.inf:
@@ -20,15 +22,9 @@ class HyperParams:
         if y_eps < np.inf:
             y_eps = 1
 
-        hparams = self.df_params.loc[
-            feature, x_eps, y_eps, dataset
-        ][['learning_rate', 'weight_decay', 'dropout']].to_dict()
-
-        if return_steps:
-            steps = self.df_steps.loc[dataset, x_eps, y_eps].to_dict()
-            if x_eps == np.inf: steps['x_steps'] = 0
-            if y_eps == np.inf: steps['y_steps'] = 0
-            hparams.update(steps)
+        hparams = self.df_params.loc[dataset, feature, x_eps, y_eps].to_dict()
+        steps = self.df_steps.loc[dataset, x_eps, y_eps].to_dict()
+        hparams.update(steps)
 
         return hparams
 
@@ -56,7 +52,7 @@ def experiment_commands(args):
 
     for dataset, x_eps, x_steps, y_eps, y_steps in product(datasets, x_eps_list, x_steps_list, y_eps_list,
                                                            y_steps_list):
-        params = hparams.get(dataset=dataset, feature='raw', x_eps=x_eps, y_eps=y_eps, return_steps=False)
+        params = hparams.get(dataset=dataset, feature='raw', x_eps=x_eps, y_eps=y_eps)
         command = get_experiment_cmd(
             dataset=dataset, feature='raw', mechanism='mbm', model='sage',
             x_eps=x_eps, x_steps=x_steps, y_eps=y_eps, y_steps=y_steps,
@@ -71,10 +67,10 @@ def experiment_commands(args):
     features = ['rnd', 'crnd', 'one', 'ohd']
 
     for dataset, feature in product(datasets, features):
-        params = hparams.get(dataset=dataset, feature=feature, x_eps=np.inf, y_eps=np.inf, return_steps=False)
+        params = hparams.get(dataset=dataset, feature=feature, x_eps=np.inf, y_eps=np.inf)
         command = get_experiment_cmd(
             dataset=dataset, feature=feature, mechanism='mbm', model='sage',
-            x_eps=np.inf, x_steps=0, y_eps=np.inf, y_steps=0, forward_correction=True,
+            x_eps=np.inf, x_steps=params['x_steps'], y_eps=np.inf, y_steps=params['y_steps'], forward_correction=True,
             learning_rate=params['learning_rate'], weight_decay=params['weight_decay'],
             dropout=params['dropout'], args=args
         )
@@ -87,10 +83,10 @@ def experiment_commands(args):
     x_eps_list = [0.01, 0.1, 1, 2, 3]
 
     for dataset, mechanism, x_eps in product(datasets, mechanisms, x_eps_list):
-        params = hparams.get(dataset=dataset, feature='raw', x_eps=x_eps, y_eps=np.inf, return_steps=True)
+        params = hparams.get(dataset=dataset, feature='raw', x_eps=x_eps, y_eps=np.inf)
         command = get_experiment_cmd(
             dataset=dataset, feature='raw', mechanism=mechanism, model='sage',
-            x_eps=x_eps, x_steps=params['x_steps'], y_eps=np.inf, y_steps=0,
+            x_eps=x_eps, x_steps=params['x_steps'], y_eps=np.inf, y_steps=params['y_steps'],
             forward_correction=True, learning_rate=params['learning_rate'],
             weight_decay=params['weight_decay'], dropout=params['dropout'], args=args
         )
@@ -102,10 +98,10 @@ def experiment_commands(args):
     y_eps_list = [1, 2, 3]
 
     for dataset, y_eps in product(datasets, y_eps_list):
-        params = hparams.get(dataset=dataset, feature='raw', x_eps=np.inf, y_eps=y_eps, return_steps=False)
+        params = hparams.get(dataset=dataset, feature='raw', x_eps=np.inf, y_eps=y_eps)
         command = get_experiment_cmd(
             dataset=dataset, feature='raw', mechanism='mbm', model='sage',
-            x_eps=np.inf, x_steps=0, y_eps=y_eps, y_steps=0,
+            x_eps=np.inf, x_steps=params['x_steps'], y_eps=y_eps, y_steps=0,
             forward_correction=False, learning_rate=params['learning_rate'],
             weight_decay=params['weight_decay'], dropout=params['dropout'], args=args
         )
