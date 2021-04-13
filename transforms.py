@@ -43,7 +43,7 @@ class FeaturePerturbation:
         self.x_eps = x_eps
 
     def __call__(self, data):
-        if self.x_eps == np.inf:
+        if np.isinf(self.x_eps):
             return data
 
         if self.input_range is None:
@@ -68,7 +68,7 @@ class LabelPerturbation:
         p_ii = 1  # probability of preserving the clean label i
         p_ij = 0  # probability of perturbing label i into another label j
 
-        if self.y_eps < np.inf:
+        if not np.isinf(self.y_eps):
             mechanism = RandomizedResopnse(eps=self.y_eps, d=data.num_classes)
             perturb_mask = data.train_mask | data.val_mask
             y_perturbed = mechanism(data.y[perturb_mask])
