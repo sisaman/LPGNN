@@ -15,14 +15,9 @@ class HyperParams:
                                     index_col=['dataset_name', 'x_eps', 'y_eps'])
 
     def get(self, dataset, feature, x_eps, y_eps):
-        if feature == 'crnd':
-            feature = 'rnd'
-        if x_eps < np.inf:
-            x_eps = 1
-        if y_eps < np.inf:
-            y_eps = 1
-
-        hparams = self.df_params.loc[dataset, feature, x_eps, y_eps].to_dict()
+        if feature == 'crnd': feature = 'rnd'
+        set_eps = lambda eps: np.inf if np.isinf(x_eps) else 1
+        hparams = self.df_params.loc[dataset, feature, set_eps(x_eps), set_eps(y_eps)].to_dict()
         steps = self.df_steps.loc[dataset, x_eps, y_eps].to_dict()
         hparams.update(steps)
 
@@ -42,24 +37,24 @@ def experiment_commands(args):
     run_cmds = []
     hparams = HyperParams(path_dir='./hparams')
 
-    ## LPGNN ALL CASES
-
-    datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
-    x_eps_list = [0.01, 0.1, 1, 2, 3, np.inf]
-    x_steps_list = [0, 2, 4, 8, 16]
-    y_eps_list = [1, 2, 3, 4, np.inf]
-    y_steps_list = [0, 2, 4, 8, 16]
-
-    for dataset, x_eps, x_steps, y_eps, y_steps in product(datasets, x_eps_list, x_steps_list, y_eps_list,
-                                                           y_steps_list):
-        params = hparams.get(dataset=dataset, feature='raw', x_eps=x_eps, y_eps=y_eps)
-        command = get_experiment_cmd(
-            dataset=dataset, feature='raw', mechanism='mbm', model='sage',
-            x_eps=x_eps, x_steps=x_steps, y_eps=y_eps, y_steps=y_steps,
-            forward_correction=True, learning_rate=params['learning_rate'],
-            weight_decay=params['weight_decay'], dropout=params['dropout'], args=args
-        )
-        run_cmds.append(command)
+    # ## LPGNN ALL CASES
+    #
+    # datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
+    # x_eps_list = [0.01, 0.1, 1, 2, 3, np.inf]
+    # x_steps_list = [0, 2, 4, 8, 16]
+    # y_eps_list = [1, 2, 3, 4, np.inf]
+    # y_steps_list = [0, 2, 4, 8, 16]
+    #
+    # for dataset, x_eps, x_steps, y_eps, y_steps in product(datasets, x_eps_list, x_steps_list, y_eps_list,
+    #                                                        y_steps_list):
+    #     params = hparams.get(dataset=dataset, feature='raw', x_eps=x_eps, y_eps=y_eps)
+    #     command = get_experiment_cmd(
+    #         dataset=dataset, feature='raw', mechanism='mbm', model='sage',
+    #         x_eps=x_eps, x_steps=x_steps, y_eps=y_eps, y_steps=y_steps,
+    #         forward_correction=True, learning_rate=params['learning_rate'],
+    #         weight_decay=params['weight_decay'], dropout=params['dropout'], args=args
+    #     )
+    #     run_cmds.append(command)
 
     ## FULLY-PRIVATE BASELINES
 
