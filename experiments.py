@@ -1,8 +1,9 @@
 import os.path
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from itertools import product
+from collections.abc import Iterable
 
-import random
+from random import sample
 import numpy as np
 import pandas as pd
 from utils import print_args, JobManager
@@ -10,23 +11,60 @@ from utils import print_args, JobManager
 
 class HyperParams:
     def __init__(self, path_dir):
-        self.df_params = pd.read_csv(os.path.join(path_dir, 'params.csv'),
-                                     index_col=['dataset_name', 'feature', 'x_eps', 'y_eps'])
-        self.df_steps = pd.read_csv(os.path.join(path_dir, 'steps.csv'),
-                                    index_col=['dataset_name', 'x_eps', 'y_eps'])
+        try:
+            self.df_lwd = pd.read_csv(os.path.join(path_dir, 'lwd.csv'),
+                                      index_col=['dataset', 'feature', 'x_eps', 'y_eps'])
+        except FileNotFoundError:
+            self.df_lwd = None
 
-    def get(self, dataset, feature, x_eps, y_eps):
-        if feature == 'crnd': feature = 'rnd'
-        set_eps = lambda eps: np.inf if np.isinf(x_eps) else 1
-        hparams = self.df_params.loc[dataset, feature, set_eps(x_eps), set_eps(y_eps)].to_dict()
-        steps = self.df_steps.loc[dataset, x_eps, y_eps].to_dict()
-        hparams.update(steps)
+        try:
+            self.df_steps = pd.read_csv(os.path.join(path_dir, 'steps.csv'),
+                                        index_col=['dataset', 'x_eps', 'y_eps'])
+        except FileNotFoundError:
+            self.df_steps = None
 
+        try:
+            self.df_lambda = pd.read_csv(os.path.join(path_dir, 'lambda.csv'),
+                                        index_col=['dataset', 'y_eps', 'y_steps'])
+        except FileNotFoundError:
+            self.df_lambda = None
+
+    def get(self, dataset, feature, x_eps, y_eps, y_steps=None):
+        hparams = self.get_lwd(dataset=dataset, feature=feature, x_eps=x_eps, y_eps=y_eps)
+        hparams.update(self.get_steps(dataset=dataset, x_eps=x_eps, y_eps=y_eps))
+        hparams.update(self.get_lambda(dataset=dataset, y_eps=y_eps,
+                                       y_steps=hparams['y_steps'] if y_steps is None else y_steps))
         return hparams
+
+    def get_lwd(self, dataset, feature, x_eps, y_eps):
+        params = {}
+        if self.df_lwd:
+            if feature == 'crnd': feature = 'rnd'
+            x_eps = np.inf if np.isinf(x_eps) else 1
+            y_eps = np.inf if np.isinf(y_eps) else 1
+            params = self.df_lwd.loc[dataset, feature, x_eps, y_eps].to_dict()
+
+        return params
+
+    def get_steps(self, dataset, x_eps, y_eps):
+        params = {}
+        if self.df_steps:
+            params = self.df_steps.loc[dataset, x_eps, y_eps].to_dict()
+
+        return params
+
+    def get_lambda(self, dataset, y_eps, y_steps):
+        params = {}
+        if np.isinf(y_eps) or y_steps == 0:
+            params['lambdaa'] = 1.0
+        elif self.df_lambda:
+            params = self.df_lambda.loc[dataset, y_eps, y_steps].to_dict()
+
+        return params
 
 
 class CommandBuilder:
-    BEST_VAL = None
+    BEST_VALUE = None
 
     def __init__(self, args, hparams_dir=None, random=None):
         self.random = random
@@ -55,7 +93,7 @@ class CommandBuilder:
         )
 
         if self.random:
-            configs = random.sample(list(configs), self.random)
+            configs = sample(list(configs), self.random)
 
         for config in configs:
             config = self.fill_best_params(config)
@@ -71,18 +109,19 @@ class CommandBuilder:
                 dataset=config['dataset'],
                 feature=config['feature'],
                 x_eps=config['x_eps'],
-                y_eps=config['y_eps']
+                y_eps=config['y_eps'],
+                y_steps=config['y_steps']
             )
 
             for param, value in config.items():
-                if value == self.BEST_VAL:
+                if value == self.BEST_VALUE:
                     config[param] = best_params[param]
         return config
 
     @staticmethod
     def get_list(param):
-        if not (isinstance(param, list) or isinstance(param, tuple)):
-            param = list(param)
+        if not isinstance(param, Iterable) or isinstance(param, str):
+            param = [param]
         return param
 
     @staticmethod
@@ -93,94 +132,154 @@ class CommandBuilder:
             yield dict(zip(keys, instance))
 
 
-def experiment_commands(args):
+def hyper_opt_lwd(args):
     run_cmds = []
-    cmdbuilder = CommandBuilder(args=args, hparams_dir='./hparams', random=100)
+    cmdbuilder = CommandBuilder(args=args, hparams_dir='./hparams')
     datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
 
+    # fully-private baselines
     run_cmds += cmdbuilder.build(
-        dataset='cora',
+        dataset=datasets,
+        feature=['rnd', 'one', 'ohd'],
+        mechanism='mbm',
+        model='sage',
+        x_eps=np.inf,
+        x_steps=0,
+        y_eps=np.inf,
+        y_steps=0,
+        forward_correction=True,
+        lambdaa=1,
+        learning_rate=[0.01, 0.001, 0.0001],
+        weight_decay=[0.01, 0.001, 0.0001],
+        dropout=[0, 0.25, 0.5, 0.75]
+    )
+
+    # LPGNN
+    run_cmds += cmdbuilder.build(
+        dataset=datasets,
         feature='raw',
         mechanism='mbm',
         model='sage',
-        x_eps=1,
-        x_steps=[16],
-        y_eps=[1],
-        y_steps=[0, 2, 4, 8, 16],
+        x_eps=[1, np.inf],
+        x_steps=CommandBuilder.BEST_VALUE,
+        y_eps=[1, np.inf],
+        y_steps=CommandBuilder.BEST_VALUE,
         forward_correction=True,
-        lambdaa=np.arange(0, 0.51, 0.1),
+        lambdaa=0.5,
         learning_rate=[0.01, 0.001, 0.0001],
         weight_decay=[0.01, 0.001, 0.0001],
-        dropout=np.arange(0, 1, 0.25)
+        dropout=[0, 0.25, 0.5, 0.75]
     )
 
-    # ## LPGNN ALL CASES
-    # run_cmds += cmdbuilder.build(
-    #     dataset=datasets,
-    #     feature='raw',
-    #     mechanism='mbm',
-    #     model='sage',
-    #     x_eps=[0.01, 0.1, 1, 2, 3, np.inf],
-    #     x_steps=[0, 2, 4, 8, 16],
-    #     y_eps=[1, 2, 3, 4, np.inf],
-    #     y_steps=[0, 2, 4, 8, 16],
-    #     forward_correction=True,
-    #     lambdaa=CommandBuilder.BEST_VAL,
-    #     learning_rate=CommandBuilder.BEST_VAL,
-    #     weight_decay=CommandBuilder.BEST_VAL,
-    #     dropout=CommandBuilder.BEST_VAL
-    # )
-    #
-    # ## FULLY-PRIVATE BASELINES
-    # run_cmds += cmdbuilder.build(
-    #     dataset=datasets,
-    #     feature=['rnd', 'crnd', 'one', 'ohd'],
-    #     mechanism='mbm',
-    #     model='sage',
-    #     x_eps=np.inf,
-    #     x_steps=CommandBuilder.BEST_VAL,
-    #     y_eps=np.inf,
-    #     y_steps=CommandBuilder.BEST_VAL,
-    #     forward_correction=True,
-    #     lambdaa=CommandBuilder.BEST_VAL,
-    #     learning_rate=CommandBuilder.BEST_VAL,
-    #     weight_decay=CommandBuilder.BEST_VAL,
-    #     dropout=CommandBuilder.BEST_VAL
-    # )
-    #
-    # ## BASELINE LDP MECHANISMS
-    # run_cmds += cmdbuilder.build(
-    #     dataset=datasets,
-    #     feature='raw',
-    #     mechanism=['1bm', 'lpm', 'agm'],
-    #     model='sage',
-    #     x_eps=[0.01, 0.1, 1, 2, 3],
-    #     x_steps=CommandBuilder.BEST_VAL,
-    #     y_eps=np.inf,
-    #     y_steps=CommandBuilder.BEST_VAL,
-    #     forward_correction=True,
-    #     lambdaa=CommandBuilder.BEST_VAL,
-    #     learning_rate=CommandBuilder.BEST_VAL,
-    #     weight_decay=CommandBuilder.BEST_VAL,
-    #     dropout=CommandBuilder.BEST_VAL
-    # )
-    #
-    # ## NO LABEL CORRECTION
-    # run_cmds += cmdbuilder.build(
-    #     dataset=datasets,
-    #     feature='raw',
-    #     mechanism='mbm',
-    #     model='sage',
-    #     x_eps=np.inf,
-    #     x_steps=CommandBuilder.BEST_VAL,
-    #     y_eps=[1, 2, 3],
-    #     y_steps=CommandBuilder.BEST_VAL,
-    #     forward_correction=False,
-    #     lambdaa=CommandBuilder.BEST_VAL,
-    #     learning_rate=CommandBuilder.BEST_VAL,
-    #     weight_decay=CommandBuilder.BEST_VAL,
-    #     dropout=CommandBuilder.BEST_VAL
-    # )
+    run_cmds = list(set(run_cmds))  # remove duplicate runs
+    return run_cmds
+
+
+def hyper_opt_lambda(args):
+    run_cmds = []
+    cmdbuilder = CommandBuilder(args=args, hparams_dir='./hparams')
+    datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
+
+    run_cmds += cmdbuilder.build(
+        dataset=datasets,
+        feature='raw',
+        mechanism='mbm',
+        model='sage',
+        x_eps=np.inf,
+        x_steps=0,
+        y_eps=[1, 2, 3],
+        y_steps=[2, 4, 8, 16],
+        forward_correction=True,
+        lambdaa=[0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
+        learning_rate=CommandBuilder.BEST_VALUE,
+        weight_decay=CommandBuilder.BEST_VALUE,
+        dropout=CommandBuilder.BEST_VALUE
+    )
+
+    run_cmds = list(set(run_cmds))  # remove duplicate runs
+    return run_cmds
+
+def experiment_lpgnn(args):
+    run_cmds = []
+    cmdbuilder = CommandBuilder(args=args, hparams_dir='./hparams')
+    datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
+
+    ## LPGNN ALL CASES
+    run_cmds += cmdbuilder.build(
+        dataset=datasets,
+        feature='raw',
+        mechanism='mbm',
+        model='sage',
+        x_eps=[0.01, 0.1, 1, 2, 3, np.inf],
+        x_steps=[0, 2, 4, 8, 16],
+        y_eps=[1, 2, 3, 4, np.inf],
+        y_steps=[0, 2, 4, 8, 16],
+        forward_correction=True,
+        lambdaa=CommandBuilder.BEST_VALUE,
+        learning_rate=CommandBuilder.BEST_VALUE,
+        weight_decay=CommandBuilder.BEST_VALUE,
+        dropout=CommandBuilder.BEST_VALUE
+    )
+
+    run_cmds = list(set(run_cmds))  # remove duplicate runs
+    return run_cmds
+
+
+def experiment_baselines(args):
+    run_cmds = []
+    cmdbuilder = CommandBuilder(args=args, hparams_dir='./hparams')
+    datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
+
+    ## FULLY-PRIVATE BASELINES
+    run_cmds += cmdbuilder.build(
+        dataset=datasets,
+        feature=['rnd', 'crnd', 'one', 'ohd'],
+        mechanism='mbm',
+        model='sage',
+        x_eps=np.inf,
+        x_steps=CommandBuilder.BEST_VALUE,
+        y_eps=np.inf,
+        y_steps=CommandBuilder.BEST_VALUE,
+        forward_correction=True,
+        lambdaa=CommandBuilder.BEST_VALUE,
+        learning_rate=CommandBuilder.BEST_VALUE,
+        weight_decay=CommandBuilder.BEST_VALUE,
+        dropout=CommandBuilder.BEST_VALUE
+    )
+
+    ## BASELINE LDP MECHANISMS
+    run_cmds += cmdbuilder.build(
+        dataset=datasets,
+        feature='raw',
+        mechanism=['1bm', 'lpm', 'agm'],
+        model='sage',
+        x_eps=[0.01, 0.1, 1, 2, 3],
+        x_steps=CommandBuilder.BEST_VALUE,
+        y_eps=np.inf,
+        y_steps=CommandBuilder.BEST_VALUE,
+        forward_correction=True,
+        lambdaa=CommandBuilder.BEST_VALUE,
+        learning_rate=CommandBuilder.BEST_VALUE,
+        weight_decay=CommandBuilder.BEST_VALUE,
+        dropout=CommandBuilder.BEST_VALUE
+    )
+
+    ## NO LABEL CORRECTION
+    run_cmds += cmdbuilder.build(
+        dataset=datasets,
+        feature='raw',
+        mechanism='mbm',
+        model='sage',
+        x_eps=np.inf,
+        x_steps=CommandBuilder.BEST_VALUE,
+        y_eps=[1, 2, 3],
+        y_steps=CommandBuilder.BEST_VALUE,
+        forward_correction=False,
+        lambdaa=CommandBuilder.BEST_VALUE,
+        learning_rate=CommandBuilder.BEST_VALUE,
+        weight_decay=CommandBuilder.BEST_VALUE,
+        dropout=CommandBuilder.BEST_VALUE
+    )
 
     run_cmds = list(set(run_cmds))  # remove duplicate runs
     return run_cmds
@@ -198,7 +297,10 @@ def main():
     args = parser.parse_args()
     print_args(args)
 
-    JobManager(args, cmd_generator=experiment_commands).run()
+    JobManager(args, cmd_generator=hyper_opt_lwd).run()
+    # JobManager(args, cmd_generator=hyper_opt_lambda).run()
+    # JobManager(args, cmd_generator=experiment_lpgnn).run()
+    # JobManager(args, cmd_generator=experiment_baselines).run()
 
 
 if __name__ == '__main__':
