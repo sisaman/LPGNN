@@ -8,9 +8,9 @@ from torch_sparse import matmul
 
 
 class KProp(MessagePassing):
-    def __init__(self, steps, aggregator, add_self_loops, normalize, cached, post_step = lambda x: x):
+    def __init__(self, steps, aggregator, add_self_loops, normalize, cached, transform = lambda x: x):
         super().__init__(aggr=aggregator)
-        self.post_step = post_step
+        self.transform = transform
         self.K = steps
         self.add_self_loops = add_self_loops
         self.normalize = normalize
@@ -35,8 +35,8 @@ class KProp(MessagePassing):
 
         for k in range(self.K):
             x = self.propagate(adj_t, x=x)
-            x = self.post_step(x)
 
+        x = self.transform(x)
         return x
 
     def message_and_aggregate(self, adj_t, x):  # noqa
@@ -82,6 +82,7 @@ class NodeClassifier(torch.nn.Module):
                  dropout:               dict(help='dropout rate (between zero and one)') = 0.0,
                  x_steps:               dict(help='KProp step parameter', option='-k') = 0,
                  y_steps:               dict(help='number of label propagation steps') = 0,
+                 lambdaa:               dict(help='loss coefficient', option='--lambda') = 0.5,
                  forward_correction:    dict(help='applies forward loss correction') = True,
                  ):
         super().__init__()
@@ -89,14 +90,15 @@ class NodeClassifier(torch.nn.Module):
         self.forward_correction = forward_correction
 
         self.x_prop = KProp(steps=x_steps, aggregator='add', add_self_loops=False, normalize=True, cached=True)
-        self.y_prop = KProp(steps=y_steps, aggregator='add', add_self_loops=False, normalize=True, cached=False)
+        self.y_prop = KProp(steps=y_steps, aggregator='add', add_self_loops=False, normalize=True, cached=False,
+                            transform=torch.nn.Softmax(dim=1))
 
         if model == 'sage':
             self.gnn = GraphSAGE(input_dim=input_dim, output_dim=num_classes, hidden_dim=hidden_dim, dropout=dropout)
         elif model == 'gcn':
             self.gnn = GCN(input_dim=input_dim, output_dim=num_classes, hidden_dim=hidden_dim, dropout=dropout)
 
-        self.lambdaa = torch.nn.Parameter(torch.tensor(0.0, requires_grad=True))
+        self.lambdaa = lambdaa
         self.cached_yt = None
 
     def forward(self, data):
@@ -119,10 +121,9 @@ class NodeClassifier(torch.nn.Module):
         return loss
 
     def model_loss(self, p_yp, p_yt, yp, yt):
-        lambdaa = torch.sigmoid(self.lambdaa)
         loss_p = self.cross_entropy_loss(p_y=p_yp, y=yp)
         loss_t = self.cross_entropy_loss(p_y=p_yt, y=yt)
-        loss = lambdaa * loss_p + (1 - lambdaa) * loss_t
+        loss = self.lambdaa * loss_p + (1 - self.lambdaa) * loss_t
         return loss
 
     def training_step(self, data):
@@ -145,8 +146,7 @@ class NodeClassifier(torch.nn.Module):
             'train/acc': accuracy(
                 pred=p_y_x[data.train_mask].argmax(dim=1),
                 target=self.cached_yt[data.train_mask].argmax(dim=1)
-            ) * 100,
-            'train/lambda': torch.sigmoid(self.lambdaa).item()
+            ) * 100
         }
 
         return loss, metrics
