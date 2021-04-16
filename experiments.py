@@ -2,6 +2,7 @@ import os.path
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from itertools import product
 
+import random
 import numpy as np
 import pandas as pd
 from utils import print_args, JobManager
@@ -24,85 +25,164 @@ class HyperParams:
         return hparams
 
 
-def get_experiment_cmd(dataset, feature, mechanism, model, x_eps, x_steps, y_eps, y_steps, forward_correction,
-                       learning_rate, weight_decay, dropout, args):
-    return f"python main.py --dataset {dataset} --feature {feature} --mechanism {mechanism} --model {model} " \
-           f"--x-eps {x_eps} --x-steps {x_steps} --y-eps {y_eps} --y-steps {y_steps} " \
-           f"--forward-correction {forward_correction} --learning-rate {learning_rate} " \
-           f"--weight-decay {weight_decay} --dropout {dropout} -s {args.seed} -r {args.repeats} " \
-           f"-o {args.output_dir} --log --log-mode collective --project-name {args.project}"
+class CommandBuilder:
+    BEST_VAL = None
+
+    def __init__(self, args, hparams_dir=None, random=None):
+        self.random = random
+        self.default_options = f" -s {args.seed} -r {args.repeats} -o {args.output_dir} --log --log-mode collective " \
+                               f"--project-name {args.project}"
+        self.hparams = HyperParams(path_dir=hparams_dir) if hparams_dir else None
+
+    def build(self, dataset, feature, mechanism, model, x_eps, y_eps, forward_correction,
+              x_steps, y_steps, lambdaa, learning_rate, weight_decay, dropout):
+
+        cmd_list = []
+        configs = self.product_dict(
+            dataset=self.get_list(dataset),
+            feature=self.get_list(feature),
+            mechanism=self.get_list(mechanism),
+            model=self.get_list(model),
+            x_eps=self.get_list(x_eps),
+            y_eps=self.get_list(y_eps),
+            forward_correction=self.get_list(forward_correction),
+            x_steps=self.get_list(x_steps),
+            y_steps=self.get_list(y_steps),
+            lambdaa=self.get_list(lambdaa),
+            learning_rate=self.get_list(learning_rate),
+            weight_decay=self.get_list(weight_decay),
+            dropout=self.get_list(dropout),
+        )
+
+        if self.random:
+            configs = random.sample(list(configs), self.random)
+
+        for config in configs:
+            config = self.fill_best_params(config)
+            options = ' '.join([f' --{param} {value} ' for param, value in config.items()])
+            command = f'python main.py {options} {self.default_options}'
+            cmd_list.append(command)
+
+        return cmd_list
+
+    def fill_best_params(self, config):
+        if self.hparams:
+            best_params = self.hparams.get(
+                dataset=config['dataset'],
+                feature=config['feature'],
+                x_eps=config['x_eps'],
+                y_eps=config['y_eps']
+            )
+
+            for param, value in config.items():
+                if value == self.BEST_VAL:
+                    config[param] = best_params[param]
+        return config
+
+    @staticmethod
+    def get_list(param):
+        if not (isinstance(param, list) or isinstance(param, tuple)):
+            param = list(param)
+        return param
+
+    @staticmethod
+    def product_dict(**kwargs):
+        keys = kwargs.keys()
+        vals = kwargs.values()
+        for instance in product(*vals):
+            yield dict(zip(keys, instance))
 
 
 def experiment_commands(args):
     run_cmds = []
-    hparams = HyperParams(path_dir='./hparams')
+    cmdbuilder = CommandBuilder(args=args, hparams_dir='./hparams', random=100)
+    datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
+
+    run_cmds += cmdbuilder.build(
+        dataset='cora',
+        feature='raw',
+        mechanism='mbm',
+        model='sage',
+        x_eps=1,
+        x_steps=[16],
+        y_eps=[1],
+        y_steps=[0, 2, 4, 8, 16],
+        forward_correction=True,
+        lambdaa=np.arange(0, 0.51, 0.1),
+        learning_rate=[0.01, 0.001, 0.0001],
+        weight_decay=[0.01, 0.001, 0.0001],
+        dropout=np.arange(0, 1, 0.25)
+    )
 
     # ## LPGNN ALL CASES
+    # run_cmds += cmdbuilder.build(
+    #     dataset=datasets,
+    #     feature='raw',
+    #     mechanism='mbm',
+    #     model='sage',
+    #     x_eps=[0.01, 0.1, 1, 2, 3, np.inf],
+    #     x_steps=[0, 2, 4, 8, 16],
+    #     y_eps=[1, 2, 3, 4, np.inf],
+    #     y_steps=[0, 2, 4, 8, 16],
+    #     forward_correction=True,
+    #     lambdaa=CommandBuilder.BEST_VAL,
+    #     learning_rate=CommandBuilder.BEST_VAL,
+    #     weight_decay=CommandBuilder.BEST_VAL,
+    #     dropout=CommandBuilder.BEST_VAL
+    # )
     #
-    # datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
-    # x_eps_list = [0.01, 0.1, 1, 2, 3, np.inf]
-    # x_steps_list = [0, 2, 4, 8, 16]
-    # y_eps_list = [1, 2, 3, 4, np.inf]
-    # y_steps_list = [0, 2, 4, 8, 16]
+    # ## FULLY-PRIVATE BASELINES
+    # run_cmds += cmdbuilder.build(
+    #     dataset=datasets,
+    #     feature=['rnd', 'crnd', 'one', 'ohd'],
+    #     mechanism='mbm',
+    #     model='sage',
+    #     x_eps=np.inf,
+    #     x_steps=CommandBuilder.BEST_VAL,
+    #     y_eps=np.inf,
+    #     y_steps=CommandBuilder.BEST_VAL,
+    #     forward_correction=True,
+    #     lambdaa=CommandBuilder.BEST_VAL,
+    #     learning_rate=CommandBuilder.BEST_VAL,
+    #     weight_decay=CommandBuilder.BEST_VAL,
+    #     dropout=CommandBuilder.BEST_VAL
+    # )
     #
-    # for dataset, x_eps, x_steps, y_eps, y_steps in product(datasets, x_eps_list, x_steps_list, y_eps_list,
-    #                                                        y_steps_list):
-    #     params = hparams.get(dataset=dataset, feature='raw', x_eps=x_eps, y_eps=y_eps)
-    #     command = get_experiment_cmd(
-    #         dataset=dataset, feature='raw', mechanism='mbm', model='sage',
-    #         x_eps=x_eps, x_steps=x_steps, y_eps=y_eps, y_steps=y_steps,
-    #         forward_correction=True, learning_rate=params['learning_rate'],
-    #         weight_decay=params['weight_decay'], dropout=params['dropout'], args=args
-    #     )
-    #     run_cmds.append(command)
+    # ## BASELINE LDP MECHANISMS
+    # run_cmds += cmdbuilder.build(
+    #     dataset=datasets,
+    #     feature='raw',
+    #     mechanism=['1bm', 'lpm', 'agm'],
+    #     model='sage',
+    #     x_eps=[0.01, 0.1, 1, 2, 3],
+    #     x_steps=CommandBuilder.BEST_VAL,
+    #     y_eps=np.inf,
+    #     y_steps=CommandBuilder.BEST_VAL,
+    #     forward_correction=True,
+    #     lambdaa=CommandBuilder.BEST_VAL,
+    #     learning_rate=CommandBuilder.BEST_VAL,
+    #     weight_decay=CommandBuilder.BEST_VAL,
+    #     dropout=CommandBuilder.BEST_VAL
+    # )
+    #
+    # ## NO LABEL CORRECTION
+    # run_cmds += cmdbuilder.build(
+    #     dataset=datasets,
+    #     feature='raw',
+    #     mechanism='mbm',
+    #     model='sage',
+    #     x_eps=np.inf,
+    #     x_steps=CommandBuilder.BEST_VAL,
+    #     y_eps=[1, 2, 3],
+    #     y_steps=CommandBuilder.BEST_VAL,
+    #     forward_correction=False,
+    #     lambdaa=CommandBuilder.BEST_VAL,
+    #     learning_rate=CommandBuilder.BEST_VAL,
+    #     weight_decay=CommandBuilder.BEST_VAL,
+    #     dropout=CommandBuilder.BEST_VAL
+    # )
 
-    ## FULLY-PRIVATE BASELINES
-
-    datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
-    features = ['rnd', 'crnd', 'one', 'ohd']
-
-    for dataset, feature in product(datasets, features):
-        params = hparams.get(dataset=dataset, feature=feature, x_eps=np.inf, y_eps=np.inf)
-        command = get_experiment_cmd(
-            dataset=dataset, feature=feature, mechanism='mbm', model='sage',
-            x_eps=np.inf, x_steps=params['x_steps'], y_eps=np.inf, y_steps=params['y_steps'], forward_correction=True,
-            learning_rate=params['learning_rate'], weight_decay=params['weight_decay'],
-            dropout=params['dropout'], args=args
-        )
-        run_cmds.append(command)
-
-    ## BASELINE LDP MECHANISMS
-
-    datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
-    mechanisms = ['1bm', 'lpm', 'agm']
-    x_eps_list = [0.01, 0.1, 1, 2, 3]
-
-    for dataset, mechanism, x_eps in product(datasets, mechanisms, x_eps_list):
-        params = hparams.get(dataset=dataset, feature='raw', x_eps=x_eps, y_eps=np.inf)
-        command = get_experiment_cmd(
-            dataset=dataset, feature='raw', mechanism=mechanism, model='sage',
-            x_eps=x_eps, x_steps=params['x_steps'], y_eps=np.inf, y_steps=params['y_steps'],
-            forward_correction=True, learning_rate=params['learning_rate'],
-            weight_decay=params['weight_decay'], dropout=params['dropout'], args=args
-        )
-        run_cmds.append(command)
-
-    ## NO LABEL CORRECTION
-
-    datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
-    y_eps_list = [1, 2, 3]
-
-    for dataset, y_eps in product(datasets, y_eps_list):
-        params = hparams.get(dataset=dataset, feature='raw', x_eps=np.inf, y_eps=y_eps)
-        command = get_experiment_cmd(
-            dataset=dataset, feature='raw', mechanism='mbm', model='sage',
-            x_eps=np.inf, x_steps=params['x_steps'], y_eps=y_eps, y_steps=0,
-            forward_correction=False, learning_rate=params['learning_rate'],
-            weight_decay=params['weight_decay'], dropout=params['dropout'], args=args
-        )
-        run_cmds.append(command)
-
-    run_cmds = list(set(run_cmds))
+    run_cmds = list(set(run_cmds))  # remove duplicate runs
     return run_cmds
 
 
