@@ -12,20 +12,21 @@ from utils import print_args, JobManager
 class HyperParams:
     def __init__(self, path_dir):
         try:
-            self.df_lwd = pd.read_csv(os.path.join(path_dir, 'lwd.csv'),
-                                      index_col=['dataset', 'feature', 'x_eps', 'y_eps'])
+            self.df_lwd = pd.read_csv(
+                os.path.join(path_dir, 'lwd.csv'), index_col=['dataset', 'feature', 'x_eps', 'y_eps']
+            )
         except FileNotFoundError:
             self.df_lwd = None
 
         try:
-            self.df_steps = pd.read_csv(os.path.join(path_dir, 'steps.csv'),
-                                        index_col=['dataset', 'x_eps', 'y_eps'])
+            self.df_steps = pd.read_csv(os.path.join(path_dir, 'steps.csv'), index_col=['dataset', 'x_eps', 'y_eps'])
         except FileNotFoundError:
             self.df_steps = None
 
         try:
-            self.df_lambda = pd.read_csv(os.path.join(path_dir, 'lambda.csv'),
-                                        index_col=['dataset', 'y_eps', 'y_steps'])
+            self.df_lambda = pd.read_csv(
+                os.path.join(path_dir, 'lambda.csv'), index_col=['dataset', 'y_eps', 'y_steps']
+            )
         except FileNotFoundError:
             self.df_lambda = None
 
@@ -289,11 +290,9 @@ def main():
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser, parser_create = JobManager.register_arguments(parser)
     parser.add_argument('-o', '--output-dir', type=str, default='./results', help="directory to store the results")
-    parser_create.add_argument('--project', type=str, default='LPGNN-experiments',
-                               help='project name for wandb logging')
+    parser_create.add_argument('--project', type=str, required=True, help='project name for wandb logging')
     parser_create.add_argument('-s', '--seed', type=int, default=12345, help='initial random seed')
-    parser_create.add_argument('-r', '--repeats', type=int, default=10,
-                               help="number of times the experiment is repeated")
+    parser_create.add_argument('-r', '--repeats', type=int, default=10, help="number of experiment iterations")
     args = parser.parse_args()
     print_args(args)
 
