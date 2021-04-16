@@ -39,7 +39,7 @@ class HyperParams:
 
     def get_lwd(self, dataset, feature, x_eps, y_eps):
         params = {}
-        if self.df_lwd:
+        if self.df_lwd is not None:
             if feature == 'crnd': feature = 'rnd'
             x_eps = np.inf if np.isinf(x_eps) else 1
             y_eps = np.inf if np.isinf(y_eps) else 1
@@ -49,7 +49,7 @@ class HyperParams:
 
     def get_steps(self, dataset, x_eps, y_eps):
         params = {}
-        if self.df_steps:
+        if self.df_steps is not None:
             params = self.df_steps.loc[dataset, x_eps, y_eps].to_dict()
 
         return params
@@ -58,7 +58,7 @@ class HyperParams:
         params = {}
         if np.isinf(y_eps) or y_steps == 0:
             params['lambdaa'] = 1.0
-        elif self.df_lambda:
+        elif self.df_lambda is not None:
             params = self.df_lambda.loc[dataset, y_eps, y_steps].to_dict()
 
         return params
@@ -293,13 +293,12 @@ def main():
     parser_create.add_argument('--project', type=str, required=True, help='project name for wandb logging')
     parser_create.add_argument('-s', '--seed', type=int, default=12345, help='initial random seed')
     parser_create.add_argument('-r', '--repeats', type=int, default=10, help="number of experiment iterations")
+    parser_create.add_argument('--stage', type=int, required=True)
     args = parser.parse_args()
     print_args(args)
 
-    JobManager(args, cmd_generator=hyper_opt_lwd).run()
-    # JobManager(args, cmd_generator=hyper_opt_lambda).run()
-    # JobManager(args, cmd_generator=experiment_lpgnn).run()
-    # JobManager(args, cmd_generator=experiment_baselines).run()
+    stages = [hyper_opt_lwd, hyper_opt_lambda, experiment_lpgnn, experiment_baselines]
+    JobManager(args, cmd_generator=lambda arg: stages[arg.stage](arg)).run()
 
 
 if __name__ == '__main__':
