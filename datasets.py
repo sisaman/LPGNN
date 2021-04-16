@@ -85,24 +85,20 @@ supported_datasets = {
 
 
 def load_dataset(
-        dataset_name:   dict(help='name of the dataset', option=('-d', '--dataset'), dest='dataset_name',
-                             choices=supported_datasets) = 'cora',
+        dataset:        dict(help='name of the dataset', option='-d', choices=supported_datasets) = 'cora',
         data_dir:       dict(help='directory to store the dataset') = './datasets',
         data_range:     dict(help='min and max feature value', nargs=2, type=float) = (0, 1),
         val_ratio:      dict(help='fraction of nodes used for validation') = .25,
         test_ratio:     dict(help='fraction of nodes used for test') = .25,
-        sparse=True
         ):
-    dataset = supported_datasets[dataset_name](root=os.path.join(data_dir, dataset_name))
-    data = AddTrainValTestMask(split='train_rest', num_val=val_ratio, num_test=test_ratio)(dataset[0])
+    datasetobj = supported_datasets[dataset](root=os.path.join(data_dir, dataset))
+    data = AddTrainValTestMask(split='train_rest', num_val=val_ratio, num_test=test_ratio)(datasetobj[0])
 
     if data_range is not None:
         low, high = data_range
         data = Normalize(low, high)(data)
 
-    if sparse:
-        data = ToSparseTensor()(data)
-
-    data.name = dataset_name
-    data.num_classes = dataset.num_classes
+    data = ToSparseTensor()(data)
+    data.name = dataset
+    data.num_classes = datasetobj.num_classes
     return data
