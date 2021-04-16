@@ -80,12 +80,13 @@ def run(args):
 
         logger.log_summary(summary)
 
-    os.makedirs(args.output_dir, exist_ok=True)
-    df_results = pd.DataFrame(test_acc, columns=['test_acc']).rename_axis('version').reset_index()
-    df_results['group'] = run_id
-    for arg_name, arg_val in vars(args).items():
-        df_results[arg_name] = [arg_val] * len(test_acc)
-    df_results.to_csv(os.path.join(args.output_dir, f'{run_id}.csv'), index=False)
+    if not args.log:
+        os.makedirs(args.output_dir, exist_ok=True)
+        df_results = pd.DataFrame(test_acc, columns=['test_acc']).rename_axis('version').reset_index()
+        df_results['group'] = run_id
+        for arg_name, arg_val in vars(args).items():
+            df_results[arg_name] = [arg_val] * len(test_acc)
+        df_results.to_csv(os.path.join(args.output_dir, f'{run_id}.csv'), index=False)
 
 
 def main():
