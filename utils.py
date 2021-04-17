@@ -97,37 +97,69 @@ class JobManager:
         elif self.args.command == 'exec':
             self.exec()
 
+    def create_job_array(self, run_cmds):
+        self.create_job_list(run_cmds)
+
+        window = 7500
+        for i in range(0, len(run_cmds), window):
+            begin = i + 1
+            end = min(i + window, len(run_cmds))
+
+            job_file_content = [
+                f'#$ -N job-{begin}-{end}\n',
+                f'#$ -S /bin/bash\n',
+                f'#$ -P dusk2dawn\n',
+                f'#$ -M sajadmanesh@idiap.ch\n',
+                f'#$ -l pytorch,{self.args.queue},gpumem={self.args.gpumem}\n',
+                f'#$ -t {begin}-{end}\n',
+                f'#$ -cwd\n',
+                f'cd ..\n',
+                f'python experiments.py exec --id $SGE_TASK_ID \n'
+            ]
+
+            with open(os.path.join(self.args.jobs_dir, f'job-{begin}-{end}.job'), 'w') as file:
+                file.writelines(job_file_content)
+                file.flush()
+
+    def create_individual_jobs(self, run_cmds):
+        for i, run in tqdm(enumerate(run_cmds), total=len(run_cmds)):
+            job_file_content = [
+                f'#$ -N job-{i + 1}\n',
+                f'#$ -S /bin/bash\n',
+                f'#$ -P dusk2dawn\n',
+                f'#$ -l pytorch,{self.args.queue},gpumem={self.args.gpumem}\n',
+                f'#$ -cwd\n',
+                f'cd ..\n',
+                f'{run}\n'
+            ]
+            with open(os.path.join(self.args.jobs_dir, f'job-{i + 1}.job'), 'w') as file:
+                file.writelines(job_file_content)
+                file.flush()
+
+    def create_job_list(self, run_cmds):
+        with open(os.path.join(self.args.jobs_dir, f'all.jobs'), 'w') as file:
+            for run in tqdm(run_cmds):
+                file.write(run + '\n')
+
     def create(self):
         os.makedirs(self.args.jobs_dir, exist_ok=True)
         run_cmds = self.cmd_generator(self.args)
 
         if 'queue' in self.args:
-            for i, run in tqdm(enumerate(run_cmds), total=len(run_cmds)):
-                job_file_content = [
-                    f'#$ -N job-{i + 1}\n',
-                    f'#$ -S /bin/bash\n',
-                    f'#$ -P dusk2dawn\n',
-                    f'#$ -l pytorch,{self.args.queue},gpumem={self.args.gpumem}\n',
-                    f'#$ -cwd\n',
-                    f'cd ..\n',
-                    f'{run}\n'
-                ]
-                with open(os.path.join(self.args.jobs_dir, f'job-{i + 1}.job'), 'w') as file:
-                    file.writelines(job_file_content)
-                    file.flush()
+            if self.args.array:
+                self.create_job_array(run_cmds)
+            else:
+                self.create_individual_jobs(run_cmds)
         else:
-            with open(os.path.join(self.args.jobs_dir, f'all.jobs'), 'w') as file:
-                for run in tqdm(run_cmds):
-                    file.write(run + '\n')
+            self.create_job_list(run_cmds)
 
         print('Job files created in:', self.args.jobs_dir)
 
     def submit(self):
         os.chdir(self.args.jobs_dir)
-        job_list = os.listdir()
+        job_list = [file for file in os.listdir() if file.endswith('.job')]
         for job in tqdm(job_list, desc='submitting jobs'):
-            if job.endswith('.job'):
-                check_call(['qsub', '-V', job], stdout=DEVNULL, stderr=STDOUT)
+            check_call(['qsub', '-V', job], stdout=DEVNULL, stderr=STDOUT)
         print('Done.')
 
     def resubmit(self):
@@ -159,7 +191,7 @@ class JobManager:
         with open(os.path.join(self.args.jobs_dir, 'all.jobs')) as jobs_file:
             job_list = jobs_file.readlines()
 
-        check_call(job_list[self.args.id].split())
+        check_call(job_list[self.args.id-1].split())
 
     @staticmethod
     def get_failed_jobs():
@@ -180,10 +212,11 @@ class JobManager:
         command_subparser = parser.add_subparsers(dest='command')
 
         parser_create = command_subparser.add_parser('create')
-        subparser_create = parser_create.add_subparsers()
-        parser_grid = subparser_create.add_parser('grid')
+        create_subparser = parser_create.add_subparsers()
+        parser_grid = create_subparser.add_parser('grid')
         parser_grid.add_argument('-q', '--queue', type=str, default=default_queue, choices=['sgpu', 'gpu', 'lgpu'])
         parser_grid.add_argument('-m', '--gpumem', type=int, default=default_gpu_mem)
+        parser_grid.add_argument('--array', action='store_true')
 
         command_subparser.add_parser('submit')
         command_subparser.add_parser('status')
