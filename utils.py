@@ -94,6 +94,8 @@ class JobManager:
             self.status()
         elif self.args.command == 'resubmit':
             self.resubmit()
+        elif self.args.command == 'exec':
+            self.exec()
 
     def create(self):
         os.makedirs(self.args.jobs_dir, exist_ok=True)
@@ -153,6 +155,12 @@ class JobManager:
         for _, file, num_lines in failed_jobs:
             print(num_lines, os.path.join(self.args.jobs_dir, file))
 
+    def exec(self):
+        with open(os.path.join(self.args.jobs_dir, 'all.jobs')) as jobs_file:
+            job_list = jobs_file.readlines()
+
+        check_call(job_list[self.args.id].split())
+
     @staticmethod
     def get_failed_jobs():
         file_list = os.listdir()
@@ -169,19 +177,22 @@ class JobManager:
     @staticmethod
     def register_arguments(parser, default_jobs_dir='./jobs', default_gpu_mem=10, default_queue='sgpu'):
         parser.add_argument('-j', '--jobs-dir', type=str, default=default_jobs_dir)
-        subparser = parser.add_subparsers(dest='command')
+        command_subparser = parser.add_subparsers(dest='command')
 
-        parser_create = subparser.add_parser('create')
+        parser_create = command_subparser.add_parser('create')
         subparser_create = parser_create.add_subparsers()
         parser_grid = subparser_create.add_parser('grid')
         parser_grid.add_argument('-q', '--queue', type=str, default=default_queue, choices=['sgpu', 'gpu', 'lgpu'])
         parser_grid.add_argument('-m', '--gpumem', type=int, default=default_gpu_mem)
 
-        subparser.add_parser('submit')
-        subparser.add_parser('status')
+        command_subparser.add_parser('submit')
+        command_subparser.add_parser('status')
 
-        parser_resubmit = subparser.add_parser('resubmit')
+        parser_resubmit = command_subparser.add_parser('resubmit')
         parser_resubmit.add_argument('--loop', action='store_true')
+
+        parser_exec = command_subparser.add_parser('exec')
+        parser_exec.add_argument('--id', type=int, required=True)
         return parser, parser_create
 
 
