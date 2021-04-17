@@ -133,69 +133,98 @@ class CommandBuilder:
             yield dict(zip(keys, instance))
 
 
-def hyper_opt_lwd(args):
+# def hyper_opt_lwd(args):
+#     run_cmds = []
+#     cmdbuilder = CommandBuilder(args=args, hparams_dir='./hparams')
+#     datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
+#
+#     # fully-private baselines
+#     run_cmds += cmdbuilder.build(
+#         dataset=datasets,
+#         feature=['rnd', 'one', 'ohd'],
+#         mechanism='mbm',
+#         model='sage',
+#         x_eps=np.inf,
+#         x_steps=0,
+#         y_eps=np.inf,
+#         y_steps=0,
+#         forward_correction=True,
+#         lambdaa=1,
+#         learning_rate=[0.01, 0.001, 0.0001],
+#         weight_decay=[0.01, 0.001, 0.0001],
+#         dropout=[0, 0.25, 0.5, 0.75]
+#     )
+#
+#     # LPGNN
+#     run_cmds += cmdbuilder.build(
+#         dataset=datasets,
+#         feature='raw',
+#         mechanism='mbm',
+#         model='sage',
+#         x_eps=[1, np.inf],
+#         x_steps=CommandBuilder.BEST_VALUE,
+#         y_eps=[1, np.inf],
+#         y_steps=CommandBuilder.BEST_VALUE,
+#         forward_correction=True,
+#         lambdaa=0.5,
+#         learning_rate=[0.01, 0.001, 0.0001],
+#         weight_decay=[0.01, 0.001, 0.0001],
+#         dropout=[0, 0.25, 0.5, 0.75]
+#     )
+#
+#     run_cmds = list(set(run_cmds))  # remove duplicate runs
+#     return run_cmds
+#
+#
+# def hyper_opt_lambda(args):
+#     run_cmds = []
+#     cmdbuilder = CommandBuilder(args=args, hparams_dir='./hparams')
+#     datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
+#
+#     run_cmds += cmdbuilder.build(
+#         dataset=datasets,
+#         feature='raw',
+#         mechanism='mbm',
+#         model='sage',
+#         x_eps=np.inf,
+#         x_steps=0,
+#         y_eps=[1, 2, 3],
+#         y_steps=[2, 4, 8, 16],
+#         forward_correction=True,
+#         lambdaa=[0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
+#         learning_rate=CommandBuilder.BEST_VALUE,
+#         weight_decay=CommandBuilder.BEST_VALUE,
+#         dropout=CommandBuilder.BEST_VALUE
+#     )
+#
+#     run_cmds = list(set(run_cmds))  # remove duplicate runs
+#     return run_cmds
+
+
+def hyperopt(args):
     run_cmds = []
-    cmdbuilder = CommandBuilder(args=args, hparams_dir='./hparams')
+    cmdbuilder = CommandBuilder(args=args)
     datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
+    x_eps_list = [1, np.inf]
+    y_eps_list = [1, 2, 3, np.inf]
+    x_steps = {'cora': 16, 'pubmed': 16, 'facebook': 4, 'lastfm': 8}
 
-    # fully-private baselines
-    run_cmds += cmdbuilder.build(
-        dataset=datasets,
-        feature=['rnd', 'one', 'ohd'],
-        mechanism='mbm',
-        model='sage',
-        x_eps=np.inf,
-        x_steps=0,
-        y_eps=np.inf,
-        y_steps=0,
-        forward_correction=True,
-        lambdaa=1,
-        learning_rate=[0.01, 0.001, 0.0001],
-        weight_decay=[0.01, 0.001, 0.0001],
-        dropout=[0, 0.25, 0.5, 0.75]
-    )
-
-    # LPGNN
-    run_cmds += cmdbuilder.build(
-        dataset=datasets,
-        feature='raw',
-        mechanism='mbm',
-        model='sage',
-        x_eps=[1, np.inf],
-        x_steps=CommandBuilder.BEST_VALUE,
-        y_eps=[1, np.inf],
-        y_steps=CommandBuilder.BEST_VALUE,
-        forward_correction=True,
-        lambdaa=0.5,
-        learning_rate=[0.01, 0.001, 0.0001],
-        weight_decay=[0.01, 0.001, 0.0001],
-        dropout=[0, 0.25, 0.5, 0.75]
-    )
-
-    run_cmds = list(set(run_cmds))  # remove duplicate runs
-    return run_cmds
-
-
-def hyper_opt_lambda(args):
-    run_cmds = []
-    cmdbuilder = CommandBuilder(args=args, hparams_dir='./hparams')
-    datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
-
-    run_cmds += cmdbuilder.build(
-        dataset=datasets,
-        feature='raw',
-        mechanism='mbm',
-        model='sage',
-        x_eps=np.inf,
-        x_steps=0,
-        y_eps=[1, 2, 3],
-        y_steps=[2, 4, 8, 16],
-        forward_correction=True,
-        lambdaa=[0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
-        learning_rate=CommandBuilder.BEST_VALUE,
-        weight_decay=CommandBuilder.BEST_VALUE,
-        dropout=CommandBuilder.BEST_VALUE
-    )
+    for dataset, x_eps, y_eps in product(datasets, x_eps_list, y_eps_list):
+        run_cmds += cmdbuilder.build(
+            dataset=dataset,
+            feature='raw',
+            mechanism='mbm',
+            model='sage',
+            x_eps=x_eps,
+            x_steps=0 if np.isinf(x_eps) else x_steps[dataset],
+            y_eps=y_eps,
+            y_steps=0 if np.isinf(y_eps) else [2, 4, 8, 16],
+            forward_correction=True,
+            lambdaa=1 if np.isinf(y_eps) else [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
+            learning_rate=[0.01, 0.001, 0.0001],
+            weight_decay=[0.01, 0.001, 0.0001],
+            dropout=[0.25, 0.5, 0.75]
+        )
 
     run_cmds = list(set(run_cmds))  # remove duplicate runs
     return run_cmds
@@ -293,12 +322,12 @@ def main():
     parser_create.add_argument('--project', type=str, required=True, help='project name for wandb logging')
     parser_create.add_argument('-s', '--seed', type=int, default=12345, help='initial random seed')
     parser_create.add_argument('-r', '--repeats', type=int, default=10, help="number of experiment iterations")
-    parser_create.add_argument('--stage', type=int, required=True)
+    # parser_create.add_argument('--stage', type=int, required=True)
     args = parser.parse_args()
     print_args(args)
 
-    stages = [hyper_opt_lwd, hyper_opt_lambda, experiment_lpgnn, experiment_baselines]
-    JobManager(args, cmd_generator=lambda arg: stages[arg.stage](arg)).run()
+    # stages = [hyper_opt_lwd, hyper_opt_lambda, experiment_lpgnn, experiment_baselines]
+    JobManager(args, cmd_generator=hyperopt).run()
 
 
 if __name__ == '__main__':
