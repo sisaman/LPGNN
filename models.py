@@ -1,14 +1,14 @@
 import torch
 import torch.nn.functional as F
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
-from torch_geometric.utils import accuracy
+from utils import accuracy
 from torch.nn import Dropout
 from torch_geometric.nn import MessagePassing, SAGEConv, GCNConv
 from torch_sparse import matmul
 
 
 class KProp(MessagePassing):
-    def __init__(self, steps, aggregator, add_self_loops, normalize, cached, transform = lambda x: x):
+    def __init__(self, steps, aggregator, add_self_loops, normalize, cached, transform=lambda x: x):
         super().__init__(aggr=aggregator)
         self.transform = transform
         self.K = steps
@@ -120,12 +120,6 @@ class NodeClassifier(torch.nn.Module):
         loss = loss.sum(dim=1).mean()
         return loss
 
-    def model_loss(self, p_yp, p_yt, yp, yt):
-        loss_p = self.cross_entropy_loss(p_y=p_yp, y=yp)
-        loss_t = self.cross_entropy_loss(p_y=p_yt, y=yt)
-        loss = self.lambdaa * loss_p + (1 - self.lambdaa) * loss_t
-        return loss
-
     def training_step(self, data):
         p_y_x, p_yp_x, p_yt_x = self(data)
 
@@ -134,37 +128,23 @@ class NodeClassifier(torch.nn.Module):
             yp[data.test_mask] = 0  # to avoid using test labels
             self.cached_yt = self.y_prop(yp, data.adj_t)  # y~
 
-        loss = self.model_loss(
-            p_yp=p_yp_x[data.train_mask],
-            p_yt=p_yt_x[data.train_mask],
-            yp=data.y[data.train_mask],
-            yt=self.cached_yt[data.train_mask],
-        )
+        loss = self.cross_entropy_loss(p_y=p_yt_x[data.train_mask], y=self.cached_yt[data.train_mask], weighted=True)
 
         metrics = {
             'train/loss': loss.item(),
-            'train/acc': accuracy(
-                pred=p_y_x[data.train_mask].argmax(dim=1),
-                target=self.cached_yt[data.train_mask].argmax(dim=1)
-            ) * 100
+            'train/acc': accuracy(pred=p_yp_x[data.train_mask], target=data.y[data.train_mask]) * 100
         }
 
         return loss, metrics
 
     def validation_step(self, data):
         p_y_x, p_yp_x, p_yt_x = self(data)
-
-        val_loss = self.model_loss(
-            p_yp=p_yp_x[data.val_mask],
-            p_yt=p_yt_x[data.val_mask],
-            yp=data.y[data.val_mask],
-            yt=self.cached_yt[data.val_mask],
-        )
+        loss = self.cross_entropy_loss(p_yp_x[data.val_mask], data.y[data.val_mask])
 
         metrics = {
-            'val/loss': val_loss.item(),
-            'val/acc': accuracy(pred=p_y_x[data.val_mask].argmax(dim=1), target=self.cached_yt[data.val_mask].argmax(dim=1)) * 100,
-            'test/acc': accuracy(pred=p_y_x[data.test_mask].argmax(dim=1), target=data.y[data.test_mask].argmax(dim=1)) * 100,
+            'val/loss': loss.item(),
+            'val/acc': accuracy(pred=p_yp_x[data.val_mask], target=data.y[data.val_mask]) * 100,
+            'test/acc': accuracy(pred=p_y_x[data.test_mask], target=data.y[data.test_mask]) * 100,
         }
 
         return metrics
