@@ -82,7 +82,6 @@ class NodeClassifier(torch.nn.Module):
                  dropout:               dict(help='dropout rate (between zero and one)') = 0.0,
                  x_steps:               dict(help='KProp step parameter', option='-k') = 0,
                  y_steps:               dict(help='number of label propagation steps') = 0,
-                 lambdaa:               dict(help='loss coefficient', option='--lambda') = 0.5,
                  forward_correction:    dict(help='applies forward loss correction') = True,
                  ):
         super().__init__()
@@ -98,7 +97,6 @@ class NodeClassifier(torch.nn.Module):
         elif model == 'gcn':
             self.gnn = GCN(input_dim=input_dim, output_dim=num_classes, hidden_dim=hidden_dim, dropout=dropout)
 
-        self.lambdaa = lambdaa
         self.cached_yt = None
 
     def forward(self, data):
