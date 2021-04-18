@@ -7,7 +7,7 @@ from torch_geometric.datasets import Planetoid
 from torch_geometric.transforms import ToSparseTensor, AddTrainValTestMask
 from torch_geometric.utils import to_undirected
 
-from transforms import Normalize
+from transforms import Normalize, FilterTopClass
 
 
 class KarateClub(InMemoryDataset):
@@ -80,7 +80,7 @@ supported_datasets = {
     'cora': partial(Planetoid, name='cora'),
     'pubmed': partial(Planetoid, name='pubmed'),
     'facebook': partial(KarateClub, name='facebook'),
-    'lastfm': partial(KarateClub, name='lastfm'),
+    'lastfm': partial(KarateClub, name='lastfm', transform=FilterTopClass(10)),
 }
 
 
@@ -91,14 +91,14 @@ def load_dataset(
         val_ratio:      dict(help='fraction of nodes used for validation') = .25,
         test_ratio:     dict(help='fraction of nodes used for test') = .25,
         ):
-    datasetobj = supported_datasets[dataset](root=os.path.join(data_dir, dataset))
-    data = AddTrainValTestMask(split='train_rest', num_val=val_ratio, num_test=test_ratio)(datasetobj[0])
+    data = supported_datasets[dataset](root=os.path.join(data_dir, dataset))
+    data = AddTrainValTestMask(split='train_rest', num_val=val_ratio, num_test=test_ratio)(data[0])
+    data = ToSparseTensor()(data)
+    data.name = dataset
+    data.num_classes = int(data.y.max().item()) + 1
 
     if data_range is not None:
         low, high = data_range
         data = Normalize(low, high)(data)
 
-    data = ToSparseTensor()(data)
-    data.name = dataset
-    data.num_classes = datasetobj.num_classes
     return data

@@ -1,11 +1,12 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
+from torch_geometric.utils import subgraph
 from mechanisms import supported_feature_mechanisms, RandomizedResopnse
 
 
 class FeatureTransform:
-    supported_features = ['raw', 'rnd', 'one', 'ohd', 'crnd']
+    supported_features = ['raw', 'rnd', 'one', 'ohd', '1rnd']
 
     def __init__(self, feature: dict(help='feature transformation method',
                                      choices=supported_features, option='-f') = 'raw'):
@@ -16,12 +17,12 @@ class FeatureTransform:
 
         if self.feature == 'rnd':
             data.x = torch.rand_like(data.x)
-        elif self.feature == 'crnd':
+        elif self.feature == '1rnd':
             n = data.x.size(0)
             m = 1
-            x = torch.rand(n, m, device=data.x.device)
-            s = torch.rand_like(data.x).topk(m, dim=1).indices
-            data.x = torch.zeros_like(data.x).scatter(1, s, x)
+            data.x = torch.rand(n, m, device=data.x.device)
+            # s = torch.rand_like(data.x).topk(m, dim=1).indices
+            # data.x = torch.zeros_like(data.x).scatter(1, s, x)
         elif self.feature == 'ohd':
             data = OneHotDegree(max_degree=data.num_features - 1)(data)
         elif self.feature == 'one':
@@ -104,4 +105,31 @@ class Normalize:
         delta = beta - alpha
         data.x = (data.x - alpha) * (self.max - self.min) / delta + self.min
         data.x = data.x[:, torch.nonzero(delta, as_tuple=False).squeeze()]  # remove features with delta = 0
+        return data
+
+
+class FilterTopClass:
+    def __init__(self, num_classes):
+        self.num_classes = num_classes
+
+    def __call__(self, data):
+        y = torch.nn.functional.one_hot(data.y)
+        c = y.sum(dim=0).sort(descending=True)
+        y = y[:, c.indices[:self.num_classes]]
+        idx = y.sum(dim=1).bool()
+
+        data.x = data.x[idx]
+        data.y = y[idx].argmax(dim=1)
+        data.num_nodes = data.y.size(0)
+
+        if 'adj_t' in data:
+            data.adj_t = data.adj_t[idx, idx]
+        elif 'edge_index' in data:
+            data.edge_index, data.edge_attr = subgraph(idx, data.edge_index, data.edge_attr, relabel_nodes=True)
+
+        if 'train_mask' in data:
+            data.train_mask = data.train_mask[idx]
+            data.val_mask = data.val_mask[idx]
+            data.test_mask = data.test_mask[idx]
+
         return data
