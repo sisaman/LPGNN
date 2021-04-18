@@ -23,24 +23,15 @@ class HyperParams:
         except FileNotFoundError:
             self.df_steps = None
 
-        try:
-            self.df_lambda = pd.read_csv(
-                os.path.join(path_dir, 'lambda.csv'), index_col=['dataset', 'y_eps', 'y_steps']
-            )
-        except FileNotFoundError:
-            self.df_lambda = None
-
-    def get(self, dataset, feature, x_eps, y_eps, y_steps=None):
+    def get(self, dataset, feature, x_eps, y_eps):
         hparams = self.get_lwd(dataset=dataset, feature=feature, x_eps=x_eps, y_eps=y_eps)
         hparams.update(self.get_steps(dataset=dataset, x_eps=x_eps, y_eps=y_eps))
-        hparams.update(self.get_lambda(dataset=dataset, y_eps=y_eps,
-                                       y_steps=hparams['y_steps'] if y_steps is None else y_steps))
         return hparams
 
     def get_lwd(self, dataset, feature, x_eps, y_eps):
         params = {}
         if self.df_lwd is not None:
-            if feature == 'crnd': feature = 'rnd'
+            if feature == '1rnd': feature = 'rnd'
             x_eps = np.inf if np.isinf(x_eps) else 1
             y_eps = np.inf if np.isinf(y_eps) else 1
             params = self.df_lwd.loc[dataset, feature, x_eps, y_eps].to_dict()
