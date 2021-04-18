@@ -5,6 +5,7 @@ import inspect
 import enum
 import functools
 from subprocess import check_call, DEVNULL, STDOUT
+from torch_geometric.utils import accuracy as accuracy_1d
 
 import torch
 import numpy as np
@@ -17,6 +18,12 @@ try:
     import wandb
 except ImportError:
     wandb = None
+
+
+def accuracy(pred, target):
+    pred = pred.argmax(dim=1) if len(pred.size()) > 1 else pred
+    target = target.argmax(dim=1) if len(target.size()) > 1 else target
+    return accuracy_1d(pred=pred, target=target)
 
 
 def confidence_interval(data, func=np.mean, size=1000, ci=95, seed=12345):
