@@ -45,15 +45,6 @@ class HyperParams:
 
         return params
 
-    def get_lambda(self, dataset, y_eps, y_steps):
-        params = {}
-        if np.isinf(y_eps) or y_steps == 0:
-            params['lambdaa'] = 1.0
-        elif self.df_lambda is not None:
-            params = self.df_lambda.loc[dataset, y_eps, y_steps].to_dict()
-
-        return params
-
 
 class CommandBuilder:
     BEST_VALUE = None
@@ -65,7 +56,7 @@ class CommandBuilder:
         self.hparams = HyperParams(path_dir=hparams_dir) if hparams_dir else None
 
     def build(self, dataset, feature, mechanism, model, x_eps, y_eps, forward_correction,
-              x_steps, y_steps, lambdaa, learning_rate, weight_decay, dropout):
+              x_steps, y_steps, learning_rate, weight_decay, dropout):
 
         cmd_list = []
         configs = self.product_dict(
@@ -78,7 +69,6 @@ class CommandBuilder:
             forward_correction=self.get_list(forward_correction),
             x_steps=self.get_list(x_steps),
             y_steps=self.get_list(y_steps),
-            lambdaa=self.get_list(lambdaa),
             learning_rate=self.get_list(learning_rate),
             weight_decay=self.get_list(weight_decay),
             dropout=self.get_list(dropout),
@@ -102,7 +92,6 @@ class CommandBuilder:
                 feature=config['feature'],
                 x_eps=config['x_eps'],
                 y_eps=config['y_eps'],
-                y_steps=config['y_steps']
             )
 
             for param, value in config.items():
@@ -124,81 +113,16 @@ class CommandBuilder:
             yield dict(zip(keys, instance))
 
 
-# def hyper_opt_lwd(args):
-#     run_cmds = []
-#     cmdbuilder = CommandBuilder(args=args, hparams_dir='./hparams')
-#     datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
-#
-#     # fully-private baselines
-#     run_cmds += cmdbuilder.build(
-#         dataset=datasets,
-#         feature=['rnd', 'one', 'ohd'],
-#         mechanism='mbm',
-#         model='sage',
-#         x_eps=np.inf,
-#         x_steps=0,
-#         y_eps=np.inf,
-#         y_steps=0,
-#         forward_correction=True,
-#         lambdaa=1,
-#         learning_rate=[0.01, 0.001, 0.0001],
-#         weight_decay=[0.01, 0.001, 0.0001],
-#         dropout=[0, 0.25, 0.5, 0.75]
-#     )
-#
-#     # LPGNN
-#     run_cmds += cmdbuilder.build(
-#         dataset=datasets,
-#         feature='raw',
-#         mechanism='mbm',
-#         model='sage',
-#         x_eps=[1, np.inf],
-#         x_steps=CommandBuilder.BEST_VALUE,
-#         y_eps=[1, np.inf],
-#         y_steps=CommandBuilder.BEST_VALUE,
-#         forward_correction=True,
-#         lambdaa=0.5,
-#         learning_rate=[0.01, 0.001, 0.0001],
-#         weight_decay=[0.01, 0.001, 0.0001],
-#         dropout=[0, 0.25, 0.5, 0.75]
-#     )
-#
-#     run_cmds = list(set(run_cmds))  # remove duplicate runs
-#     return run_cmds
-#
-#
-# def hyper_opt_lambda(args):
-#     run_cmds = []
-#     cmdbuilder = CommandBuilder(args=args, hparams_dir='./hparams')
-#     datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
-#
-#     run_cmds += cmdbuilder.build(
-#         dataset=datasets,
-#         feature='raw',
-#         mechanism='mbm',
-#         model='sage',
-#         x_eps=np.inf,
-#         x_steps=0,
-#         y_eps=[1, 2, 3],
-#         y_steps=[2, 4, 8, 16],
-#         forward_correction=True,
-#         lambdaa=[0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
-#         learning_rate=CommandBuilder.BEST_VALUE,
-#         weight_decay=CommandBuilder.BEST_VALUE,
-#         dropout=CommandBuilder.BEST_VALUE
-#     )
-#
-#     run_cmds = list(set(run_cmds))  # remove duplicate runs
-#     return run_cmds
-
-
 def hyperopt(args):
     run_cmds = []
     cmdbuilder = CommandBuilder(args=args)
     datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
+
+    # LPGNN
     x_eps_list = [1, np.inf]
-    y_eps_list = [1, 2, 3, np.inf]
+    y_eps_list = [1, np.inf]
     x_steps = {'cora': 16, 'pubmed': 16, 'facebook': 4, 'lastfm': 8}
+    y_steps = {'cora': 8, 'pubmed': 2, 'facebook': 2, 'lastfm': 2}
 
     for dataset, x_eps, y_eps in product(datasets, x_eps_list, y_eps_list):
         run_cmds += cmdbuilder.build(
@@ -209,16 +133,33 @@ def hyperopt(args):
             x_eps=x_eps,
             x_steps=0 if np.isinf(x_eps) else x_steps[dataset],
             y_eps=y_eps,
-            y_steps=0 if np.isinf(y_eps) else [2, 4, 8, 16],
+            y_steps=0 if np.isinf(y_eps) else y_steps[dataset],
             forward_correction=True,
-            lambdaa=1 if np.isinf(y_eps) else [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
             learning_rate=[0.01, 0.001, 0.0001],
-            weight_decay=[0.01, 0.001, 0.0001],
-            dropout=[0.25, 0.5, 0.75]
+            weight_decay=[0.01, 0.001, 0.0001, 0],
+            dropout=[0, 0.25, 0.5, 0.75]
         )
+
+
+    # fully-private baselines
+    run_cmds += cmdbuilder.build(
+        dataset=datasets,
+        feature=['rnd', 'one', 'ohd'],
+        mechanism='mbm',
+        model='sage',
+        x_eps=np.inf,
+        x_steps=0,
+        y_eps=np.inf,
+        y_steps=0,
+        forward_correction=True,
+        learning_rate=[0.01, 0.001, 0.0001],
+        weight_decay=[0.01, 0.001, 0.0001],
+        dropout=[0, 0.25, 0.5, 0.75]
+    )
 
     run_cmds = list(set(run_cmds))  # remove duplicate runs
     return run_cmds
+
 
 def experiment_lpgnn(args):
     run_cmds = []
@@ -236,7 +177,6 @@ def experiment_lpgnn(args):
         y_eps=[1, 2, 3, 4, np.inf],
         y_steps=[0, 2, 4, 8, 16],
         forward_correction=True,
-        lambdaa=CommandBuilder.BEST_VALUE,
         learning_rate=CommandBuilder.BEST_VALUE,
         weight_decay=CommandBuilder.BEST_VALUE,
         dropout=CommandBuilder.BEST_VALUE
@@ -262,7 +202,6 @@ def experiment_baselines(args):
         y_eps=np.inf,
         y_steps=CommandBuilder.BEST_VALUE,
         forward_correction=True,
-        lambdaa=CommandBuilder.BEST_VALUE,
         learning_rate=CommandBuilder.BEST_VALUE,
         weight_decay=CommandBuilder.BEST_VALUE,
         dropout=CommandBuilder.BEST_VALUE
@@ -272,14 +211,13 @@ def experiment_baselines(args):
     run_cmds += cmdbuilder.build(
         dataset=datasets,
         feature='raw',
-        mechanism=['1bm', 'lpm', 'agm'],
+        mechanism=['1bm', 'rbm', 'lpm', 'agm'],
         model='sage',
         x_eps=[0.01, 0.1, 1, 2, 3],
         x_steps=CommandBuilder.BEST_VALUE,
         y_eps=np.inf,
         y_steps=CommandBuilder.BEST_VALUE,
         forward_correction=True,
-        lambdaa=CommandBuilder.BEST_VALUE,
         learning_rate=CommandBuilder.BEST_VALUE,
         weight_decay=CommandBuilder.BEST_VALUE,
         dropout=CommandBuilder.BEST_VALUE
@@ -291,12 +229,11 @@ def experiment_baselines(args):
         feature='raw',
         mechanism='mbm',
         model='sage',
-        x_eps=np.inf,
+        x_eps=[np.inf],
         x_steps=CommandBuilder.BEST_VALUE,
         y_eps=[1, 2, 3],
         y_steps=CommandBuilder.BEST_VALUE,
         forward_correction=False,
-        lambdaa=CommandBuilder.BEST_VALUE,
         learning_rate=CommandBuilder.BEST_VALUE,
         weight_decay=CommandBuilder.BEST_VALUE,
         dropout=CommandBuilder.BEST_VALUE
