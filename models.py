@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
-from utils import accuracy
+from utils import accuracy, cross_entropy_loss
 from torch.nn import Dropout
 from torch_geometric.nn import MessagePassing, SAGEConv, GCNConv
 from torch_sparse import matmul
@@ -110,14 +110,6 @@ class NodeClassifier(torch.nn.Module):
 
         return p_y_x, p_yp_x, p_yt_x
 
-    @staticmethod
-    def cross_entropy_loss(p_y, y, weighted=False):
-        y_onehot = F.one_hot(y.argmax(dim=1))
-        loss = -torch.log(p_y + 1e-20) * y_onehot
-        loss *= y if weighted else 1
-        loss = loss.sum(dim=1).mean()
-        return loss
-
     def training_step(self, data):
         p_y_x, p_yp_x, p_yt_x = self(data)
 
@@ -126,22 +118,22 @@ class NodeClassifier(torch.nn.Module):
             yp[data.test_mask] = 0  # to avoid using test labels
             self.cached_yt = self.y_prop(yp, data.adj_t)  # y~
 
-        loss = self.cross_entropy_loss(p_y=p_yt_x[data.train_mask], y=self.cached_yt[data.train_mask], weighted=True)
+        loss = cross_entropy_loss(p_y=p_yt_x[data.train_mask], y=self.cached_yt[data.train_mask], weighted=False)
 
         metrics = {
             'train/loss': loss.item(),
-            'train/acc': accuracy(pred=p_yp_x[data.train_mask], target=data.y[data.train_mask]) * 100
+            'train/acc': accuracy(pred=p_y_x[data.train_mask], target=data.y[data.train_mask]) * 100,
+            'train/maxacc': data.T[0, 0].item() * 100,
         }
 
         return loss, metrics
 
     def validation_step(self, data):
         p_y_x, p_yp_x, p_yt_x = self(data)
-        loss = self.cross_entropy_loss(p_yp_x[data.val_mask], data.y[data.val_mask])
 
         metrics = {
-            'val/loss': loss.item(),
-            'val/acc': accuracy(pred=p_yp_x[data.val_mask], target=data.y[data.val_mask]) * 100,
+            'val/loss': cross_entropy_loss(p_yp_x[data.val_mask], data.y[data.val_mask]).item(),
+            'val/acc': accuracy(pred=p_y_x[data.val_mask], target=data.y[data.val_mask]) * 100,
             'test/acc': accuracy(pred=p_y_x[data.test_mask], target=data.y[data.test_mask]) * 100,
         }
 

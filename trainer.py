@@ -40,7 +40,7 @@ class Trainer:
 
         epoch_progbar = tqdm(range(1, self.max_epochs + 1), desc='Epoch: ', leave=False, position=1, file=sys.stdout)
         for epoch in epoch_progbar:
-            metrics = {}
+            metrics = {'epoch': epoch}
             train_metrics = self._train(data, optimizer)
             metrics.update(train_metrics)
 
@@ -48,10 +48,14 @@ class Trainer:
             metrics.update(val_metrics)
 
             if self.logger:
-                self.logger.log({**metrics, 'epoch': epoch})
+                self.logger.log(metrics)
 
-            if best_metrics is None or val_metrics['val/loss'] < best_metrics['val/loss']:
-                best_metrics = val_metrics
+            if best_metrics is None or (
+                metrics['val/loss'] < best_metrics['val/loss'] and
+                best_metrics['val/acc'] < metrics['val/acc'] <= metrics['train/maxacc'] and
+                best_metrics['train/acc'] < metrics['train/acc'] <= 1.05 * metrics['train/maxacc']
+            ):
+                best_metrics = metrics
                 num_epochs_without_improvement = 0
             else:
                 num_epochs_without_improvement += 1
