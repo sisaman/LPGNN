@@ -26,10 +26,12 @@ def accuracy(pred, target):
     return accuracy_1d(pred=pred, target=target)
 
 
-def confidence_interval(data, func=np.mean, size=1000, ci=95, seed=12345):
-    bs_replicates = sns.algorithms.bootstrap(data, func=func, n_boot=size, seed=seed)
-    bounds = sns.utils.ci(bs_replicates, ci)
-    return (bounds[1] - bounds[0]) / 2
+def cross_entropy_loss(p_y, y, weighted=False):
+    y_onehot = F.one_hot(y.argmax(dim=1))
+    loss = -torch.log(p_y + 1e-20) * y_onehot
+    loss *= y if weighted else 1
+    loss = loss.sum(dim=1).mean()
+    return loss
 
 
 def js_div(p, q):
@@ -37,6 +39,12 @@ def js_div(p, q):
     m = (p + q) / 2
     js = F.kl_div(torch.log(p + eps), m) + F.kl_div(torch.log(q + eps), m)
     return js / 2
+
+
+def confidence_interval(data, func=np.mean, size=1000, ci=95, seed=12345):
+    bs_replicates = sns.algorithms.bootstrap(data, func=func, n_boot=size, seed=seed)
+    bounds = sns.utils.ci(bs_replicates, ci)
+    return (bounds[1] - bounds[0]) / 2
 
 
 def measure_runtime(func):
