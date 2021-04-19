@@ -174,7 +174,7 @@ def experiment_lpgnn(args):
         model='sage',
         x_eps=[0.01, 0.1, 1, 2, 3, np.inf],
         x_steps=[0, 2, 4, 8, 16],
-        y_eps=[1, 2, 3, 4, np.inf],
+        y_eps=[0.5, 1, 2, 3, np.inf],
         y_steps=[0, 2, 4, 8, 16],
         forward_correction=True,
         learning_rate=CommandBuilder.BEST_VALUE,

@@ -70,7 +70,7 @@ class RandomBit(OneBit):
         w = torch.rand(x.size(1), 1, device=x.device)
         w /= w.sum(dim=0)
         x = torch.matmul(x, w)
-        return super().__call__(x)
+        return super().__call__(x)  # noqa
 
 
 class Gaussian(Mechanism):
