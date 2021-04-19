@@ -250,12 +250,12 @@ def main():
     parser_create.add_argument('--project', type=str, required=True, help='project name for wandb logging')
     parser_create.add_argument('-s', '--seed', type=int, default=12345, help='initial random seed')
     parser_create.add_argument('-r', '--repeats', type=int, default=10, help="number of experiment iterations")
-    # parser_create.add_argument('--stage', type=int, required=True)
+    parser_create.add_argument('--stage', type=int, required=True)
     args = parser.parse_args()
     print_args(args)
 
-    # stages = [hyper_opt_lwd, hyper_opt_lambda, experiment_lpgnn, experiment_baselines]
-    JobManager(args, cmd_generator=hyperopt).run()
+    stages = [hyperopt, experiment_lpgnn, experiment_baselines]
+    JobManager(args, cmd_generator=lambda arg: stages[args.stage](arg)).run()
 
 
 if __name__ == '__main__':
