@@ -194,7 +194,7 @@ def experiment_baselines(args):
     ## FULLY-PRIVATE BASELINES
     run_cmds += cmdbuilder.build(
         dataset=datasets,
-        feature=['rnd', 'crnd', 'one', 'ohd'],
+        feature=['rnd', '1rnd', 'one', 'ohd'],
         mechanism='mbm',
         model='sage',
         x_eps=np.inf,
