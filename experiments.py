@@ -191,6 +191,22 @@ def experiment_baselines(args):
     cmdbuilder = CommandBuilder(args=args, hparams_dir='./hparams')
     datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
 
+    ## DIFFERENT GNN MODELS
+    run_cmds += cmdbuilder.build(
+        dataset=datasets,
+        feature='raw',
+        mechanism='mbm',
+        model=['gcn', 'gat'],
+        x_eps=[0.01, 0.1, 1, 2, 3, np.inf],
+        x_steps=CommandBuilder.BEST_VALUE,
+        y_eps=[0.5, 1, 2, 3, np.inf],
+        y_steps=CommandBuilder.BEST_VALUE,
+        forward_correction=True,
+        learning_rate=CommandBuilder.BEST_VALUE,
+        weight_decay=CommandBuilder.BEST_VALUE,
+        dropout=CommandBuilder.BEST_VALUE
+    )
+
     ## FULLY-PRIVATE BASELINES
     run_cmds += cmdbuilder.build(
         dataset=datasets,
@@ -229,15 +245,26 @@ def experiment_baselines(args):
         feature='raw',
         mechanism='mbm',
         model='sage',
-        x_eps=[np.inf],
+        x_eps=[1, np.inf],
         x_steps=CommandBuilder.BEST_VALUE,
-        y_eps=[1, 2, 3],
+        y_eps=[0.5, 1, 2, 3],
         y_steps=CommandBuilder.BEST_VALUE,
         forward_correction=False,
         learning_rate=CommandBuilder.BEST_VALUE,
         weight_decay=CommandBuilder.BEST_VALUE,
         dropout=CommandBuilder.BEST_VALUE
     )
+
+    run_cmds = list(set(run_cmds))  # remove duplicate runs
+    return run_cmds
+
+
+def experiment_models(args):
+    run_cmds = []
+    cmdbuilder = CommandBuilder(args=args, hparams_dir='./hparams')
+    datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
+
+
 
     run_cmds = list(set(run_cmds))  # remove duplicate runs
     return run_cmds
@@ -254,7 +281,7 @@ def main():
     args = parser.parse_args()
     print_args(args)
 
-    stages = [hyperopt, experiment_lpgnn, experiment_baselines]
+    stages = [hyperopt, experiment_lpgnn, experiment_baselines, experiment_models]
     JobManager(args, cmd_generator=lambda arg: stages[args.stage](arg)).run()
 
 
