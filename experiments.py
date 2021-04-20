@@ -248,23 +248,12 @@ def experiment_baselines(args):
         x_eps=[1, np.inf],
         x_steps=CommandBuilder.BEST_VALUE,
         y_eps=[0.5, 1, 2, 3],
-        y_steps=CommandBuilder.BEST_VALUE,
+        y_steps=0,
         forward_correction=False,
         learning_rate=CommandBuilder.BEST_VALUE,
         weight_decay=CommandBuilder.BEST_VALUE,
         dropout=CommandBuilder.BEST_VALUE
     )
-
-    run_cmds = list(set(run_cmds))  # remove duplicate runs
-    return run_cmds
-
-
-def experiment_models(args):
-    run_cmds = []
-    cmdbuilder = CommandBuilder(args=args, hparams_dir='./hparams')
-    datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
-
-
 
     run_cmds = list(set(run_cmds))  # remove duplicate runs
     return run_cmds
@@ -281,7 +270,7 @@ def main():
     args = parser.parse_args()
     print_args(args)
 
-    stages = [hyperopt, experiment_lpgnn, experiment_baselines, experiment_models]
+    stages = [hyperopt, experiment_lpgnn, experiment_baselines]
     JobManager(args, cmd_generator=lambda arg: stages[args.stage](arg)).run()
 
 
