@@ -2,8 +2,8 @@ import torch
 import torch.nn.functional as F
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
 from utils import accuracy, cross_entropy_loss
-from torch.nn import Dropout
-from torch_geometric.nn import MessagePassing, SAGEConv, GCNConv
+from torch.nn import Dropout, SELU
+from torch_geometric.nn import MessagePassing, SAGEConv, GCNConv, GATConv
 from torch_sparse import matmul
 
 
@@ -43,41 +43,49 @@ class KProp(MessagePassing):
         return matmul(adj_t, x, reduce=self.aggr)
 
 
-class GCN(torch.nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim, dropout):
+class GNN(torch.nn.Module):
+    def __init__(self, dropout):
         super().__init__()
+        self.conv1 = None
+        self.conv2 = None
+        self.dropout = Dropout(p=dropout)
+        self.activation = SELU(inplace=True)
+
+    def forward(self, x, adj_t):
+        x = self.conv1(x, adj_t)
+        x = self.activation(x)
+        x = self.dropout(x)
+        x = self.conv2(x, adj_t)
+        return x
+
+
+class GCN(GNN):
+    def __init__(self, input_dim, output_dim, hidden_dim, dropout):
+        super().__init__(dropout)
         self.conv1 = GCNConv(input_dim, hidden_dim)
         self.conv2 = GCNConv(hidden_dim, output_dim)
-        self.dropout = Dropout(p=dropout)
-
-    def forward(self, x, adj_t):
-        x = self.conv1(x, adj_t)
-        x = torch.selu(x)
-        x = self.dropout(x)
-        x = self.conv2(x, adj_t)
-        return x
 
 
-class GraphSAGE(torch.nn.Module):
+class GAT(GNN):
     def __init__(self, input_dim, output_dim, hidden_dim, dropout):
-        super().__init__()
+        super().__init__(dropout)
+        heads = 4
+        self.conv1 = GATConv(input_dim, hidden_dim, heads=heads, concat=True, dropout=dropout)
+        self.conv2 = GATConv(heads * hidden_dim, output_dim, heads=1, concat=False, dropout=dropout)
+
+
+class GraphSAGE(GNN):
+    def __init__(self, input_dim, output_dim, hidden_dim, dropout):
+        super().__init__(dropout)
         self.conv1 = SAGEConv(in_channels=input_dim, out_channels=hidden_dim, normalize=False, root_weight=True)
         self.conv2 = SAGEConv(in_channels=hidden_dim, out_channels=output_dim, normalize=False, root_weight=True)
-        self.dropout = Dropout(p=dropout)
-
-    def forward(self, x, adj_t):
-        x = self.conv1(x, adj_t)
-        x = torch.selu(x)
-        x = self.dropout(x)
-        x = self.conv2(x, adj_t)
-        return x
 
 
 class NodeClassifier(torch.nn.Module):
     def __init__(self,
                  input_dim,
                  num_classes,
-                 model:                 dict(help='backbone GNN model', choices=['gcn', 'sage']) = 'sage',
+                 model:                 dict(help='backbone GNN model', choices=['gcn', 'sage', 'gat']) = 'sage',
                  hidden_dim:            dict(help='dimension of the hidden layers') = 16,
                  dropout:               dict(help='dropout rate (between zero and one)') = 0.0,
                  x_steps:               dict(help='KProp step parameter', option='-k') = 0,
@@ -86,18 +94,19 @@ class NodeClassifier(torch.nn.Module):
                  ):
         super().__init__()
 
-        self.forward_correction = forward_correction
-
         self.x_prop = KProp(steps=x_steps, aggregator='add', add_self_loops=False, normalize=True, cached=True)
         self.y_prop = KProp(steps=y_steps, aggregator='add', add_self_loops=False, normalize=True, cached=False,
                             transform=torch.nn.Softmax(dim=1))
 
-        if model == 'sage':
-            self.gnn = GraphSAGE(input_dim=input_dim, output_dim=num_classes, hidden_dim=hidden_dim, dropout=dropout)
-        elif model == 'gcn':
-            self.gnn = GCN(input_dim=input_dim, output_dim=num_classes, hidden_dim=hidden_dim, dropout=dropout)
+        self.gnn = {'gcn': GCN, 'sage': GraphSAGE, 'gat': GAT}[model](
+            input_dim=input_dim,
+            output_dim=num_classes,
+            hidden_dim=hidden_dim,
+            dropout=dropout
+        )
 
         self.cached_yt = None
+        self.forward_correction = forward_correction
 
     def forward(self, data):
         x, adj_t = data.x, data.adj_t
