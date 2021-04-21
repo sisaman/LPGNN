@@ -117,13 +117,12 @@ def hyperopt(args):
     run_cmds = []
     cmdbuilder = CommandBuilder(args=args)
     datasets = ['cora', 'pubmed', 'facebook', 'lastfm']
-
-    # LPGNN
     x_eps_list = [1, np.inf]
     y_eps_list = [1, np.inf]
     x_steps = {'cora': 16, 'pubmed': 16, 'facebook': 4, 'lastfm': 8}
     y_steps = {'cora': 8, 'pubmed': 2, 'facebook': 2, 'lastfm': 2}
 
+    # LPGNN
     for dataset, x_eps, y_eps in product(datasets, x_eps_list, y_eps_list):
         run_cmds += cmdbuilder.build(
             dataset=dataset,
@@ -142,20 +141,21 @@ def hyperopt(args):
 
 
     # fully-private baselines
-    run_cmds += cmdbuilder.build(
-        dataset=datasets,
-        feature=['rnd', 'one', 'ohd'],
-        mechanism='mbm',
-        model='sage',
-        x_eps=np.inf,
-        x_steps=0,
-        y_eps=np.inf,
-        y_steps=0,
-        forward_correction=True,
-        learning_rate=[0.01, 0.001, 0.0001],
-        weight_decay=[0.01, 0.001, 0.0001],
-        dropout=[0, 0.25, 0.5, 0.75]
-    )
+    for dataset, y_eps in product(datasets, y_eps_list):
+        run_cmds += cmdbuilder.build(
+            dataset=dataset,
+            feature=['rnd', 'one', 'ohd'],
+            mechanism='mbm',
+            model='sage',
+            x_eps=np.inf,
+            x_steps=0,
+            y_eps=y_eps,
+            y_steps=0 if np.isinf(y_eps) else y_steps[dataset],
+            forward_correction=True,
+            learning_rate=[0.01, 0.001, 0.0001],
+            weight_decay=[0.01, 0.001, 0.0001, 0],
+            dropout=[0, 0.25, 0.5, 0.75]
+        )
 
     run_cmds = list(set(run_cmds))  # remove duplicate runs
     return run_cmds
@@ -215,7 +215,7 @@ def experiment_baselines(args):
         model='sage',
         x_eps=np.inf,
         x_steps=CommandBuilder.BEST_VALUE,
-        y_eps=np.inf,
+        y_eps=[1, np.inf],
         y_steps=CommandBuilder.BEST_VALUE,
         forward_correction=True,
         learning_rate=CommandBuilder.BEST_VALUE,
@@ -231,7 +231,7 @@ def experiment_baselines(args):
         model='sage',
         x_eps=[0.01, 0.1, 1, 2, 3],
         x_steps=CommandBuilder.BEST_VALUE,
-        y_eps=np.inf,
+        y_eps=[1, np.inf],
         y_steps=CommandBuilder.BEST_VALUE,
         forward_correction=True,
         learning_rate=CommandBuilder.BEST_VALUE,
