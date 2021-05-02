@@ -6,7 +6,7 @@ from mechanisms import supported_feature_mechanisms, RandomizedResopnse
 
 
 class FeatureTransform:
-    supported_features = ['raw', 'rnd', 'one', 'ohd', '1rnd']
+    supported_features = ['raw', 'rnd', 'one', 'ohd']
 
     def __init__(self, feature: dict(help='feature transformation method',
                                      choices=supported_features, option='-f') = 'raw'):
@@ -17,12 +17,6 @@ class FeatureTransform:
 
         if self.feature == 'rnd':
             data.x = torch.rand_like(data.x)
-        elif self.feature == '1rnd':
-            n = data.x.size(0)
-            m = 1
-            data.x = torch.rand(n, m, device=data.x.device)
-            # s = torch.rand_like(data.x).topk(m, dim=1).indices
-            # data.x = torch.zeros_like(data.x).scatter(1, s, x)
         elif self.feature == 'ohd':
             data = OneHotDegree(max_degree=data.num_features - 1)(data)
         elif self.feature == 'one':
