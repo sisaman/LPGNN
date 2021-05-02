@@ -178,7 +178,7 @@ class JobManager:
 
     @staticmethod
     def register_arguments(parser, default_jobs_dir='./jobs'):
-        parser.add_argument('-n', '--name', type=str, default='job')
+        parser.add_argument('-n', '--name', type=str, required=True)
         parser.add_argument('-j', '--jobs-dir', type=str, default=default_jobs_dir)
         command_subparser = parser.add_subparsers(dest='command')
 
