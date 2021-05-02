@@ -3,8 +3,10 @@ import sys
 import traceback
 import uuid
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+import random
 import numpy as np
 import pandas as pd
+import seaborn as sns
 import torch
 from tqdm.auto import tqdm
 from torch_geometric.transforms import Compose
@@ -12,13 +14,26 @@ from datasets import load_dataset
 from models import NodeClassifier
 from trainer import Trainer
 from transforms import FeatureTransform, FeaturePerturbation, LabelPerturbation
-from utils import print_args, seed_everything, WandbLogger, add_parameters_as_argument, \
-    measure_runtime, from_args, str2bool, Enum, EnumAction, colored_text, confidence_interval
+from utils import print_args, WandbLogger, add_parameters_as_argument, \
+    measure_runtime, from_args, str2bool, Enum, EnumAction, colored_text
 
 
 class LogMode(Enum):
     INDIVIDUAL = 'individual'
     COLLECTIVE = 'collective'
+
+
+def seed_everything(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
+def confidence_interval(data, func=np.mean, size=1000, ci=95, seed=12345):
+    bs_replicates = sns.algorithms.bootstrap(data, func=func, n_boot=size, seed=seed)
+    bounds = sns.utils.ci(bs_replicates, ci)
+    return (bounds[1] - bounds[0]) / 2
 
 
 @measure_runtime
