@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
-from utils import accuracy, cross_entropy_loss
+from torch_geometric.utils import accuracy as accuracy_1d
 from torch.nn import Dropout, SELU
 from torch_geometric.nn import MessagePassing, SAGEConv, GCNConv, GATConv
 from torch_sparse import matmul
@@ -70,8 +70,8 @@ class GAT(GNN):
     def __init__(self, input_dim, output_dim, hidden_dim, dropout):
         super().__init__(dropout)
         heads = 4
-        self.conv1 = GATConv(input_dim, hidden_dim, heads=heads, concat=True, dropout=dropout)
-        self.conv2 = GATConv(heads * hidden_dim, output_dim, heads=1, concat=False, dropout=dropout)
+        self.conv1 = GATConv(input_dim, hidden_dim, heads=heads, concat=True)
+        self.conv2 = GATConv(heads * hidden_dim, output_dim, heads=1, concat=False)
 
 
 class GraphSAGE(GNN):
@@ -127,11 +127,11 @@ class NodeClassifier(torch.nn.Module):
             yp[data.test_mask] = 0  # to avoid using test labels
             self.cached_yt = self.y_prop(yp, data.adj_t)  # y~
 
-        loss = cross_entropy_loss(p_y=p_yt_x[data.train_mask], y=self.cached_yt[data.train_mask], weighted=False)
+        loss = self.cross_entropy_loss(p_y=p_yt_x[data.train_mask], y=self.cached_yt[data.train_mask], weighted=False)
 
         metrics = {
             'train/loss': loss.item(),
-            'train/acc': accuracy(pred=p_y_x[data.train_mask], target=data.y[data.train_mask]) * 100,
+            'train/acc': self.accuracy(pred=p_y_x[data.train_mask], target=data.y[data.train_mask]) * 100,
             'train/maxacc': data.T[0, 0].item() * 100,
         }
 
@@ -141,9 +141,23 @@ class NodeClassifier(torch.nn.Module):
         p_y_x, p_yp_x, p_yt_x = self(data)
 
         metrics = {
-            'val/loss': cross_entropy_loss(p_yp_x[data.val_mask], data.y[data.val_mask]).item(),
-            'val/acc': accuracy(pred=p_y_x[data.val_mask], target=data.y[data.val_mask]) * 100,
-            'test/acc': accuracy(pred=p_y_x[data.test_mask], target=data.y[data.test_mask]) * 100,
+            'val/loss': self.cross_entropy_loss(p_yp_x[data.val_mask], data.y[data.val_mask]).item(),
+            'val/acc': self.accuracy(pred=p_y_x[data.val_mask], target=data.y[data.val_mask]) * 100,
+            'test/acc': self.accuracy(pred=p_y_x[data.test_mask], target=data.y[data.test_mask]) * 100,
         }
 
         return metrics
+
+    @staticmethod
+    def accuracy(pred, target):
+        pred = pred.argmax(dim=1) if len(pred.size()) > 1 else pred
+        target = target.argmax(dim=1) if len(target.size()) > 1 else target
+        return accuracy_1d(pred=pred, target=target)
+
+    @staticmethod
+    def cross_entropy_loss(p_y, y, weighted=False):
+        y_onehot = F.one_hot(y.argmax(dim=1))
+        loss = -torch.log(p_y + 1e-20) * y_onehot
+        loss *= y if weighted else 1
+        loss = loss.sum(dim=1).mean()
+        return loss
