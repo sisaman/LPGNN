@@ -5,46 +5,12 @@ import inspect
 import enum
 import functools
 from subprocess import check_call, DEVNULL, STDOUT
-from torch_geometric.utils import accuracy as accuracy_1d
-
-import torch
-import numpy as np
-import random
-import torch.nn.functional as F
-import seaborn as sns
 from tqdm.auto import tqdm
 
 try:
     import wandb
 except ImportError:
     wandb = None
-
-
-def accuracy(pred, target):
-    pred = pred.argmax(dim=1) if len(pred.size()) > 1 else pred
-    target = target.argmax(dim=1) if len(target.size()) > 1 else target
-    return accuracy_1d(pred=pred, target=target)
-
-
-def cross_entropy_loss(p_y, y, weighted=False):
-    y_onehot = F.one_hot(y.argmax(dim=1))
-    loss = -torch.log(p_y + 1e-20) * y_onehot
-    loss *= y if weighted else 1
-    loss = loss.sum(dim=1).mean()
-    return loss
-
-
-def js_div(p, q):
-    eps = 1e-20
-    m = (p + q) / 2
-    js = F.kl_div(torch.log(p + eps), m) + F.kl_div(torch.log(q + eps), m)
-    return js / 2
-
-
-def confidence_interval(data, func=np.mean, size=1000, ci=95, seed=12345):
-    bs_replicates = sns.algorithms.bootstrap(data, func=func, n_boot=size, seed=seed)
-    bounds = sns.utils.ci(bs_replicates, ci)
-    return (bounds[1] - bounds[0]) / 2
 
 
 def measure_runtime(func):
@@ -98,157 +64,134 @@ class WandbLogger:
 class JobManager:
     def __init__(self, args, cmd_generator=None):
         self.args = args
+        self.name = args.name
+        self.command = args.command
+        self.jobs_dir = args.jobs_dir
         self.cmd_generator = cmd_generator
 
     def run(self):
-        if self.args.command == 'create':
+        if self.command == 'create':
             self.create()
-        elif self.args.command == 'submit':
+        elif self.command == 'submit':
             self.submit()
-        elif self.args.command == 'status':
+        elif self.command == 'status':
             self.status()
-        elif self.args.command == 'resubmit':
+        elif self.command == 'resubmit':
             self.resubmit()
-        elif self.args.command == 'exec':
+        elif self.command == 'exec':
             self.exec()
 
-    def create_job_array(self, run_cmds):
-        self.create_job_list(run_cmds)
+    def create(self):
+        os.makedirs(self.jobs_dir, exist_ok=True)
+        run_cmds = self.cmd_generator(self.args)
 
-        window = 7500
-        for i in range(0, len(run_cmds), window):
-            begin = i + 1
-            end = min(i + window, len(run_cmds))
-
-            job_file_content = [
-                f'#$ -N job-{begin}-{end}\n',
-                f'#$ -S /bin/bash\n',
-                f'#$ -P dusk2dawn\n',
-                f'#$ -M sajadmanesh@idiap.ch\n',
-                f'#$ -l pytorch,{self.args.queue},gpumem={self.args.gpumem}\n',
-                f'#$ -t {begin}-{end}\n',
-                f'#$ -cwd\n',
-                f'cd ..\n',
-                f'python experiments.py exec --id $SGE_TASK_ID \n'
-            ]
-
-            with open(os.path.join(self.args.jobs_dir, f'job-{begin}-{end}.job'), 'w') as file:
-                file.writelines(job_file_content)
-                file.flush()
-
-    def create_individual_jobs(self, run_cmds):
-        for i, run in tqdm(enumerate(run_cmds), total=len(run_cmds)):
-            job_file_content = [
-                f'#$ -N job-{i + 1}\n',
-                f'#$ -S /bin/bash\n',
-                f'#$ -P dusk2dawn\n',
-                f'#$ -l pytorch,{self.args.queue},gpumem={self.args.gpumem}\n',
-                f'#$ -cwd\n',
-                f'cd ..\n',
-                f'{run}\n'
-            ]
-            with open(os.path.join(self.args.jobs_dir, f'job-{i + 1}.job'), 'w') as file:
-                file.writelines(job_file_content)
-                file.flush()
-
-    def create_job_list(self, run_cmds):
-        with open(os.path.join(self.args.jobs_dir, f'all.jobs'), 'w') as file:
+        with open(os.path.join(self.jobs_dir, f'{self.name}.jobs'), 'w') as file:
             for run in tqdm(run_cmds):
                 file.write(run + '\n')
 
-    def create(self):
-        os.makedirs(self.args.jobs_dir, exist_ok=True)
-        run_cmds = self.cmd_generator(self.args)
-
-        if 'queue' in self.args:
-            if self.args.array:
-                self.create_job_array(run_cmds)
-            else:
-                self.create_individual_jobs(run_cmds)
-        else:
-            self.create_job_list(run_cmds)
-
-        print('Job files created in:', self.args.jobs_dir)
+        print('job file created:', os.path.join(self.jobs_dir, f'{self.name}.jobs'))
 
     def submit(self):
-        os.chdir(self.args.jobs_dir)
-        job_list = [file for file in os.listdir() if file.endswith('.job')]
-        for job in tqdm(job_list, desc='submitting jobs'):
-            check_call(['qsub', '-V', job], stdout=DEVNULL, stderr=STDOUT)
-        print('Done.')
+        window = 7500
+        num_cmds = sum(1 for _ in open(os.path.join(self.jobs_dir, f'{self.name}.jobs')))
+
+        for i in tqdm(range(0, num_cmds, window), desc='submitting jobs'):
+            begin = i + 1
+            end = min(i + window, num_cmds)
+
+            job_file_content = [
+                f'#$ -N {self.name}-{begin}-{end}\n',
+                f'#$ -S /bin/bash\n',
+                f'#$ -P dusk2dawn\n',
+                f'#$ -l pytorch,sgpu,gpumem=10\n',
+                f'#$ -t {begin}-{end}\n',
+                f'#$ -o {self.jobs_dir}\n',
+                f'#$ -e {self.jobs_dir}\n',
+                f'#$ -cwd\n',
+                f'#$ -V\n',
+                f'python experiments.py -n {self.name} exec --id $SGE_TASK_ID \n'
+            ]
+
+            file_name = os.path.join(self.jobs_dir, f'{self.name}-{begin}-{end}.job')
+
+            with open(file_name, 'w') as file:
+                file.writelines(job_file_content)
+                file.flush()
+
+            check_call(['qsub', file_name], stdout=DEVNULL, stderr=STDOUT)
+
+        print('done')
 
     def resubmit(self):
-        os.chdir(self.args.jobs_dir)
+        failed_jobs = self.get_failed_jobs()
 
-        while True:
-            try:
-                failed_jobs = self.get_failed_jobs()
-                for job_file, error_file, _ in failed_jobs:
-                    print('resubmitting', job_file, '...', end='')
-                    check_call(['qsub', '-V', job_file], stdout=DEVNULL, stderr=STDOUT)
-                    os.remove(error_file)
-                    print('done')
+        if len(failed_jobs):
+            with open(os.path.join(self.jobs_dir, f'{self.name}.jobs')) as jobs_file:
+                job_list = jobs_file.read().splitlines()
 
-                if self.args.loop:
-                    time.sleep(60)
-                else:
-                    break
-            except KeyboardInterrupt:
-                break
+            self.cmd_generator = lambda args: [job_list[i-1] for i,_,_ in failed_jobs]
+            self.name = f'{self.name}-resubmit'
+            self.create()
+            self.submit()
+
 
     def status(self):
-        os.chdir(self.args.jobs_dir)
+        try:
+            import tabulate
+        except ImportError:
+            tabulate = None
+
         failed_jobs = self.get_failed_jobs()
-        for _, file, num_lines in failed_jobs:
-            print(num_lines, os.path.join(self.args.jobs_dir, file))
+
+        if tabulate:
+            print(tabulate.tabulate(failed_jobs, headers=['job id', 'error file', 'num lines']))
+        else:
+            for _, file, num_lines in failed_jobs:
+                print(num_lines, os.path.join(self.jobs_dir, file))
+
+        print()
 
     def exec(self):
-        with open(os.path.join(self.args.jobs_dir, 'all.jobs')) as jobs_file:
-            job_list = jobs_file.readlines()
+        with open(os.path.join(self.jobs_dir, f'{self.name}.jobs')) as jobs_file:
+            job_list = jobs_file.read().splitlines()
 
-        check_call(job_list[self.args.id-1].split())
+        if self.args.all:
+            for cmd in job_list:
+                check_call(cmd.split())
+        else:
+            check_call(job_list[self.args.id-1].split())
 
-    @staticmethod
-    def get_failed_jobs():
-        file_list = os.listdir()
+    def get_failed_jobs(self):
         failed_jobs = []
+        file_list = [
+            os.path.join(self.jobs_dir, file)
+            for file in os.listdir(self.jobs_dir) if file.startswith(self.name) and file.count('.e')
+        ]
+
         for file in file_list:
-            if file.count('.e'):
-                num_lines = sum(1 for _ in open(file))
-                if num_lines > 0:
-                    job_file = file.split('.')[0] + '.job'
-                    failed_jobs.append((job_file, file, num_lines))
+            num_lines = sum(1 for _ in open(file))
+            if num_lines > 0:
+                job_id = int(file.split('.')[-1])
+                failed_jobs.append([job_id, file, num_lines])
 
         return failed_jobs
 
     @staticmethod
-    def register_arguments(parser, default_jobs_dir='./jobs', default_gpu_mem=10, default_queue='sgpu'):
+    def register_arguments(parser, default_jobs_dir='./jobs'):
+        parser.add_argument('-n', '--name', type=str, default='job')
         parser.add_argument('-j', '--jobs-dir', type=str, default=default_jobs_dir)
         command_subparser = parser.add_subparsers(dest='command')
 
         parser_create = command_subparser.add_parser('create')
-        create_subparser = parser_create.add_subparsers()
-        parser_grid = create_subparser.add_parser('grid')
-        parser_grid.add_argument('-q', '--queue', type=str, default=default_queue, choices=['sgpu', 'gpu', 'lgpu'])
-        parser_grid.add_argument('-m', '--gpumem', type=int, default=default_gpu_mem)
-        parser_grid.add_argument('--array', action='store_true')
-
         command_subparser.add_parser('submit')
         command_subparser.add_parser('status')
-
-        parser_resubmit = command_subparser.add_parser('resubmit')
-        parser_resubmit.add_argument('--loop', action='store_true')
+        command_subparser.add_parser('resubmit')
 
         parser_exec = command_subparser.add_parser('exec')
-        parser_exec.add_argument('--id', type=int, required=True)
+        parser_exec.add_argument('--id', type=int)
+        parser_exec.add_argument('--all', action='store_true')
+
         return parser, parser_create
-
-
-def seed_everything(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
 
 
 def str2bool(v):
