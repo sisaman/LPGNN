@@ -62,17 +62,6 @@ class OneBit(MultiBit):
         super().__init__(*args, m='max', **kwargs)
 
 
-class RandomBit(OneBit):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def __call__(self, x):
-        w = torch.rand(x.size(1), 1, device=x.device)
-        w /= w.sum(dim=0)
-        x = torch.matmul(x, w)
-        return super().__call__(x)  # noqa
-
-
 class Gaussian(Mechanism):
     def __init__(self, *args, delta=1e-10, **kwargs):
         super().__init__(*args, **kwargs)
@@ -172,5 +161,4 @@ supported_feature_mechanisms = {
     '1bm': OneBit,
     'lpm': Laplace,
     'agm': AnalyticGaussian,
-    'rbm': RandomBit
 }
