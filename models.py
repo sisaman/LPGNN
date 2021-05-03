@@ -90,7 +90,7 @@ class NodeClassifier(torch.nn.Module):
                  dropout:               dict(help='dropout rate (between zero and one)') = 0.0,
                  x_steps:               dict(help='KProp step parameter for features', option='-kx') = 0,
                  y_steps:               dict(help='KProp step parameter for labels', option='-ky') = 0,
-                 forward_correction:    dict(help='applies forward loss correction') = True,
+                 forward_correction:    dict(help='applies forward loss correction', option='--forward') = True,
                  ):
         super().__init__()
 
