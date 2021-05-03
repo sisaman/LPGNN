@@ -88,8 +88,8 @@ class NodeClassifier(torch.nn.Module):
                  model:                 dict(help='backbone GNN model', choices=['gcn', 'sage', 'gat']) = 'sage',
                  hidden_dim:            dict(help='dimension of the hidden layers') = 16,
                  dropout:               dict(help='dropout rate (between zero and one)') = 0.0,
-                 x_steps:               dict(help='KProp step parameter', option='-k') = 0,
-                 y_steps:               dict(help='number of label propagation steps') = 0,
+                 x_steps:               dict(help='KProp step parameter for features', option='-kx') = 0,
+                 y_steps:               dict(help='KProp step parameter for labels', option='-ky') = 0,
                  forward_correction:    dict(help='applies forward loss correction') = True,
                  ):
         super().__init__()

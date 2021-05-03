@@ -131,10 +131,10 @@ def main():
     group_expr.add_argument('-s', '--seed', type=int, default=None, help='initial random seed')
     group_expr.add_argument('-r', '--repeats', type=int, default=1, help="number of times the experiment is repeated")
     group_expr.add_argument('-o', '--output-dir', type=str, default='./output', help="directory to store the results")
-    group_expr.add_argument('--log', type=str2bool, nargs='?', const=True, default=False, help='enable logging')
+    group_expr.add_argument('--log', type=str2bool, nargs='?', const=True, default=False, help='enable wandb logging')
     group_expr.add_argument('--log-mode', type=LogMode, action=EnumAction, default=LogMode.INDIVIDUAL,
-                            help='logging mode')
-    group_expr.add_argument('--project-name', type=str, default='LPGNN', help='project name for wandb logging')
+                            help='wandb logging mode')
+    group_expr.add_argument('--project-name', type=str, default='LPGNN', help='wandb project name')
 
     parser = ArgumentParser(parents=[init_parser], formatter_class=ArgumentDefaultsHelpFormatter)
     args = parser.parse_args()
