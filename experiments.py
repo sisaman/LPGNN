@@ -51,8 +51,9 @@ class CommandBuilder:
 
     def __init__(self, args, hparams_dir=None, random=None):
         self.random = random
-        self.default_options = f" -s {args.seed} -r {args.repeats} -o {args.output_dir} --log --log-mode collective " \
-                               f"--project-name {args.project}"
+        self.default_options = f" -s {args.seed} -r {args.repeats} -o {args.output_dir} "
+        if args.project:
+            self.default_options += f" --log --log-mode collective --project-name {args.project} "
         self.hparams = HyperParams(path_dir=hparams_dir) if hparams_dir else None
 
     def build(self, dataset, feature, mechanism, model, x_eps, y_eps, forward_correction,
@@ -263,7 +264,7 @@ def main():
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser, parser_create = JobManager.register_arguments(parser)
     parser.add_argument('-o', '--output-dir', type=str, default='./results', help="directory to store the results")
-    parser_create.add_argument('--project', type=str, required=True, help='project name for wandb logging')
+    parser_create.add_argument('--project', type=str, help='project name for wandb logging (omit to disable)')
     parser_create.add_argument('-s', '--seed', type=int, default=12345, help='initial random seed')
     parser_create.add_argument('-r', '--repeats', type=int, default=10, help="number of experiment iterations")
     parser_create.add_argument('--stage', type=int, required=True)
