@@ -260,6 +260,19 @@ def experiment_baselines(args):
     return run_cmds
 
 
+def experiment_generator(args):
+    run_cmds = []
+
+    if args.hyperopt:
+        run_cmds += hyperopt(args)
+    if args.LPGNN:
+        run_cmds += experiment_lpgnn(args)
+    if args.baselines:
+        run_cmds += experiment_baselines(args)
+
+    return run_cmds
+
+
 def main():
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser, parser_create = JobManager.register_arguments(parser)
@@ -267,12 +280,13 @@ def main():
     parser_create.add_argument('--project', type=str, help='project name for wandb logging (omit to disable)')
     parser_create.add_argument('-s', '--seed', type=int, default=12345, help='initial random seed')
     parser_create.add_argument('-r', '--repeats', type=int, default=10, help="number of experiment iterations")
-    parser_create.add_argument('--stage', type=int, required=True)
+    parser_create.add_argument('--hyperopt', action='store_true')
+    parser_create.add_argument('--LPGNN', action='store_true')
+    parser_create.add_argument('--baselines', action='store_true')
     args = parser.parse_args()
     print_args(args)
 
-    stages = [hyperopt, experiment_lpgnn, experiment_baselines]
-    JobManager(args, cmd_generator=lambda arg: stages[args.stage](arg)).run()
+    JobManager(args, cmd_generator=experiment_generator).run()
 
 
 if __name__ == '__main__':
