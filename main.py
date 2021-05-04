@@ -45,13 +45,13 @@ def run(args):
     run_id = str(uuid.uuid1())
 
     logger = None
-    if args.log_mode == LogMode.COLLECTIVE:
+    if args.log and args.log_mode == LogMode.COLLECTIVE:
         logger = WandbLogger(project=args.project_name, config=args, enabled=args.log, reinit=False, group=run_id)
 
     progbar = tqdm(range(args.repeats), file=sys.stdout)
     for version in progbar:
 
-        if args.log_mode == LogMode.INDIVIDUAL:
+        if args.log and args.log_mode == LogMode.INDIVIDUAL:
             args.version = version
             logger = WandbLogger(project=args.project_name, config=args, enabled=args.log, group=run_id)
 
@@ -84,10 +84,10 @@ def run(args):
             logger.log_summary({'error': error})
             raise e
         finally:
-            if args.log_mode == LogMode.INDIVIDUAL:
+            if args.log and args.log_mode == LogMode.INDIVIDUAL:
                 logger.finish()
 
-    if args.log_mode == LogMode.COLLECTIVE:
+    if args.log and args.log_mode == LogMode.COLLECTIVE:
         summary = {}
         for metric, values in run_metrics.items():
             summary[metric + '_mean'] = np.mean(values)
@@ -97,8 +97,8 @@ def run(args):
 
     if not args.log:
         os.makedirs(args.output_dir, exist_ok=True)
-        df_results = pd.DataFrame(test_acc, columns=['test_acc']).rename_axis('version').reset_index()
-        df_results['group'] = run_id
+        df_results = pd.DataFrame(test_acc, columns=['test/acc']).rename_axis('version').reset_index()
+        df_results['Name'] = run_id
         for arg_name, arg_val in vars(args).items():
             df_results[arg_name] = [arg_val] * len(test_acc)
         df_results.to_csv(os.path.join(args.output_dir, f'{run_id}.csv'), index=False)
