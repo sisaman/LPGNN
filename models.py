@@ -1,15 +1,14 @@
 import torch
 import torch.nn.functional as F
-from torch_geometric.nn.conv.gcn_conv import gcn_norm
-from torch_geometric.utils import accuracy as accuracy_1d
 from torch.nn import Dropout, SELU
-from torch_geometric.nn import MessagePassing, SAGEConv, GCNConv, GATConv
-from torch_sparse import matmul
+import dgl
+from dgl.nn.pytorch import GraphConv, GATConv, SAGEConv
 
 
-class KProp(MessagePassing):
+class KProp(torch.nn.Module):
     def __init__(self, steps, aggregator, add_self_loops, normalize, cached, transform=lambda x: x):
-        super().__init__(aggr=aggregator)
+        super().__init__()
+        self.aggregator = aggregator
         self.transform = transform
         self.K = steps
         self.add_self_loops = add_self_loops
@@ -17,30 +16,33 @@ class KProp(MessagePassing):
         self.cached = cached
         self._cached_x = None
 
-    def forward(self, x, adj_t):
+    def forward(self, g, x):
         if self._cached_x is None or not self.cached:
-            self._cached_x = self.neighborhood_aggregation(x, adj_t)
+            self._cached_x = self.neighborhood_aggregation(g, x)
 
         return self._cached_x
 
-    def neighborhood_aggregation(self, x, adj_t):
+    def neighborhood_aggregation(self, g, x):
         if self.K <= 0:
             return x
 
-        if self.normalize:
-            adj_t = gcn_norm(adj_t, add_self_loops=False)
+        conv = GraphConv(
+            in_feats=x.size(1),
+            out_feats=x.size(1),
+            norm='both' if self.normalize else 'none',
+            weight=False,
+            bias=False
+        )
 
         if self.add_self_loops:
-            adj_t = adj_t.set_diag()
+            g = dgl.remove_self_loop(g)
+            g = dgl.add_self_loop(g)
 
         for k in range(self.K):
-            x = self.propagate(adj_t, x=x)
+            x = conv(g, x)
 
         x = self.transform(x)
         return x
-
-    def message_and_aggregate(self, adj_t, x):  # noqa
-        return matmul(adj_t, x, reduce=self.aggr)
 
 
 class GNN(torch.nn.Module):
@@ -51,34 +53,41 @@ class GNN(torch.nn.Module):
         self.dropout = Dropout(p=dropout)
         self.activation = SELU(inplace=True)
 
-    def forward(self, x, adj_t):
-        x = self.conv1(x, adj_t)
+    def forward(self, g, x):
+        x = self.conv1(g, x)
         x = self.activation(x)
         x = self.dropout(x)
-        x = self.conv2(x, adj_t)
+        x = self.conv2(g, x)
         return x
 
 
 class GCN(GNN):
     def __init__(self, input_dim, output_dim, hidden_dim, dropout):
         super().__init__(dropout)
-        self.conv1 = GCNConv(input_dim, hidden_dim)
-        self.conv2 = GCNConv(hidden_dim, output_dim)
+        self.conv1 = GraphConv(input_dim, hidden_dim)
+        self.conv2 = GraphConv(hidden_dim, output_dim)
 
 
 class GAT(GNN):
     def __init__(self, input_dim, output_dim, hidden_dim, dropout):
         super().__init__(dropout)
         heads = 4
-        self.conv1 = GATConv(input_dim, hidden_dim, heads=heads, concat=True)
-        self.conv2 = GATConv(heads * hidden_dim, output_dim, heads=1, concat=False)
+        self.conv1 = GATConv(input_dim, hidden_dim, num_heads=heads)
+        self.conv2 = GATConv(heads * hidden_dim, output_dim, num_heads=1)
+
+    def forward(self, g, x):
+        x = self.conv1(g, x).flatten(1)
+        x = self.activation(x)
+        x = self.dropout(x)
+        x = self.conv2(g, x).mean(1)
+        return x
 
 
 class GraphSAGE(GNN):
     def __init__(self, input_dim, output_dim, hidden_dim, dropout):
         super().__init__(dropout)
-        self.conv1 = SAGEConv(in_channels=input_dim, out_channels=hidden_dim, normalize=False, root_weight=True)
-        self.conv2 = SAGEConv(in_channels=hidden_dim, out_channels=output_dim, normalize=False, root_weight=True)
+        self.conv1 = SAGEConv(input_dim, hidden_dim, aggregator_type='mean')
+        self.conv2 = SAGEConv(hidden_dim, output_dim, aggregator_type='mean')
 
 
 class NodeClassifier(torch.nn.Module):
@@ -108,42 +117,47 @@ class NodeClassifier(torch.nn.Module):
         self.cached_yt = None
         self.forward_correction = forward_correction
 
-    def forward(self, data):
-        x, adj_t = data.x, data.adj_t
-        x = self.x_prop(x, adj_t)
-        x = self.gnn(x, adj_t)
+    def forward(self, g):
+        x = g.ndata['feat']
+        x = self.x_prop(g, x)
+        x = self.gnn(g, x)
 
-        p_y_x = F.softmax(x, dim=1)                                                         # P(y|x')
-        p_yp_x = torch.matmul(p_y_x, data.T) if self.forward_correction else p_y_x          # P(y'|x')
-        p_yt_x = self.y_prop(p_yp_x, data.adj_t)                                            # P(y~|x')
+        p_y_x = F.softmax(x, dim=1)                                                      # P(y|x')
+        p_yp_x = torch.matmul(p_y_x, g.T) if self.forward_correction else p_y_x          # P(y'|x')
+        p_yt_x = self.y_prop(g, p_yp_x)                                            # P(y~|x')
 
         return p_y_x, p_yp_x, p_yt_x
 
-    def training_step(self, data):
-        p_y_x, p_yp_x, p_yt_x = self(data)
+    def training_step(self, g):
+        p_y_x, p_yp_x, p_yt_x = self(g)
 
         if self.cached_yt is None:
-            yp = data.y.float()
-            yp[data.test_mask] = 0  # to avoid using test labels
-            self.cached_yt = self.y_prop(yp, data.adj_t)  # y~
+            yp = g.ndata['label'].float()
+            yp[g.ndata['test_mask']] = 0  # to avoid using test labels
+            self.cached_yt = self.y_prop(g, yp)  # y~
 
-        loss = self.cross_entropy_loss(p_y=p_yt_x[data.train_mask], y=self.cached_yt[data.train_mask], weighted=False)
+        train_mask = g.ndata['train_mask']
+        loss = self.cross_entropy_loss(p_y=p_yt_x[train_mask], y=self.cached_yt[train_mask], weighted=False)
 
         metrics = {
             'train/loss': loss.item(),
-            'train/acc': self.accuracy(pred=p_y_x[data.train_mask], target=data.y[data.train_mask]) * 100,
-            'train/maxacc': data.T[0, 0].item() * 100,
+            'train/acc': self.accuracy(pred=p_y_x[train_mask], target=g.ndata['label'][train_mask]) * 100,
+            'train/maxacc': g.T[0, 0].item() * 100,
         }
 
         return loss, metrics
 
-    def validation_step(self, data):
-        p_y_x, p_yp_x, p_yt_x = self(data)
+    def validation_step(self, g):
+        p_y_x, p_yp_x, p_yt_x = self(g)
+
+        y = g.ndata['label']
+        val_mask = g.ndata['val_mask']
+        test_mask = g.ndata['test_mask']
 
         metrics = {
-            'val/loss': self.cross_entropy_loss(p_yp_x[data.val_mask], data.y[data.val_mask]).item(),
-            'val/acc': self.accuracy(pred=p_y_x[data.val_mask], target=data.y[data.val_mask]) * 100,
-            'test/acc': self.accuracy(pred=p_y_x[data.test_mask], target=data.y[data.test_mask]) * 100,
+            'val/loss': self.cross_entropy_loss(p_yp_x[val_mask], y[val_mask]).item(),
+            'val/acc': self.accuracy(pred=p_y_x[val_mask], target=y[val_mask]) * 100,
+            'test/acc': self.accuracy(pred=p_y_x[test_mask], target=y[test_mask]) * 100,
         }
 
         return metrics
@@ -152,7 +166,7 @@ class NodeClassifier(torch.nn.Module):
     def accuracy(pred, target):
         pred = pred.argmax(dim=1) if len(pred.size()) > 1 else pred
         target = target.argmax(dim=1) if len(target.size()) > 1 else target
-        return accuracy_1d(pred=pred, target=target)
+        return (pred == target).float().mean().item()
 
     @staticmethod
     def cross_entropy_loss(p_y, y, weighted=False):

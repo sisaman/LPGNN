@@ -4,12 +4,14 @@ import traceback
 import uuid
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import random
+
+import dgl
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import torch
 from tqdm.auto import tqdm
-from torch_geometric.transforms import Compose
+# from torch_geometric.transforms import Compose
 from datasets import load_dataset
 from models import NodeClassifier
 from trainer import Trainer
@@ -24,6 +26,7 @@ class LogMode(Enum):
 
 
 def seed_everything(seed):
+    dgl.seed(seed)
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -56,21 +59,19 @@ def run(args):
             logger = WandbLogger(project=args.project_name, config=args, enabled=args.log, group=run_id)
 
         try:
-            data = dataset.clone().to(args.device)
+            g = dataset.clone().to(args.device)
 
             # preprocess data
-            data = Compose([
-                from_args(FeatureTransform, args),
-                from_args(FeaturePerturbation, args),
-                from_args(LabelPerturbation, args)
-            ])(data)
+            g = from_args(FeatureTransform, args)(g)
+            g = from_args(FeaturePerturbation, args)(g)
+            g = from_args(LabelPerturbation, args)(g)
 
             # define model
-            model = from_args(NodeClassifier, args, input_dim=data.num_features, num_classes=data.num_classes)
+            model = from_args(NodeClassifier, args, input_dim=g.num_features, num_classes=g.num_classes)
 
             # train the model
             trainer = from_args(Trainer, args, logger=logger if args.log_mode == LogMode.INDIVIDUAL else None)
-            best_metrics = trainer.fit(model, data)
+            best_metrics = trainer.fit(model, g)
 
             # process results
             for metric, value in best_metrics.items():
@@ -105,7 +106,7 @@ def run(args):
 
 
 def main():
-    print('\nVersion: Pytorch-Geometric\n')
+    print('\nVersion: Deep Graph Library\n')
     init_parser = ArgumentParser(add_help=False, conflict_handler='resolve')
 
     # dataset args

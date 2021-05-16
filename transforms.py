@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch_geometric.utils import subgraph
+# from torch_geometric.utils import subgraph
 from mechanisms import supported_feature_mechanisms, RandomizedResopnse
 
 
@@ -13,16 +13,16 @@ class FeatureTransform:
 
         self.feature = feature
 
-    def __call__(self, data):
+    def __call__(self, g):
 
         if self.feature == 'rnd':
-            data.x = torch.rand_like(data.x)
+            g.ndata['feat'] = torch.rand_like(g.ndata['feat'])
         elif self.feature == 'ohd':
-            data = OneHotDegree(max_degree=data.num_features - 1)(data)
+            g = OneHotDegree(max_degree=g.num_features - 1)(g)
         elif self.feature == 'one':
-            data.x = torch.ones_like(data.x)
+            g.ndata['feat'] = torch.ones_like(g.ndata['feat'])
 
-        return data
+        return g
 
 
 class FeaturePerturbation:
@@ -37,19 +37,19 @@ class FeaturePerturbation:
         self.input_range = data_range
         self.x_eps = x_eps
 
-    def __call__(self, data):
+    def __call__(self, g):
         if np.isinf(self.x_eps):
-            return data
+            return g
 
         if self.input_range is None:
-            self.input_range = data.x.min().item(), data.x.max().item()
+            self.input_range = g.ndata['feat'].min().item(), g.ndata['feat'].max().item()
 
-        data.x = supported_feature_mechanisms[self.mechanism](
+        g.ndata['feat'] = supported_feature_mechanisms[self.mechanism](
             eps=self.x_eps,
             input_range=self.input_range
-        )(data.x)
+        )(g.ndata['feat'])
 
-        return data
+        return g
 
 
 class LabelPerturbation:
@@ -58,34 +58,34 @@ class LabelPerturbation:
                              type=float, option='-ey') = np.inf):
         self.y_eps = y_eps
 
-    def __call__(self, data):
-        data.y = F.one_hot(data.y, num_classes=data.num_classes)
+    def __call__(self, g):
+        g.ndata['label'] = F.one_hot(g.ndata['label'], num_classes=g.num_classes)
         p_ii = 1  # probability of preserving the clean label i
         p_ij = 0  # probability of perturbing label i into another label j
 
         if not np.isinf(self.y_eps):
-            mechanism = RandomizedResopnse(eps=self.y_eps, d=data.num_classes)
-            perturb_mask = data.train_mask | data.val_mask
-            y_perturbed = mechanism(data.y[perturb_mask])
-            data.y[perturb_mask] = y_perturbed
+            mechanism = RandomizedResopnse(eps=self.y_eps, d=g.num_classes)
+            perturb_mask = g.ndata['train_mask'] | g.ndata['val_mask']
+            y_perturbed = mechanism(g.ndata['label'][perturb_mask])
+            g.ndata['label'][perturb_mask] = y_perturbed
             p_ii, p_ij = mechanism.p, mechanism.q
 
         # set label transistion matrix
-        data.T = torch.ones(data.num_classes, data.num_classes, device=data.y.device) * p_ij
-        data.T.fill_diagonal_(p_ii)
+        g.T = torch.ones(g.num_classes, g.num_classes, device=g.device) * p_ij
+        g.T.fill_diagonal_(p_ii)
 
-        return data
+        return g
 
 
 class OneHotDegree:
     def __init__(self, max_degree):
         self.max_degree = max_degree
 
-    def __call__(self, data):
-        degree = data.adj_t.sum(dim=0).long()
+    def __call__(self, g):
+        degree = g.in_degrees()
         degree.clamp_(max=self.max_degree)
-        data.x = F.one_hot(degree, num_classes=self.max_degree + 1).float()  # add 1 for zero degree
-        return data
+        g.ndata['feat'] = F.one_hot(degree, num_classes=self.max_degree + 1).float()  # add 1 for zero degree
+        return g
 
 
 class Normalize:
@@ -93,13 +93,16 @@ class Normalize:
         self.min = low
         self.max = high
 
-    def __call__(self, data):
-        alpha = data.x.min(dim=0)[0]
-        beta = data.x.max(dim=0)[0]
+    def __call__(self, g):
+        x = g.ndata['feat']
+        alpha = x.min(dim=0)[0]
+        beta = x.max(dim=0)[0]
         delta = beta - alpha
-        data.x = (data.x - alpha) * (self.max - self.min) / delta + self.min
-        data.x = data.x[:, torch.nonzero(delta, as_tuple=False).squeeze()]  # remove features with delta = 0
-        return data
+        x = (x - alpha) * (self.max - self.min) / delta + self.min
+        x = x[:, torch.nonzero(delta, as_tuple=False).squeeze()]  # remove features with delta = 0
+        g.ndata['feat'] = x
+        g.num_features = x.size(1)
+        return g
 
 
 class FilterTopClass:
@@ -127,3 +130,27 @@ class FilterTopClass:
             data.test_mask = data.test_mask[idx]
 
         return data
+
+
+class NodeSplit:
+    def __init__(self, val_ratio=.25, test_ratio=.25):
+        self.val_ratio = val_ratio
+        self.test_ratio = test_ratio
+
+    def __call__(self, g):
+        n_val = int(self.val_ratio * g.num_nodes())
+        n_test = int(self.test_ratio * g.num_nodes())
+        perm = torch.randperm(g.num_nodes())
+        val_nodes = perm[:n_val]
+        test_nodes = perm[n_val:n_val + n_test]
+        train_nodes = perm[n_val + n_test:]
+        val_mask = torch.zeros_like(g.ndata['val_mask'], dtype=torch.bool)
+        val_mask[val_nodes] = True
+        test_mask = torch.zeros_like(g.ndata['test_mask'], dtype=torch.bool)
+        test_mask[test_nodes] = True
+        train_mask = torch.zeros_like(g.ndata['train_mask'], dtype=torch.bool)
+        train_mask[train_nodes] = True
+        g.ndata['val_mask'] = val_mask
+        g.ndata['test_mask'] = test_mask
+        g.ndata['train_mask'] = train_mask
+        return g

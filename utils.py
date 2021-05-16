@@ -129,11 +129,10 @@ class JobManager:
             with open(os.path.join(self.jobs_dir, f'{self.name}.jobs')) as jobs_file:
                 job_list = jobs_file.read().splitlines()
 
-            self.cmd_generator = lambda args: [job_list[i-1] for i,_,_ in failed_jobs]
+            self.cmd_generator = lambda args: [job_list[i - 1] for i, _, _ in failed_jobs]
             self.name = f'{self.name}-resubmit'
             self.create()
             self.submit()
-
 
     def status(self):
         try:
@@ -159,7 +158,7 @@ class JobManager:
             for cmd in job_list:
                 check_call(cmd.split())
         else:
-            check_call(job_list[self.args.id-1].split())
+            check_call(job_list[self.args.id - 1].split())
 
     def get_failed_jobs(self):
         failed_jobs = []
@@ -273,6 +272,7 @@ class EnumAction(Action):
     """
     Argparse action for handling Enums
     """
+
     def __init__(self, **kwargs):
         # Pop off the type value
         _enum = kwargs.pop("type", None)
