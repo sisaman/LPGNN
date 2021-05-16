@@ -105,6 +105,7 @@ def run(args):
 
 
 def main():
+    print('\nVersion: Pytorch-Geometric\n')
     init_parser = ArgumentParser(add_help=False, conflict_handler='resolve')
 
     # dataset args
