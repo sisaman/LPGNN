@@ -1,17 +1,20 @@
 # Locally Private Graph Neural Networks
 
-This repository is the official implementation of the paper [Locally Private Graph Neural Networks](https://arxiv.org/abs/2006.05535).  
+This repository is the DGL-based implementation of the paper [Locally Private Graph Neural Networks](https://arxiv.org/abs/2006.05535).  
 
 
 ## Requirements
 
 This code is implemented in Python 3.9, and relies on the following packages:  
 - [PyTorch](https://pytorch.org/get-started/locally/) >= 1.8.1
-- [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html) >= 1.7.0
+- [Deep Graph Library](https://www.dgl.ai/pages/start.html) >= 0.6.1
 - [Pandas](https://pandas.pydata.org/pandas-docs/stable/getting_started/install.html) >= 1.2.4
 - [Numpy](https://numpy.org/install/) >= 1.20.2
 - [Seaborn](https://seaborn.pydata.org/) >= 0.11.1  
 
+####Note: For the Pytorch-Geometric implementation, refer to the main branch.
+
+**Disclaimer:** The results in the paper have been obtained using the pytorch-geometric implementation, so there might be some slight discrepancies between the paper and the results achieved using this code.
 
 ## Usage
 
