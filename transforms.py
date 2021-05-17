@@ -1,7 +1,7 @@
+import dgl
 import numpy as np
 import torch
 import torch.nn.functional as F
-# from torch_geometric.utils import subgraph
 from mechanisms import supported_feature_mechanisms, RandomizedResopnse
 
 
@@ -109,27 +109,13 @@ class FilterTopClass:
     def __init__(self, num_classes):
         self.num_classes = num_classes
 
-    def __call__(self, data):
-        y = torch.nn.functional.one_hot(data.y)
+    def __call__(self, g: dgl.DGLGraph):
+        y = torch.nn.functional.one_hot(g.ndata['label'])
         c = y.sum(dim=0).sort(descending=True)
         y = y[:, c.indices[:self.num_classes]]
         idx = y.sum(dim=1).bool()
-
-        data.x = data.x[idx]
-        data.y = y[idx].argmax(dim=1)
-        data.num_nodes = data.y.size(0)
-
-        if 'adj_t' in data:
-            data.adj_t = data.adj_t[idx, idx]
-        elif 'edge_index' in data:
-            data.edge_index, data.edge_attr = subgraph(idx, data.edge_index, data.edge_attr, relabel_nodes=True)
-
-        if 'train_mask' in data:
-            data.train_mask = data.train_mask[idx]
-            data.val_mask = data.val_mask[idx]
-            data.test_mask = data.test_mask[idx]
-
-        return data
+        g = g.subgraph(idx)
+        return g
 
 
 class NodeSplit:
@@ -144,11 +130,11 @@ class NodeSplit:
         val_nodes = perm[:n_val]
         test_nodes = perm[n_val:n_val + n_test]
         train_nodes = perm[n_val + n_test:]
-        val_mask = torch.zeros_like(g.ndata['val_mask'], dtype=torch.bool)
+        val_mask = torch.zeros(g.num_nodes(), dtype=torch.bool, device=g.device)
         val_mask[val_nodes] = True
-        test_mask = torch.zeros_like(g.ndata['test_mask'], dtype=torch.bool)
+        test_mask = torch.zeros(g.num_nodes(), dtype=torch.bool, device=g.device)
         test_mask[test_nodes] = True
-        train_mask = torch.zeros_like(g.ndata['train_mask'], dtype=torch.bool)
+        train_mask = torch.zeros(g.num_nodes(), dtype=torch.bool, device=g.device)
         train_mask[train_nodes] = True
         g.ndata['val_mask'] = val_mask
         g.ndata['test_mask'] = test_mask

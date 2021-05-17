@@ -11,7 +11,6 @@ import pandas as pd
 import seaborn as sns
 import torch
 from tqdm.auto import tqdm
-# from torch_geometric.transforms import Compose
 from datasets import load_dataset
 from models import NodeClassifier
 from trainer import Trainer
