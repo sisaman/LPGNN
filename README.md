@@ -12,7 +12,7 @@ This code is implemented in Python 3.9, and relies on the following packages:
 - [Numpy](https://numpy.org/install/) >= 1.20.2
 - [Seaborn](https://seaborn.pydata.org/) >= 0.11.1  
 
-####Note: For the DGL-based implementation, refer to the [DGL branch](https://github.com/sisaman/LPGNN/tree/DGL).
+#### Note: For the DGL-based implementation, refer to the [DGL branch](https://github.com/sisaman/LPGNN/tree/DGL).
 
 ## Usage
 
