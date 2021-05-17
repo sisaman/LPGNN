@@ -22,24 +22,23 @@ class KProp(torch.nn.Module):
 
         return self._cached_x
 
-    def neighborhood_aggregation(self, g, x):
+    def neighborhood_aggregation(self, g: dgl.DGLGraph, x):
         if self.K <= 0:
             return x
-
-        conv = GraphConv(
-            in_feats=x.size(1),
-            out_feats=x.size(1),
-            norm='both' if self.normalize else 'none',
-            weight=False,
-            bias=False
-        )
 
         if self.add_self_loops:
             g = dgl.remove_self_loop(g)
             g = dgl.add_self_loop(g)
 
+        if 'norm' not in g.edata:
+            if self.normalize:
+                g.ndata['norm'] = torch.pow(g.in_degrees(), -0.5).unsqueeze(1)
+            else:
+                g.ndata['norm'] = torch.ones(g.num_nodes(), 1, device=g.device)
+            g.apply_edges(dgl.function.u_mul_v('norm', 'norm', 'norm'))
+
         for k in range(self.K):
-            x = conv(g, x)
+            x = dgl.ops.u_mul_e_sum(g, x, g.edata['norm'])
 
         x = self.transform(x)
         return x
