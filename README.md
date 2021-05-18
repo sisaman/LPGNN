@@ -12,7 +12,7 @@ This code is implemented in Python 3.9, and relies on the following packages:
 - [Numpy](https://numpy.org/install/) >= 1.20.2
 - [Seaborn](https://seaborn.pydata.org/) >= 0.11.1  
 
-#### Note: For the Pytorch-Geometric implementation, refer to the [main branch](https://github.com/sisaman/LPGNN).
+#### Note: For the Pytorch-Geometric implementation, switch to the [main branch](https://github.com/sisaman/LPGNN).
 
 **Disclaimer:** The results in the paper have been obtained using the pytorch-geometric implementation, so there might be some slight discrepancies between the paper and the results achieved using this code.
 
