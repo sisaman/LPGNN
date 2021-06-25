@@ -76,8 +76,8 @@ class KarateClub(DGLDataset):
 
 
 supported_datasets = {
-    'cora': CoraGraphDataset,
-    'pubmed': PubmedGraphDataset,
+    'cora': partial(CoraGraphDataset, verbose=False),
+    'pubmed': partial(PubmedGraphDataset, verbose=False),
     'facebook': partial(KarateClub, name='facebook'),
     'lastfm': partial(KarateClub, name='lastfm', transform=FilterTopClass(10)),
 }
