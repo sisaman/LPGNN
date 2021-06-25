@@ -8,7 +8,6 @@ import random
 import dgl
 import numpy as np
 import pandas as pd
-import seaborn as sns
 import torch
 from tqdm.auto import tqdm
 from datasets import load_dataset
@@ -16,7 +15,7 @@ from models import NodeClassifier
 from trainer import Trainer
 from transforms import FeatureTransform, FeaturePerturbation, LabelPerturbation
 from utils import print_args, WandbLogger, add_parameters_as_argument, \
-    measure_runtime, from_args, str2bool, Enum, EnumAction, colored_text
+    measure_runtime, from_args, str2bool, Enum, EnumAction, colored_text, bootstrap
 
 
 class LogMode(Enum):
@@ -33,8 +32,9 @@ def seed_everything(seed):
 
 
 def confidence_interval(data, func=np.mean, size=1000, ci=95, seed=12345):
-    bs_replicates = sns.algorithms.bootstrap(data, func=func, n_boot=size, seed=seed)
-    bounds = sns.utils.ci(bs_replicates, ci)
+    bs_replicates = bootstrap(data, func=func, n_boot=size, seed=seed)
+    p = 50 - ci / 2, 50 + ci / 2
+    bounds = np.nanpercentile(bs_replicates, p)
     return (bounds[1] - bounds[0]) / 2
 
 
