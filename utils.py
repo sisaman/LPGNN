@@ -4,6 +4,7 @@ from argparse import ArgumentTypeError, Action
 import inspect
 import enum
 import functools
+import numpy as np
 from subprocess import check_call, DEVNULL, STDOUT
 from tqdm.auto import tqdm
 
@@ -23,6 +24,22 @@ def measure_runtime(func):
         return out
 
     return wrapper
+
+
+def bootstrap(data, func=np.mean, n_boot=10000, seed=None):
+    n = len(data)
+    data = np.asarray(data)
+    rng = np.random.default_rng(seed)
+    integers = rng.integers
+    
+    boot_dist = []
+    for i in range(int(n_boot)):
+        resampler = integers(0, n, n, dtype=np.intp)  # intp is indexing dtype
+        sample = [data.take(resampler, axis=0)]
+        boot_dist.append(func(*sample))
+        
+    return np.array(boot_dist)
+
 
 
 class WandbLogger:
