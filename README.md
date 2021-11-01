@@ -1,6 +1,12 @@
 # Locally Private Graph Neural Networks
 
-This repository is the official implementation of the paper [Locally Private Graph Neural Networks](https://arxiv.org/abs/2006.05535).  
+This repository is the official implementation of the paper [Locally Private Graph Neural Networks](https://arxiv.org/abs/2006.05535) (ACM CCS '21).  
+
+**Abstract**
+
+> 	Graph Neural Networks (GNNs) have demonstrated superior performance in learning node representations for various graph inference tasks. However, learning over graph data can raise privacy concerns when nodes represent people or human-related variables that involve sensitive or personal information. In this paper, we study the problem of node data privacy, where graph nodes (e.g., social network users) have potentially sensitive data that is kept private, but they could be beneficial for a central server for training a GNN over the graph. To address this problem, we propose a privacy-preserving, architecture-agnostic GNN learning framework with formal privacy guarantees based on Local Differential Privacy (LDP). Specifically, we develop a locally private mechanism to perturb and compress node features, which the server can efficiently collect to approximate the GNN's neighborhood aggregation step. Furthermore, to improve the accuracy of the estimation, we prepend to the GNN a denoising layer, called KProp, which is based on the multi-hop aggregation of node features. Finally, we propose a robust algorithm for learning with privatized noisy labels, where we again benefit from KProp's denoising capability to increase the accuracy of label inference for node classification. Extensive experiments conducted over real-world datasets demonstrate that our method can maintain a satisfying level of accuracy with low privacy loss.  
+
+![figure](https://raw.githubusercontent.com/sisaman/LPGNN/master/LPGNN.png)
 
 
 ## Requirements
@@ -72,11 +78,11 @@ The test result for each run will be saved as a csv file in the directory specif
 ## Citation
 
 If you find this code useful, please cite the following paper:  
-```
-@article{sajadmanesh2020differential,
+```bibtex
+@inproceedings{sajadmanesh2020differential,
   title={Locally Private Graph Neural Networks},
   author={Sajadmanesh, Sina and Gatica-Perez, Daniel},
-  journal={arXiv preprint arXiv:2006.05535},
-  year={2020}
+  booktitle={Proceedings of the 2021 ACM SIGSAC Conference on Computer and Communications Security (CCS '21)},
+  year={2021}
 }
 ```
