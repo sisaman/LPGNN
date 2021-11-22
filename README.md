@@ -1,6 +1,10 @@
 # Locally Private Graph Neural Networks
 
-This repository is the official implementation of the paper [Locally Private Graph Neural Networks](https://arxiv.org/abs/2006.05535) (ACM CCS '21).  
+This repository is the official implementation of the paper:  
+[**Locally Private Graph Neural Networks**](https://arxiv.org/abs/2006.05535) (ACM CCS '21)
+
+Proceedings version: https://dl.acm.org/doi/abs/10.1145/3460120.3484565  
+Video presentation: https://www.youtube.com/watch?v=1LdC5G_p-0g
 
 **Abstract**
 
@@ -79,10 +83,15 @@ The test result for each run will be saved as a csv file in the directory specif
 
 If you find this code useful, please cite the following paper:  
 ```bibtex
-@inproceedings{sajadmanesh2020differential,
-  title={Locally Private Graph Neural Networks},
-  author={Sajadmanesh, Sina and Gatica-Perez, Daniel},
-  booktitle={Proceedings of the 2021 ACM SIGSAC Conference on Computer and Communications Security (CCS '21)},
-  year={2021}
+@inproceedings{sajadmanesh2021locally,
+   author = {Sajadmanesh, Sina and Gatica-Perez, Daniel},
+   title = {Locally Private Graph Neural Networks},
+   year = {2021},
+   publisher = {Association for Computing Machinery},
+   doi = {10.1145/3460120.3484565},
+   booktitle = {Proceedings of the 2021 ACM SIGSAC Conference on Computer and Communications Security},
+   pages = {2130–2145},
+   series = {CCS '21}
 }
+
 ```
