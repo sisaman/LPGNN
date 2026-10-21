@@ -11,11 +11,11 @@ import torch
 from torch_geometric.transforms import Compose
 from tqdm.auto import tqdm
 
-from datasets import load_dataset
-from models import NodeClassifier
-from trainer import Trainer
-from transforms import FeaturePerturbation, FeatureTransform, LabelPerturbation
-from utils import (
+from lpgnn.datasets import load_dataset
+from lpgnn.models import NodeClassifier
+from lpgnn.trainer import Trainer
+from lpgnn.transforms import FeaturePerturbation, FeatureTransform, LabelPerturbation
+from lpgnn.utils import (
     Enum,
     EnumAction,
     WandbLogger,

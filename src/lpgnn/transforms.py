@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 from torch_geometric.utils import subgraph
 
-from mechanisms import RandomizedResopnse, supported_feature_mechanisms
+from .mechanisms import RandomizedResopnse, supported_feature_mechanisms
 
 
 class FeatureTransform:

@@ -8,7 +8,7 @@ from torch_geometric.datasets import Planetoid
 from torch_geometric.transforms import RandomNodeSplit, ToSparseTensor
 from torch_geometric.utils import to_undirected
 
-from transforms import FilterTopClass, Normalize
+from .transforms import FilterTopClass, Normalize
 
 
 class KarateClub(InMemoryDataset):
