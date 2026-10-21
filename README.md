@@ -15,12 +15,11 @@ Video presentation: https://www.youtube.com/watch?v=1LdC5G_p-0g
 
 ## Requirements
 
-This code is implemented in Python 3.9, and relies on the following packages:  
-- [PyTorch](https://pytorch.org/get-started/locally/) >= 1.8.1
-- [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html) >= 1.7.0
-- [Pandas](https://pandas.pydata.org/pandas-docs/stable/getting_started/install.html) >= 1.2.4
-- [Numpy](https://numpy.org/install/) >= 1.20.2
-- [Seaborn](https://seaborn.pydata.org/) >= 0.11.1  
+This code is implemented in Python 3.9, and its dependencies (PyTorch 2.0.1 with CUDA 11.8, PyTorch Geometric 2.3.1, etc.) are managed with [uv](https://docs.astral.sh/uv/) in ``pyproject.toml``. To set up the environment, run:
+```
+uv sync                  # add --extra wandb to enable wandb logging
+```
+Then prefix the commands below with ``uv run`` (e.g., ``uv run python main.py``).
 
 #### Note: For the DGL-based implementation, switch to the [DGL branch](https://github.com/sisaman/LPGNN/tree/DGL).
 

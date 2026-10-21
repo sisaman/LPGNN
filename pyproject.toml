@@ -1,0 +1,44 @@
+[project]
+name = "lpgnn"
+version = "0.1.0"
+description = "Locally Private Graph Neural Networks (ACM CCS '21)"
+readme = "README.md"
+license = "MIT"
+requires-python = "==3.9.*"
+dependencies = [
+    "torch==2.0.1",
+    "torch-geometric==2.3.1",
+    "torch-scatter==2.1.2",
+    "torch-sparse==0.6.18",
+    "numpy==1.22.0",
+    "pandas==1.2.4",
+    "scipy",
+    "seaborn==0.11.1",
+    "tabulate",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+wandb = ["wandb"]
+
+[dependency-groups]
+dev = ["ipykernel"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu118" }
+torch-scatter = { index = "pyg" }
+torch-sparse = { index = "pyg" }
+
+[[tool.uv.index]]
+name = "pytorch-cu118"
+url = "https://download.pytorch.org/whl/cu118"
+explicit = true
+
+[[tool.uv.index]]
+name = "pyg"
+url = "https://data.pyg.org/whl/torch-2.0.1+cu118.html"
+format = "flat"
+explicit = true

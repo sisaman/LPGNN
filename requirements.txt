@@ -1,5 +1,0 @@
-torch==2.12.0
-torch-geometric==1.7.0
-pandas==1.2.4
-numpy==1.22.0
-seaborn==0.11.1

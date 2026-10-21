@@ -4,7 +4,7 @@ import pandas as pd
 import torch
 from torch_geometric.data import Data, InMemoryDataset, download_url
 from torch_geometric.datasets import Planetoid
-from torch_geometric.transforms import ToSparseTensor, AddTrainValTestMask
+from torch_geometric.transforms import ToSparseTensor, RandomNodeSplit
 from torch_geometric.utils import to_undirected
 
 from transforms import Normalize, FilterTopClass
@@ -57,7 +57,7 @@ class KarateClub(InMemoryDataset):
         edge_file = os.path.join(self.raw_dir, self.raw_file_names[0])
         edge_index = pd.read_csv(edge_file)
         edge_index = torch.from_numpy(edge_index.to_numpy()).t().contiguous()
-        edge_index = to_undirected(edge_index, num_nodes)  # undirected edges
+        edge_index = to_undirected(edge_index, num_nodes=num_nodes)  # undirected edges
 
         feature_file = os.path.join(self.raw_dir, self.raw_file_names[1])
         x = pd.read_csv(feature_file).drop_duplicates()
@@ -92,7 +92,7 @@ def load_dataset(
         test_ratio:     dict(help='fraction of nodes used for test') = .25,
         ):
     data = supported_datasets[dataset](root=os.path.join(data_dir, dataset))
-    data = AddTrainValTestMask(split='train_rest', num_val=val_ratio, num_test=test_ratio)(data[0])
+    data = RandomNodeSplit(split='train_rest', num_val=val_ratio, num_test=test_ratio)(data[0])
     data = ToSparseTensor()(data)
     data.name = dataset
     data.num_classes = int(data.y.max().item()) + 1

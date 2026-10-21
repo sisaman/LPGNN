@@ -1,7 +1,6 @@
 import torch
 import torch.nn.functional as F
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
-from torch_geometric.utils import accuracy as accuracy_1d
 from torch.nn import Dropout, SELU
 from torch_geometric.nn import MessagePassing, SAGEConv, GCNConv, GATConv
 from torch_sparse import matmul
@@ -152,7 +151,7 @@ class NodeClassifier(torch.nn.Module):
     def accuracy(pred, target):
         pred = pred.argmax(dim=1) if len(pred.size()) > 1 else pred
         target = target.argmax(dim=1) if len(target.size()) > 1 else target
-        return accuracy_1d(pred=pred, target=target)
+        return (pred == target).sum().item() / target.numel()
 
     @staticmethod
     def cross_entropy_loss(p_y, y, weighted=False):
