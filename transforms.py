@@ -2,11 +2,12 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch_geometric.utils import subgraph
-from mechanisms import supported_feature_mechanisms, RandomizedResopnse
+
+from mechanisms import RandomizedResopnse, supported_feature_mechanisms
 
 
 class FeatureTransform:
-    supported_features = ['raw', 'rnd', 'one', 'ohd']
+    supported_features = ('raw', 'rnd', 'one', 'ohd')
 
     def __init__(self, feature: dict(help='feature transformation method',
                                      choices=supported_features, option='-f') = 'raw'):

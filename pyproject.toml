@@ -42,3 +42,7 @@ name = "pyg"
 url = "https://data.pyg.org/whl/torch-2.0.1+cu118.html"
 format = "flat"
 explicit = true
+
+[tool.ruff.lint]
+# argparse metadata annotations are written as dict(help=...) calls
+extend-ignore = ["C408"]

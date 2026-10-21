@@ -1,11 +1,12 @@
-import os
-import time
-from argparse import ArgumentTypeError, Action
-import inspect
 import enum
 import functools
+import inspect
+import os
+import time
+from argparse import Action, ArgumentTypeError
+from subprocess import DEVNULL, STDOUT, check_call
+
 import numpy as np
-from subprocess import check_call, DEVNULL, STDOUT
 from tqdm.auto import tqdm
 
 try:
@@ -20,7 +21,7 @@ def measure_runtime(func):
         start = time.time()
         out = func(*args, **kwargs)
         end = time.time()
-        print(f'\nTotal time spent in {str(func.__name__)}:', end - start, 'seconds.\n\n')
+        print(f'\nTotal time spent in {func.__name__!s}:', end - start, 'seconds.\n\n')
         return out
 
     return wrapper
@@ -52,7 +53,7 @@ class WandbLogger:
 
             os.environ["WANDB_SILENT"] = "true"
 
-            settings = wandb.Settings(start_method="fork")  # noqa
+            settings = wandb.Settings(start_method="fork")
 
             self.experiment = wandb.init(
                 name=name, project=project,
@@ -103,14 +104,14 @@ class JobManager:
         run_cmds = self.cmd_generator(self.args)
 
         with open(os.path.join(self.jobs_dir, f'{self.name}.jobs'), 'w') as file:
-            for run in tqdm(run_cmds):
-                file.write(run + '\n')
+            file.writelines(run + '\n' for run in tqdm(run_cmds))
 
         print('job file created:', os.path.join(self.jobs_dir, f'{self.name}.jobs'))
 
     def submit(self):
         window = 7500
-        num_cmds = sum(1 for _ in open(os.path.join(self.jobs_dir, f'{self.name}.jobs')))
+        with open(os.path.join(self.jobs_dir, f'{self.name}.jobs')) as file:
+            num_cmds = sum(1 for _ in file)
 
         for i in tqdm(range(0, num_cmds, window), desc='submitting jobs'):
             begin = i + 1
@@ -118,14 +119,14 @@ class JobManager:
 
             job_file_content = [
                 f'#$ -N {self.name}-{begin}-{end}\n',
-                f'#$ -S /bin/bash\n',
-                f'#$ -P dusk2dawn\n',
-                f'#$ -l pytorch,sgpu,gpumem=10\n',
+                '#$ -S /bin/bash\n',
+                '#$ -P dusk2dawn\n',
+                '#$ -l pytorch,sgpu,gpumem=10\n',
                 f'#$ -t {begin}-{end}\n',
                 f'#$ -o {self.jobs_dir}\n',
                 f'#$ -e {self.jobs_dir}\n',
-                f'#$ -cwd\n',
-                f'#$ -V\n',
+                '#$ -cwd\n',
+                '#$ -V\n',
                 f'python experiments.py -n {self.name} exec --id $SGE_TASK_ID \n'
             ]
 
@@ -186,7 +187,8 @@ class JobManager:
         ]
 
         for file in file_list:
-            num_lines = sum(1 for _ in open(file))
+            with open(file) as f:
+                num_lines = sum(1 for _ in f)
             if num_lines > 0:
                 job_id = int(file.split('.')[-1])
                 failed_jobs.append([job_id, file, num_lines])
@@ -246,7 +248,7 @@ def add_parameters_as_argument(function, parser):
             custom_options = arg_info.pop('option', [])
             custom_options = [custom_options] if isinstance(custom_options, str) else custom_options
             options.update(custom_options)
-            options = sorted(sorted(list(options)), key=len)
+            options = sorted(sorted(options), key=len)
             parser.add_argument(*options, **arg_info)
 
 
@@ -255,7 +257,7 @@ def strip_unexpected_kwargs(func, kwargs):
     parameters = signature.parameters
 
     # check if the function has kwargs
-    for name, param in parameters.items():
+    for param in parameters.values():
         if param.kind == inspect.Parameter.VAR_KEYWORD:
             return kwargs
 
@@ -303,13 +305,13 @@ class EnumAction(Action):
         # Generate choices from the Enum
         kwargs.setdefault("choices", tuple(e.value for e in _enum))
 
-        super(EnumAction, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
         self._enum = _enum
 
     def __call__(self, parser, namespace, values, option_string=None):
         # Convert value back into an Enum
-        enum = self._enum(values)  # noqa
+        enum = self._enum(values)
         setattr(namespace, self.dest, enum)
 
 

@@ -1,8 +1,8 @@
 import torch
 import torch.nn.functional as F
+from torch.nn import SELU, Dropout
+from torch_geometric.nn import GATConv, GCNConv, MessagePassing, SAGEConv
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
-from torch.nn import Dropout, SELU
-from torch_geometric.nn import MessagePassing, SAGEConv, GCNConv, GATConv
 from torch_sparse import matmul
 
 
@@ -38,7 +38,7 @@ class KProp(MessagePassing):
         x = self.transform(x)
         return x
 
-    def message_and_aggregate(self, adj_t, x):  # noqa
+    def message_and_aggregate(self, adj_t, x):
         return matmul(adj_t, x, reduce=self.aggr)
 
 
@@ -119,7 +119,7 @@ class NodeClassifier(torch.nn.Module):
         return p_y_x, p_yp_x, p_yt_x
 
     def training_step(self, data):
-        p_y_x, p_yp_x, p_yt_x = self(data)
+        p_y_x, _p_yp_x, p_yt_x = self(data)
 
         if self.cached_yt is None:
             yp = data.y.float()
@@ -137,7 +137,7 @@ class NodeClassifier(torch.nn.Module):
         return loss, metrics
 
     def validation_step(self, data):
-        p_y_x, p_yp_x, p_yt_x = self(data)
+        p_y_x, p_yp_x, _ = self(data)
 
         metrics = {
             'val/loss': self.cross_entropy_loss(p_yp_x[data.val_mask], data.y[data.val_mask]).item(),

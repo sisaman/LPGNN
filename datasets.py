@@ -1,25 +1,26 @@
 import os
 from functools import partial
+
 import pandas as pd
 import torch
 from torch_geometric.data import Data, InMemoryDataset, download_url
 from torch_geometric.datasets import Planetoid
-from torch_geometric.transforms import ToSparseTensor, RandomNodeSplit
+from torch_geometric.transforms import RandomNodeSplit, ToSparseTensor
 from torch_geometric.utils import to_undirected
 
-from transforms import Normalize, FilterTopClass
+from transforms import FilterTopClass, Normalize
 
 
 class KarateClub(InMemoryDataset):
     url = 'https://raw.githubusercontent.com/benedekrozemberczki/karateclub/master/dataset/node_level'
-    available_datasets = {
+    available_datasets = frozenset({
         'twitch',
         'facebook',
         'github',
         'deezer',
         'lastfm',
         'wikipedia'
-    }
+    })
 
     def __init__(self, root, name, transform=None, pre_transform=None):
         self.name = name.lower()
