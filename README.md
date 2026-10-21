@@ -6,11 +6,11 @@ This repository is the DGL-based implementation of the paper [Locally Private Gr
 ## Requirements
 
 This code is implemented in Python 3.9, and relies on the following packages:  
-- [PyTorch](https://pytorch.org/get-started/locally/) >= 1.8.1
-- [Deep Graph Library](https://www.dgl.ai/pages/start.html) >= 0.6.1
-- [Pandas](https://pandas.pydata.org/pandas-docs/stable/getting_started/install.html) >= 1.2.4
-- [Numpy](https://numpy.org/install/) >= 1.20.2
-- [Seaborn](https://seaborn.pydata.org/) >= 0.11.1  
+- [PyTorch](https://pytorch.org/get-started/locally/) == 1.8.1
+- [Deep Graph Library](https://www.dgl.ai/pages/start.html) == 0.6.1
+- [Pandas](https://pandas.pydata.org/pandas-docs/stable/getting_started/install.html) == 1.2.4
+- [Numpy](https://numpy.org/install/) == 1.20.2
+- [Seaborn](https://seaborn.pydata.org/) == 0.11.1  
 
 #### Note: For the Pytorch-Geometric implementation, switch to the [main branch](https://github.com/sisaman/LPGNN).
 
