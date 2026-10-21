@@ -82,7 +82,7 @@ class CommandBuilder:
         for config in configs:
             config = self.fill_best_params(config)
             options = ' '.join([f' --{param} {value} ' for param, value in config.items()])
-            command = f'python main.py {options} {self.default_options}'
+            command = f'python train.py {options} {self.default_options}'
             cmd_list.append(command)
 
         return cmd_list

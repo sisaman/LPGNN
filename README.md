@@ -19,7 +19,7 @@ This code is implemented in Python 3.9, and its dependencies (PyTorch 2.0.1 with
 ```
 uv sync                  # add --extra wandb to enable wandb logging
 ```
-Then prefix the commands below with ``uv run`` (e.g., ``uv run python main.py``).
+Then prefix the commands below with ``uv run`` (e.g., ``uv run python train.py``).
 
 #### Note: For the DGL-based implementation, switch to the [DGL branch](https://github.com/sisaman/LPGNN/tree/DGL).
 
@@ -35,7 +35,7 @@ In order to replicate our experiments and reproduce the paper's results, you mus
 ### Training individual models
 If you want to individually train and evaluate the models on any of the datasets mentioned in the paper, run the following command:  
 ```
-python main.py [OPTIONS...]
+python train.py [OPTIONS...]
 
 dataset arguments:
   -d              <string>       name of the dataset (choices: cora, pubmed, facebook, lastfm) (default: cora)
