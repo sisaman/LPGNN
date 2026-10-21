@@ -104,8 +104,9 @@ def run(args):
             progbar.set_postfix({'last_test_acc': test_acc[-1], 'avg_test_acc': np.mean(test_acc)})
 
         except Exception as e:
-            error = ''.join(traceback.format_exception(Exception, e, e.__traceback__))
-            logger.log_summary({'error': error})
+            if logger is not None:
+                error = ''.join(traceback.format_exception(Exception, e, e.__traceback__))
+                logger.log_summary({'error': error})
             raise
         finally:
             if args.log and args.log_mode == LogMode.INDIVIDUAL:
