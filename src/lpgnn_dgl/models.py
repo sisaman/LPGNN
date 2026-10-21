@@ -71,8 +71,9 @@ class GAT(GNN):
     def __init__(self, input_dim, output_dim, hidden_dim, dropout):
         super().__init__(dropout)
         heads = 4
-        self.conv1 = GATConv(input_dim, hidden_dim, num_heads=heads)
-        self.conv2 = GATConv(heads * hidden_dim, output_dim, num_heads=1)
+        # Keep the graph unchanged and use an empty aggregate for isolated nodes.
+        self.conv1 = GATConv(input_dim, hidden_dim, num_heads=heads, allow_zero_in_degree=True)
+        self.conv2 = GATConv(heads * hidden_dim, output_dim, num_heads=1, allow_zero_in_degree=True)
 
     def forward(self, g, x):
         x = self.conv1(g, x).flatten(1)
