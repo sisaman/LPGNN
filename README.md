@@ -13,11 +13,6 @@ Install the dependencies and run training with:
 uv sync --python 3.9
 ```
 
-Run the following `export` command once per shell before training to let DGL find the CUDA 11 cuSPARSE library installed by uv, without requiring a system CUDA 11.8 toolkit:
-```bash
-export LD_LIBRARY_PATH="$(uv run python -c 'import sysconfig; print(sysconfig.get_path("purelib") + "/nvidia/cusparse/lib")')${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-```
-
 `uv sync` also installs the `lpgnn_dgl` package from `src/lpgnn_dgl` in editable mode. The root-level `main.py` and `experiments.py` remain the CLI scripts. Prefix the Python commands below with `uv run` to use this environment, for example `uv run python main.py --help`.
 
 #### Note: For the Pytorch-Geometric implementation, switch to the [main branch](https://github.com/sisaman/LPGNN).

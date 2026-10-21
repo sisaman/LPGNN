@@ -1,15 +1,24 @@
+import ctypes
 import os
 import random
 import sys
+import sysconfig
 import traceback
 import uuid
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from pathlib import Path
 
-import dgl
 import numpy as np
 import pandas as pd
 import torch
 from tqdm.auto import tqdm
+
+# Load cuSPARSE after PyTorch's CUDA runtime and before DGL.
+ctypes.CDLL(
+    str(Path(sysconfig.get_path('purelib')) / 'nvidia/cusparse/lib/libcusparse.so.11')
+)
+
+import dgl
 
 from lpgnn_dgl.datasets import load_dataset
 from lpgnn_dgl.models import NodeClassifier
