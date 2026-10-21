@@ -8,7 +8,7 @@ import torch
 from dgl.data import CoraGraphDataset, DGLDataset, PubmedGraphDataset
 from dgl.data.utils import download
 
-from transforms import FilterTopClass, NodeSplit, Normalize
+from .transforms import FilterTopClass, NodeSplit, Normalize
 
 
 class KarateClub(DGLDataset):

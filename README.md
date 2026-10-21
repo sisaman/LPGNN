@@ -18,7 +18,7 @@ Run the following `export` command once per shell before training to let DGL fin
 export LD_LIBRARY_PATH="$(uv run python -c 'import sysconfig; print(sysconfig.get_path("purelib") + "/nvidia/cusparse/lib")')${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 ```
 
-Prefix the Python commands below with `uv run` to use this environment, for example `uv run python main.py --help`.
+`uv sync` also installs the `lpgnn_dgl` package from `src/lpgnn_dgl` in editable mode. The root-level `main.py` and `experiments.py` remain the CLI scripts. Prefix the Python commands below with `uv run` to use this environment, for example `uv run python main.py --help`.
 
 #### Note: For the Pytorch-Geometric implementation, switch to the [main branch](https://github.com/sisaman/LPGNN).
 

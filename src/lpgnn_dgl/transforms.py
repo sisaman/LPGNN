@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from mechanisms import RandomizedResopnse, supported_feature_mechanisms
+from .mechanisms import RandomizedResopnse, supported_feature_mechanisms
 
 
 class FeatureTransform:

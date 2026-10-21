@@ -11,11 +11,15 @@ import pandas as pd
 import torch
 from tqdm.auto import tqdm
 
-from datasets import load_dataset
-from models import NodeClassifier
-from trainer import Trainer
-from transforms import FeaturePerturbation, FeatureTransform, LabelPerturbation
-from utils import (
+from lpgnn_dgl.datasets import load_dataset
+from lpgnn_dgl.models import NodeClassifier
+from lpgnn_dgl.trainer import Trainer
+from lpgnn_dgl.transforms import (
+    FeaturePerturbation,
+    FeatureTransform,
+    LabelPerturbation,
+)
+from lpgnn_dgl.utils import (
     Enum,
     EnumAction,
     WandbLogger,

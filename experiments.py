@@ -7,7 +7,7 @@ from random import sample
 import numpy as np
 import pandas as pd
 
-from utils import JobManager, print_args
+from lpgnn_dgl.utils import JobManager, print_args
 
 
 class HyperParams:
