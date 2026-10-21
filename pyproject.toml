@@ -42,3 +42,7 @@ name = "dgl-cu118"
 url = "https://data.dgl.ai/wheels/cu118/repo.html"
 format = "flat"
 explicit = true
+
+[tool.ruff.lint]
+# argparse metadata annotations are written as dict(help=...) calls
+extend-ignore = ["C408"]

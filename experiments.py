@@ -1,12 +1,13 @@
 import os.path
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-from itertools import product
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from collections.abc import Iterable
-
+from itertools import product
 from random import sample
+
 import numpy as np
 import pandas as pd
-from utils import print_args, JobManager
+
+from utils import JobManager, print_args
 
 
 class HyperParams:

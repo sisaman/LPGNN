@@ -1,8 +1,8 @@
+import dgl
 import torch
 import torch.nn.functional as F
-from torch.nn import Dropout, SELU
-import dgl
-from dgl.nn.pytorch import GraphConv, GATConv, SAGEConv
+from dgl.nn.pytorch import GATConv, GraphConv, SAGEConv
+from torch.nn import SELU, Dropout
 
 
 class KProp(torch.nn.Module):
@@ -128,7 +128,7 @@ class NodeClassifier(torch.nn.Module):
         return p_y_x, p_yp_x, p_yt_x
 
     def training_step(self, g):
-        p_y_x, p_yp_x, p_yt_x = self(g)
+        p_y_x, _p_yp_x, p_yt_x = self(g)
 
         if self.cached_yt is None:
             yp = g.ndata['label'].float()
@@ -147,7 +147,7 @@ class NodeClassifier(torch.nn.Module):
         return loss, metrics
 
     def validation_step(self, g):
-        p_y_x, p_yp_x, p_yt_x = self(g)
+        p_y_x, p_yp_x, _p_yt_x = self(g)
 
         y = g.ndata['label']
         val_mask = g.ndata['val_mask']

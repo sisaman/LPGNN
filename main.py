@@ -1,21 +1,32 @@
 import os
+import random
 import sys
 import traceback
 import uuid
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-import random
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
 import dgl
 import numpy as np
 import pandas as pd
 import torch
 from tqdm.auto import tqdm
+
 from datasets import load_dataset
 from models import NodeClassifier
 from trainer import Trainer
-from transforms import FeatureTransform, FeaturePerturbation, LabelPerturbation
-from utils import print_args, WandbLogger, add_parameters_as_argument, \
-    measure_runtime, from_args, str2bool, Enum, EnumAction, colored_text, bootstrap
+from transforms import FeaturePerturbation, FeatureTransform, LabelPerturbation
+from utils import (
+    Enum,
+    EnumAction,
+    WandbLogger,
+    add_parameters_as_argument,
+    bootstrap,
+    colored_text,
+    from_args,
+    measure_runtime,
+    print_args,
+    str2bool,
+)
 
 
 class LogMode(Enum):
@@ -82,7 +93,7 @@ def run(args):
         except Exception as e:
             error = ''.join(traceback.format_exception(Exception, e, e.__traceback__))
             logger.log_summary({'error': error})
-            raise e
+            raise
         finally:
             if args.log and args.log_mode == LogMode.INDIVIDUAL:
                 logger.finish()
@@ -112,17 +123,17 @@ def main():
     add_parameters_as_argument(load_dataset, group_dataset)
 
     # data transformation args
-    group_perturb = init_parser.add_argument_group(f'data transformation arguments')
+    group_perturb = init_parser.add_argument_group('data transformation arguments')
     add_parameters_as_argument(FeatureTransform, group_perturb)
     add_parameters_as_argument(FeaturePerturbation, group_perturb)
     add_parameters_as_argument(LabelPerturbation, group_perturb)
 
     # model args
-    group_model = init_parser.add_argument_group(f'model arguments')
+    group_model = init_parser.add_argument_group('model arguments')
     add_parameters_as_argument(NodeClassifier, group_model)
 
     # trainer arguments (depends on perturbation)
-    group_trainer = init_parser.add_argument_group(f'trainer arguments')
+    group_trainer = init_parser.add_argument_group('trainer arguments')
     add_parameters_as_argument(Trainer, group_trainer)
     group_trainer.add_argument('--device', help='desired device for training', choices=['cpu', 'cuda'], default='cuda')
 

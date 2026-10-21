@@ -1,17 +1,18 @@
 import os
 from functools import partial
+from typing import ClassVar
 
 import dgl
 import pandas as pd
 import torch
-from dgl.data import DGLDataset, CoraGraphDataset, PubmedGraphDataset
+from dgl.data import CoraGraphDataset, DGLDataset, PubmedGraphDataset
 from dgl.data.utils import download
 
-from transforms import Normalize, FilterTopClass, NodeSplit
+from transforms import FilterTopClass, NodeSplit, Normalize
 
 
 class KarateClub(DGLDataset):
-    available_datasets = {
+    available_datasets: ClassVar[set[str]] = {
         'twitch',
         'facebook',
         'github',

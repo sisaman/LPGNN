@@ -1,4 +1,5 @@
 import math
+
 import torch
 import torch.nn.functional as F
 from scipy.special import erf
@@ -29,7 +30,7 @@ class MultiBit(Mechanism):
         self.m = m
 
     def __call__(self, x):
-        n, d = x.size()
+        _n, d = x.size()
         if self.m == 'best':
             m = int(max(1, min(d, math.floor(self.eps / 2.18))))
         elif self.m == 'max':
