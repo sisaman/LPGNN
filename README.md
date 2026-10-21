@@ -5,12 +5,20 @@ This repository is the DGL-based implementation of the paper [Locally Private Gr
 
 ## Requirements
 
-This code is implemented in Python 3.9, and relies on the following packages:  
-- [PyTorch](https://pytorch.org/get-started/locally/) == 1.8.1
-- [Deep Graph Library](https://www.dgl.ai/pages/start.html) == 0.6.1
-- [Pandas](https://pandas.pydata.org/pandas-docs/stable/getting_started/install.html) == 1.2.4
-- [Numpy](https://numpy.org/install/) == 1.20.2
-- [Seaborn](https://seaborn.pydata.org/) == 0.11.1  
+The environment is managed with [uv](https://docs.astral.sh/uv/) and supports Python 3.9–3.11 on Linux x86_64. It uses [PyTorch 2.0.1 with CUDA 11.8](https://pytorch.org/get-started/previous-versions/#v201) and [DGL 1.1.3 with CUDA 11.8](https://data.dgl.ai/wheels/cu118/repo.html). A working NVIDIA driver is required for GPU training.
+
+Install the dependencies and run training with:
+
+```sh
+uv sync --python 3.9
+```
+
+Run the following `export` command once per shell before training to let DGL find the CUDA 11 cuSPARSE library installed by uv, without requiring a system CUDA 11.8 toolkit:
+```bash
+export LD_LIBRARY_PATH="$(uv run python -c 'import sysconfig; print(sysconfig.get_path("purelib") + "/nvidia/cusparse/lib")')${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+```
+
+Prefix the Python commands below with `uv run` to use this environment, for example `uv run python main.py --help`.
 
 #### Note: For the Pytorch-Geometric implementation, switch to the [main branch](https://github.com/sisaman/LPGNN).
 
